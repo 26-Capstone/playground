@@ -2,22 +2,55 @@
 // Components are attached to window for cross-script access.
 
 // ─── Overview (Dashboard) ──────────────────────────────────────────────────
-function OverviewScreen({ onOpenCrawler, onGoApprovals, onNewCrawler }) {
+function OverviewScreen({ crawlers = CRAWLERS, stats, approvalCount = 0, onOpenCrawler, onGoApprovals, onNewCrawler, onRefresh, onDeleteCrawler }) {
   const [filter, setFilter] = React.useState('all');
   const [query, setQuery] = React.useState('');
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [menu, setMenu] = React.useState(null); // { id, name, x, y }
+
+  // 메뉴 외부 클릭 시 닫기
+  React.useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, [!!menu]);
+
+  const handleRefresh = () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    onRefresh();
+    setTimeout(() => setRefreshing(false), 800);
+  };
 
   const tabs = [
-    { id:'all',      label:'전체',         count: CRAWLERS.length },
-    { id:'pending',  label:'승인 대기',     count: CRAWLERS.filter(c=>c.status==='pending').length },
-    { id:'healing',  label:'자가치유 중',   count: CRAWLERS.filter(c=>c.status==='healing').length },
-    { id:'failed',   label:'실패',         count: CRAWLERS.filter(c=>c.status==='failed').length },
-    { id:'paused',   label:'일시중지',     count: CRAWLERS.filter(c=>c.status==='paused').length },
+    { id:'all',      label:'전체',         count: crawlers.length },
+    { id:'pending',  label:'승인 대기',     count: crawlers.filter(c=>c.status==='pending').length },
+    { id:'healing',  label:'자가치유 중',   count: crawlers.filter(c=>c.status==='healing').length },
+    { id:'failed',   label:'실패',         count: crawlers.filter(c=>c.status==='failed').length },
+    { id:'paused',   label:'일시중지',     count: crawlers.filter(c=>c.status==='paused').length },
   ];
 
-  const rows = CRAWLERS.filter(c =>
+  const rows = crawlers.filter(c =>
     (filter==='all' || c.status===filter) &&
     (!query || c.name.includes(query) || c.url.includes(query))
   );
+
+  // stats 포맷 헬퍼
+  const fmtMs = ms => {
+    if (ms == null) return '—';
+    return ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : ms + 'ms';
+  };
+  const fmtPct = v => v != null ? v.toFixed(2) + '%' : '—';
+  const activeFeeds   = stats ? stats.activeFeedsCount     : crawlers.filter(c => c.status !== 'paused').length;
+  const successRate   = stats ? fmtPct(stats.successRate7d) : '—';
+  const rateColor     = stats && stats.successRate7d != null
+    ? (stats.successRate7d >= 95 ? 'var(--ok)' : stats.successRate7d >= 80 ? 'var(--warn)' : 'var(--danger)')
+    : 'var(--text)';
+  const totalHealed   = stats ? stats.totalHealed          : '—';
+  const avgDur        = stats ? fmtMs(stats.avgDurationMs)  : '—';
+  const p95Dur        = stats ? fmtMs(stats.p95DurationMs)  : '—';
+  const noData        = stats && stats.resultCount7d === 0;
 
   return (
     <div className="fadein" style={{padding:'28px 32px 80px', maxWidth:1480, margin:'0 auto'}}>
@@ -26,7 +59,11 @@ function OverviewScreen({ onOpenCrawler, onGoApprovals, onNewCrawler }) {
         title="대안 데이터 운영 현황"
         action={
           <div style={{display:'flex', gap:8}}>
-            <button className="btn"><Icon name="refresh" className="icon icon-sm"/>새로고침</button>
+            <button className="btn" onClick={handleRefresh} disabled={refreshing}>
+              <Icon name="refresh" className="icon icon-sm" style={{
+                transition:'transform 0.6s', transform: refreshing ? 'rotate(360deg)' : 'none'
+              }}/>새로고침
+            </button>
             <button className="btn primary" onClick={onNewCrawler}>
               <Icon name="plus" className="icon icon-sm"/>새 크롤러
             </button>
@@ -38,32 +75,49 @@ function OverviewScreen({ onOpenCrawler, onGoApprovals, onNewCrawler }) {
 
       {/* Top stats */}
       <div className="grid" style={{gridTemplateColumns:'repeat(4, 1fr)', marginBottom:18}}>
-        <Stat icon="crawler"  label="ACTIVE FEEDS"      value="42" sub={<><span style={{color:'var(--ok)'}}>+3</span> 이번 주</>} />
-        <Stat icon="activity" label="7D 수집 성공률"    value="98.62%" sub={<>SLA 임계값 <span className="mono">95.00%</span> 상회</>} accent="var(--ok)"/>
-        <Stat icon="bolt"     label="이번 주 자가치유"  value="27" sub={<>자동 24 · <span style={{color:'var(--warn)'}}>승인 대기 3</span></>} />
-        <Stat icon="inbox"    label="평균 응답시간"     value="1.24s" sub="P95 2.81s · P99 4.10s" />
+        <Stat icon="crawler"  label="ACTIVE FEEDS"
+          value={String(activeFeeds)}
+          sub={<><span className="mono">{crawlers.length}</span>개 중 활성</>}
+        />
+        <Stat icon="activity" label="7D 수집 성공률"
+          value={noData ? '—' : successRate}
+          sub={noData ? '아직 실행 기록 없음' : <>SLA 임계값 <span className="mono">95.00%</span> 기준</>}
+          accent={noData ? undefined : rateColor}
+        />
+        <Stat icon="bolt" label="누적 자가치유"
+          value={String(totalHealed)}
+          sub={approvalCount > 0
+            ? <><span style={{color:'var(--warn)'}}>승인 대기 {approvalCount}건</span></>
+            : '모두 자동 복구됨'}
+        />
+        <Stat icon="inbox" label="평균 응답시간"
+          value={noData ? '—' : avgDur}
+          sub={noData ? '아직 실행 기록 없음' : `P95 ${p95Dur}`}
+        />
       </div>
 
-      {/* Banner: pending approvals */}
-      <div className="card" style={{
-        padding:'14px 18px', display:'flex', alignItems:'center', gap:14,
-        marginBottom:20, background:'linear-gradient(180deg, rgba(245,192,99,0.08), rgba(245,192,99,0.02))',
-        borderColor:'var(--warn-line)'
-      }}>
-        <div style={{
-          width:36, height:36, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center',
-          background:'var(--warn-soft)', color:'var(--warn)'
+      {/* Banner: pending approvals — 0건이면 숨김 */}
+      {approvalCount > 0 && (
+        <div className="card" style={{
+          padding:'14px 18px', display:'flex', alignItems:'center', gap:14,
+          marginBottom:20, background:'linear-gradient(180deg, rgba(245,192,99,0.08), rgba(245,192,99,0.02))',
+          borderColor:'var(--warn-line)'
         }}>
-          <Icon name="bell" className="icon"/>
-        </div>
-        <div style={{flex:1}}>
-          <div style={{fontWeight:600}}>3건의 자가치유 결과가 승인을 기다리고 있습니다</div>
-          <div className="muted" style={{fontSize:12, marginTop:2}}>
-            AI 확신도가 임계값 미달 — 대시보드에서 확인 후 승인해 주세요.
+          <div style={{
+            width:36, height:36, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center',
+            background:'var(--warn-soft)', color:'var(--warn)'
+          }}>
+            <Icon name="bell" className="icon"/>
           </div>
+          <div style={{flex:1}}>
+            <div style={{fontWeight:600}}>{approvalCount}건의 자가치유 결과가 승인을 기다리고 있습니다</div>
+            <div className="muted" style={{fontSize:12, marginTop:2}}>
+              AI 확신도가 임계값 미달 — 대시보드에서 확인 후 승인해 주세요.
+            </div>
+          </div>
+          <button className="btn" onClick={onGoApprovals}>승인 큐로 이동<Icon name="arrow_r" className="icon icon-sm"/></button>
         </div>
-        <button className="btn" onClick={onGoApprovals}>승인 큐로 이동<Icon name="arrow_r" className="icon icon-sm"/></button>
-      </div>
+      )}
 
       {/* Filter bar */}
       <div style={{display:'flex', alignItems:'center', gap:14, marginBottom:12}}>
@@ -184,11 +238,51 @@ function OverviewScreen({ onOpenCrawler, onGoApprovals, onNewCrawler }) {
                   color={c.score>=c.threshold ? 'var(--ok)' : c.score>=60 ? 'var(--warn)' : 'var(--danger)'}/>
               ) : <span className="dim">—</span>}
             </div>
-            <div className="muted" style={{fontSize:12}}>{c.schedule}</div>
-            <button className="btn ghost sm" style={{padding:4}}><Icon name="more" className="icon icon-sm"/></button>
+            <div>
+              <div className="muted" style={{fontSize:12}}>{c.schedule}</div>
+              <div className="dim mono" style={{fontSize:10.5, marginTop:1}}>
+                {nextRunLabel(c.scheduleKey || c.schedule)}
+              </div>
+            </div>
+            <button
+              className="btn ghost sm"
+              style={{padding:4}}
+              onClick={e => {
+                e.stopPropagation();
+                const r = e.currentTarget.getBoundingClientRect();
+                setMenu({ id: c.id, name: c.name, x: r.right, y: r.bottom + 4 });
+              }}
+            >
+              <Icon name="more" className="icon icon-sm"/>
+            </button>
           </div>
         ))}
       </div>
+
+      {/* 플로팅 컨텍스트 메뉴 */}
+      {menu && (
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            position:'fixed', top: menu.y, right: window.innerWidth - menu.x,
+            zIndex:200, background:'var(--bg-2)', border:'1px solid var(--border)',
+            borderRadius:10, boxShadow:'0 8px 24px rgba(0,0,0,0.14)', padding:4, minWidth:140,
+          }}
+        >
+          <button
+            className="btn ghost sm"
+            style={{width:'100%', justifyContent:'flex-start', color:'var(--danger)', padding:'7px 10px', gap:8}}
+            onClick={() => {
+              if (onDeleteCrawler && window.confirm(`"${menu.name}" 크롤러를 삭제하시겠습니까?\n\n실행 이력과 자가치유 기록도 함께 삭제됩니다.`)) {
+                onDeleteCrawler(menu.id);
+              }
+              setMenu(null);
+            }}
+          >
+            <Icon name="x" className="icon icon-sm"/>삭제
+          </button>
+        </div>
+      )}
 
       <div style={{marginTop:12, fontSize:12, color:'var(--text-dim)', display:'flex', justifyContent:'space-between'}}>
         <span>{rows.length}개 · 행을 클릭해 상세를 보세요</span>
@@ -199,211 +293,232 @@ function OverviewScreen({ onOpenCrawler, onGoApprovals, onNewCrawler }) {
 }
 
 // ─── Approvals (Self-healing Human-in-the-Loop) ────────────────────────────
-function ApprovalsScreen({ onBack, onApprove, onReject }) {
-  const p = PENDING_APPROVAL;
-  const passes = p.finalScore >= p.threshold;
+function ApprovalsScreen({ onBack, onAction }) {
+  const [list, setList]       = React.useState(null); // null = loading
+  const [selected, setSelected] = React.useState(null);
+  const [acting, setActing]   = React.useState(false);
 
+  const load = () => {
+    fetch('/api/approvals')
+      .then(r => r.json())
+      .then(data => { setList(Array.isArray(data) ? data : []); })
+      .catch(() => setList([]));
+  };
+
+  React.useEffect(() => { load(); }, []);
+
+  const handleApprove = async (proposal) => {
+    setActing(true);
+    await fetch(`/api/approvals/${proposal.id}/approve`, { method: 'POST' }).catch(() => {});
+    setActing(false);
+    setSelected(null);
+    load();
+    if (onAction) onAction();
+  };
+
+  const handleReject = async (proposal) => {
+    setActing(true);
+    await fetch(`/api/approvals/${proposal.id}/reject`, { method: 'POST' }).catch(() => {});
+    setActing(false);
+    setSelected(null);
+    load();
+    if (onAction) onAction();
+  };
+
+  // ── 상세 뷰 ─────────────────────────────────────────────────────────────────
+  if (selected) {
+    const p = selected;
+    const scoreVal = Math.round(p.confidence * 1000) / 10;
+    return (
+      <div className="fadein" style={{padding:'28px 32px 80px', maxWidth:1480, margin:'0 auto'}}>
+        <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:18, fontSize:12, color:'var(--text-mute)'}}>
+          <a onClick={onBack} style={{cursor:'default'}} className="muted">Approvals</a>
+          <Icon name="chevron_r" className="icon icon-sm" style={{color:'var(--text-dim)'}}/>
+          <a onClick={()=>setSelected(null)} style={{cursor:'default'}} className="muted">목록</a>
+          <Icon name="chevron_r" className="icon icon-sm" style={{color:'var(--text-dim)'}}/>
+          <span>{p.crawler_id} — {p.crawler_name}</span>
+          <span className="chip warn" style={{marginLeft:8}}><span className="dot"/>수동 승인 대기</span>
+        </div>
+
+        <SectionTitle
+          eyebrow="HUMAN-IN-THE-LOOP"
+          title="자가치유 결과 검토"
+          action={
+            <div style={{display:'flex', gap:8}}>
+              <button className="btn" onClick={()=>handleReject(p)} disabled={acting}>
+                <Icon name="x" className="icon icon-sm"/>거부 · 다시 시도
+              </button>
+              <button className="btn primary" onClick={()=>handleApprove(p)} disabled={acting}>
+                <Icon name="check" className="icon icon-sm"/>승인 후 자동 복구
+              </button>
+            </div>
+          }
+        >
+          AI가 찾은 후보의 확신도가 임계값에 미달했습니다. <strong style={{color:'var(--text)'}}>{p.crawler_name}</strong> 크롤러를 검토해 주세요.
+        </SectionTitle>
+
+        <div style={{display:'grid', gridTemplateColumns:'1.4fr 1fr', gap:16, marginBottom:16}}>
+          {/* Selector diff */}
+          <div className="card" style={{padding:0, overflow:'hidden'}}>
+            <div style={{padding:'14px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10}}>
+              <Icon name="code" className="icon"/>
+              <div style={{fontWeight:600}}>Selector 변경</div>
+              <span className="dim mono" style={{fontSize:11, marginLeft:'auto'}}>{p.created_at}</span>
+            </div>
+
+            <div style={{padding:18, display:'flex', flexDirection:'column', gap:14}}>
+              <div>
+                <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
+                  <span className="chip danger"><span className="dot"/>이전 (장애 발생)</span>
+                </div>
+                <pre className="code" style={{margin:0, wordBreak:'break-all', whiteSpace:'pre-wrap'}}>
+                  {p.old_selector}
+                </pre>
+              </div>
+
+              <div style={{display:'flex', alignItems:'center', gap:8, color:'var(--text-dim)'}}>
+                <Icon name="chevron_d" className="icon icon-sm"/>
+                <span className="dim mono" style={{fontSize:11}}>AI 제안 셀렉터</span>
+                <div style={{flex:1, height:1, background:'var(--border)'}}/>
+              </div>
+
+              <div>
+                <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
+                  <span className="chip ok"><span className="dot"/>새 후보</span>
+                </div>
+                <pre className="code" style={{margin:0, wordBreak:'break-all', whiteSpace:'pre-wrap'}}>
+                  {p.proposed_selector || '(제안 없음)'}
+                </pre>
+              </div>
+
+              {p.extracted_text && (
+                <div style={{padding:'10px 14px', background:'var(--bg-2)', borderRadius:8, border:'1px solid var(--border)'}}>
+                  <div className="dim mono" style={{fontSize:10.5, marginBottom:4}}>추출된 텍스트</div>
+                  <div style={{fontSize:13}}>{p.extracted_text}</div>
+                </div>
+              )}
+
+              {p.reasoning && (
+                <div style={{padding:'10px 14px', background:'var(--bg-2)', borderRadius:8, border:'1px solid var(--border)'}}>
+                  <div className="dim mono" style={{fontSize:10.5, marginBottom:4}}>AI 추론 근거</div>
+                  <div style={{fontSize:12.5, lineHeight:1.6, color:'var(--text-mute)'}}>{p.reasoning}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Score panel */}
+          <div className="card" style={{padding:0, overflow:'hidden', display:'flex', flexDirection:'column'}}>
+            <div style={{padding:'14px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10}}>
+              <Icon name="target" className="icon"/>
+              <div style={{fontWeight:600}}>확신도 (Confidence)</div>
+            </div>
+
+            <div style={{padding:'32px 18px', display:'flex', alignItems:'center', gap:18, justifyContent:'center', flex:1}}>
+              <ScoreRing value={scoreVal} threshold={70} size={120} stroke={10}/>
+              <div style={{display:'flex', flexDirection:'column', gap:8, minWidth:160}}>
+                <div>
+                  <div className="dim mono" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase'}}>Confidence</div>
+                  <div className="mono" style={{fontSize:22, fontWeight:600, color:'var(--warn)'}}>
+                    {scoreVal.toFixed(1)} <span className="dim" style={{fontSize:13, fontWeight:400}}>/ 100</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="dim mono" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase'}}>Raw</div>
+                  <div className="mono" style={{fontSize:15, color:'var(--text-mute)'}}>
+                    {p.confidence.toFixed(4)}
+                  </div>
+                </div>
+                <div className="chip warn" style={{alignSelf:'flex-start', marginTop:4}}>
+                  <Icon name="triangle_dn" className="icon icon-sm"/>
+                  수동 검토 필요
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 목록 뷰 ──────────────────────────────────────────────────────────────────
   return (
     <div className="fadein" style={{padding:'28px 32px 80px', maxWidth:1480, margin:'0 auto'}}>
-      <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:18, fontSize:12, color:'var(--text-mute)'}}>
-        <a onClick={onBack} style={{cursor:'default'}} className="muted">Approvals</a>
-        <Icon name="chevron_r" className="icon icon-sm" style={{color:'var(--text-dim)'}}/>
-        <span>cr_4n1p — 쿠팡 PS5 슬림 가격</span>
-        <span className="chip warn" style={{marginLeft:8}}><span className="dot"/>수동 승인 대기</span>
-      </div>
-
       <SectionTitle
         eyebrow="HUMAN-IN-THE-LOOP"
-        title="자가치유 결과 검토"
-        action={
-          <div style={{display:'flex', gap:8}}>
-            <button className="btn" onClick={onReject}><Icon name="x" className="icon icon-sm"/>거부 · 다시 시도</button>
-            <button className="btn primary" onClick={onApprove} disabled={false}>
-              <Icon name="check" className="icon icon-sm"/>승인 후 자동 복구
-            </button>
-          </div>
-        }
+        title="승인 큐"
       >
-        AI가 찾은 후보의 확신도가 임계값에 미달했습니다. <strong style={{color:'var(--text)'}}>{p.crawler}</strong> 크롤러를 검토해 주세요.
+        자가치유 신뢰도가 임계값에 미달한 제안을 검토하고 승인하세요.
       </SectionTitle>
 
-      <div style={{display:'grid', gridTemplateColumns:'1.4fr 1fr', gap:16, marginBottom:16}}>
-        {/* Selector diff */}
+      {list === null && (
+        <div className="card" style={{padding:'var(--s-11)', textAlign:'center'}}>
+          <div className="muted">로딩 중…</div>
+        </div>
+      )}
+
+      {list !== null && list.length === 0 && (
+        <div className="card" style={{padding:'var(--s-11)', textAlign:'center'}}>
+          <Icon name="check" className="icon icon-lg" style={{margin:'0 auto var(--s-3)', display:'block', color:'var(--ok)'}}/>
+          <div style={{fontWeight:600, marginBottom:6}}>검토 대기 중인 항목이 없습니다</div>
+          <div className="muted" style={{fontSize:13}}>자가치유 신뢰도가 임계값을 충족하면 자동으로 복구됩니다.</div>
+        </div>
+      )}
+
+      {list !== null && list.length > 0 && (
         <div className="card" style={{padding:0, overflow:'hidden'}}>
-          <div style={{padding:'14px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10}}>
-            <Icon name="code" className="icon"/>
-            <div style={{fontWeight:600}}>Selector 변경</div>
-            <span className="dim mono" style={{fontSize:11, marginLeft:'auto'}}>{p.detectedAt}</span>
-          </div>
-
-          <div style={{padding:18, display:'flex', flexDirection:'column', gap:14}}>
-            <div>
-              <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
-                <span className="chip danger"><span className="dot"/>이전 (장애 발생)</span>
-                <span className="dim mono" style={{fontSize:11}}>span.price_old · 매칭 0건</span>
-              </div>
-              <pre className="code" style={{margin:0}}>
-{`<span class="`}<span className="removed">price_old</span>{`" font-weight="bold" color="red">529,000원</span>`}
-              </pre>
-            </div>
-
-            <div style={{display:'flex', alignItems:'center', gap:8, color:'var(--text-dim)'}}>
-              <Icon name="chevron_d" className="icon icon-sm"/>
-              <span className="dim mono" style={{fontSize:11}}>자동 탐색 결과</span>
-              <div style={{flex:1, height:1, background:'var(--border)'}}/>
-            </div>
-
-            <div>
-              <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
-                <span className="chip ok"><span className="dot"/>새 후보 #1</span>
-                <span className="dim mono" style={{fontSize:11}}>div.val_new.bold-num · 매칭 1건</span>
-              </div>
-              <pre className="code" style={{margin:0}}>
-{`<div class="`}<span className="added">val_new bold-num</span>{`" font-weight="bold" color="black">529,000원</div>`}
-              </pre>
-            </div>
-
-            {/* Element comparison table */}
-            <div style={{
-              border:'1px solid var(--border)', borderRadius:10, overflow:'hidden',
-              fontFamily:'var(--mono)', fontSize:12
-            }}>
-              {[
-                ['Tag', p.oldElement.tag, p.newElement.tag, p.oldElement.tag !== p.newElement.tag],
-                ['Weight', p.oldElement.attrs['font-weight'], p.newElement.attrs['font-weight'], false],
-                ['Color', p.oldElement.attrs.color, p.newElement.attrs.color, true],
-                ['텍스트', p.oldElement.text, p.newElement.text, false],
-              ].map(([k,a,b,diff], i, arr)=> (
-                <div key={k} style={{
-                  display:'grid', gridTemplateColumns:'90px 1fr 1fr 28px',
-                  padding:'8px 12px', alignItems:'center',
-                  background: i%2 ? 'var(--bg-2)' : 'transparent',
-                  borderBottom: i===arr.length-1 ? 'none' : '1px solid var(--border)'
-                }}>
-                  <div className="dim" style={{fontSize:11}}>{k}</div>
-                  <div className="muted">{a}</div>
-                  <div style={{color:'var(--text)'}}>{b}</div>
-                  <div style={{display:'flex', justifyContent:'flex-end'}}>
-                    {diff ? <span className="chip danger" style={{fontSize:10, padding:'1px 6px'}}>변경</span>
-                          : <span className="chip ok" style={{fontSize:10, padding:'1px 6px'}}>일치</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Score panel */}
-        <div className="card" style={{padding:0, overflow:'hidden', display:'flex', flexDirection:'column'}}>
-          <div style={{padding:'14px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10}}>
-            <Icon name="target" className="icon"/>
-            <div style={{fontWeight:600}}>확신도 (Confidence)</div>
-            <span className="chip" style={{marginLeft:'auto', fontSize:10}}>Logistic + AHP</span>
-          </div>
-
-          <div style={{padding:'24px 18px 12px', display:'flex', alignItems:'center', gap:18, justifyContent:'center'}}>
-            <ScoreRing value={p.finalScore} threshold={p.threshold} size={120} stroke={10}/>
-            <div style={{display:'flex', flexDirection:'column', gap:8, minWidth:160}}>
-              <div>
-                <div className="dim mono" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase'}}>Final Score</div>
-                <div className="mono" style={{fontSize:22, fontWeight:600, color: passes ? 'var(--ok)':'var(--warn)'}}>
-                  {p.finalScore.toFixed(1)} <span className="dim" style={{fontSize:13, fontWeight:400}}>/ 100</span>
-                </div>
-              </div>
-              <div>
-                <div className="dim mono" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase'}}>Threshold</div>
-                <div className="mono" style={{fontSize:15, color:'var(--text-mute)'}}>
-                  ≥ {p.threshold}.0
-                </div>
-              </div>
-              <div className="chip warn" style={{alignSelf:'flex-start', marginTop:4}}>
-                <Icon name="triangle_dn" className="icon icon-sm"/>
-                임계값 미달 {(p.threshold - p.finalScore).toFixed(1)}p
-              </div>
-            </div>
-          </div>
-
-          {/* Breakdown */}
-          <div style={{padding:'12px 18px 4px'}}>
-            <div className="dim mono" style={{fontSize:10.5, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10}}>
-              Score Breakdown
-            </div>
-            {p.signals.map((s,i) => {
-              const contrib = s.weight * s.raw;
-              return (
-                <div key={s.key} style={{padding:'8px 0', borderBottom: i===p.signals.length-1?'none':'1px solid var(--border)'}}>
-                  <div style={{display:'flex', alignItems:'baseline', justifyContent:'space-between', marginBottom:5, gap:8}}>
-                    <div style={{display:'flex', alignItems:'center', gap:8}}>
-                      <span style={{fontSize:13}}>{s.label}</span>
-                      <span className="chip" style={{fontSize:10, padding:'0px 6px'}}>w={s.weight.toFixed(2)}</span>
-                    </div>
-                    <div className="mono" style={{fontSize:12.5}}>
-                      <span style={{color: s.raw>=0.9?'var(--ok)':s.raw>=0.5?'var(--warn)':'var(--danger)'}}>{(s.raw*100).toFixed(0)}</span>
-                      <span className="dim"> × {s.weight.toFixed(2)} = </span>
-                      <span>{contrib.toFixed(3)}</span>
-                    </div>
-                  </div>
-                  <div className="pbar thin">
-                    <i style={{
-                      width:`${s.raw*100}%`,
-                      background: s.raw>=0.9?'var(--ok)':s.raw>=0.5?'var(--warn)':'var(--danger)'
-                    }}/>
-                  </div>
-                  <div className="dim" style={{fontSize:11, marginTop:5}}>{s.why}</div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={{padding:'14px 18px', background:'var(--bg-3)', borderTop:'1px solid var(--border)', marginTop:6}}>
-            <div className="dim mono" style={{fontSize:10.5, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:6}}>
-              Logistic σ(β·X)
-            </div>
-            <pre className="code" style={{margin:0, fontSize:11, padding:'8px 10px'}}>
-{`P = 1 / (1 + e^-(β₀ + Σ βᵢXᵢ))
-  = 1 / (1 + e^-(2.41 · 0.832 + 0.18))
-  = `}<span className="hl">0.8634</span>{`  →  86.3%`}
-            </pre>
-          </div>
-        </div>
-      </div>
-
-      {/* Other candidates */}
-      <div className="card" style={{padding:0, overflow:'hidden'}}>
-        <div style={{padding:'14px 18px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:10}}>
-          <Icon name="layers" className="icon"/>
-          <div style={{fontWeight:600}}>다른 후보 셀렉터</div>
-          <span className="muted" style={{fontSize:12}}>· 페이지에서 탐지된 상위 3개</span>
-        </div>
-        {p.candidates.map((c,i) => (
-          <div key={c.rank} style={{
-            display:'grid', gridTemplateColumns:'40px 1fr 200px 100px 130px',
-            padding:'14px 18px', alignItems:'center',
-            borderBottom: i===p.candidates.length-1?'none':'1px solid var(--border)'
+          <div style={{
+            display:'grid', gridTemplateColumns:'1fr 1.2fr 1.2fr 90px 120px 130px',
+            padding:'10px 18px', borderBottom:'1px solid var(--border)',
+            fontSize:11, fontWeight:600, color:'var(--text-dim)', letterSpacing:'0.04em', textTransform:'uppercase'
           }}>
-            <div className="mono dim" style={{fontSize:12}}>#{c.rank}</div>
-            <div className="mono" style={{fontSize:12.5, color: i===0 ? 'var(--text)' : 'var(--text-mute)'}}>{c.selector}</div>
-            <div className="mono" style={{fontSize:12.5}}>{c.preview}</div>
-            <div className="mono" style={{
-              fontSize:13, fontWeight:600,
-              color: c.score>=90?'var(--ok)':c.score>=60?'var(--warn)':'var(--danger)'
-            }}>{c.score.toFixed(1)}</div>
-            <div style={{display:'flex', justifyContent:'flex-end', gap:6}}>
-              <button className="btn ghost sm"><Icon name="eye" className="icon icon-sm"/>미리보기</button>
-              {i===0 && <button className="btn sm">선택</button>}
-            </div>
+            <div>크롤러</div><div>이전 셀렉터</div><div>제안 셀렉터</div>
+            <div>확신도</div><div>요청 시각</div><div/>
           </div>
-        ))}
-      </div>
+          {list.map((p, i) => (
+            <div key={p.id} style={{
+              display:'grid', gridTemplateColumns:'1fr 1.2fr 1.2fr 90px 120px 130px',
+              padding:'14px 18px', alignItems:'center', gap:4,
+              borderBottom: i===list.length-1?'none':'1px solid var(--border)',
+            }}>
+              <div>
+                <div style={{fontWeight:600, fontSize:13}}>{p.crawler_name}</div>
+                <div className="dim mono" style={{fontSize:11}}>{p.crawler_id}</div>
+              </div>
+              <div className="mono muted" style={{fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}} title={p.old_selector}>
+                {p.old_selector}
+              </div>
+              <div className="mono" style={{fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'var(--ok)'}} title={p.proposed_selector}>
+                {p.proposed_selector || '—'}
+              </div>
+              <div className="mono" style={{
+                fontSize:13, fontWeight:600,
+                color: p.confidence>=0.9?'var(--ok)':p.confidence>=0.6?'var(--warn)':'var(--danger)'
+              }}>
+                {(p.confidence*100).toFixed(1)}%
+              </div>
+              <div className="dim mono" style={{fontSize:11}}>{p.created_at}</div>
+              <div style={{display:'flex', gap:6, justifyContent:'flex-end'}}>
+                <button className="btn ghost sm" onClick={()=>setSelected(p)}>검토</button>
+                <button className="btn primary sm" onClick={()=>handleApprove(p)} disabled={acting}>승인</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Crawler Detail ────────────────────────────────────────────────────────
-function DetailScreen({ crawler, onBack }) {
-  const c = crawler || CRAWLERS[0];
+function DetailScreen({ crawler, onBack, onCrawlerUpdate, onDelete }) {
+  const [c, setC] = React.useState(crawler || CRAWLERS[0]);
   const tabs = ['Overview', 'Runs', 'Healing log', 'Schema', 'Settings'];
   const [tab, setTab] = React.useState('Overview');
+  const [healOpen, setHealOpen] = React.useState(false);
+  const [runState, setRunState] = React.useState('idle'); // idle | running | done | error
+  const [runMsg, setRunMsg]   = React.useState('');
+  const [deleteConfirm, setDeleteConfirm] = React.useState(false);
 
   // synthetic 30-day score chart
   const scores = c.spark.length ? c.spark : seedSpark30();
@@ -426,17 +541,77 @@ function DetailScreen({ crawler, onBack }) {
               <span className="mono">{c.url}</span>
               <span className="dim">·</span>
               <span>{c.schedule}</span>
+              <span className="chip" style={{fontSize:10, padding:'1px 7px'}}>
+                <Icon name="history" className="icon icon-sm"/>
+                {nextRunLabel(c.scheduleKey || c.schedule)}
+              </span>
               <span className="dim">·</span>
               <span>owner: <span className="mono" style={{color:'var(--text)'}}>{c.owner}</span></span>
             </div>
           </div>
         </div>
-        <div style={{display:'flex', gap:8}}>
+        <div style={{display:'flex', gap:8, alignItems:'center'}}>
           <button className="btn ghost"><Icon name="pause" className="icon icon-sm"/>일시중지</button>
-          <button className="btn ghost"><Icon name="play" className="icon icon-sm"/>지금 실행</button>
+          <button
+            className="btn ghost"
+            disabled={runState === 'running'}
+            onClick={async () => {
+              setRunState('running'); setRunMsg('');
+              try {
+                const resp = await fetch(`/api/crawlers/${c.id}/run`, { method: 'POST' });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.error || '실행 실패');
+                setC(data.crawler);
+                if (onCrawlerUpdate) onCrawlerUpdate(data.crawler);
+                const r = data.result;
+                setRunMsg(
+                  r.status === 'healthy'  ? `✓ 수집 완료 — "${r.value}"` :
+                  r.heal?.status === 'healed'  ? `⚡ 자가치유 성공` :
+                  r.heal?.status === 'pending' ? `⏳ 신뢰도 미달 — 승인 대기` :
+                  `✗ 실패: ${r.heal?.reason || '셀렉터 오류'}`
+                );
+                setRunState('done');
+              } catch (e) {
+                setRunMsg(`오류: ${e.message}`); setRunState('error');
+              }
+            }}>
+            {runState === 'running'
+              ? <><div className="spin" style={{width:11,height:11,borderRadius:999,border:'2px solid var(--border-strong)',borderTopColor:'var(--accent)'}}/> 실행 중…</>
+              : <><Icon name="play" className="icon icon-sm"/>지금 실행</>
+            }
+          </button>
+          {runMsg && (
+            <span style={{fontSize:12, color: runState==='done' ? 'var(--ok)' : 'var(--danger)', maxWidth:260, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+              {runMsg}
+            </span>
+          )}
           <button className="btn"><Icon name="settings" className="icon icon-sm"/>설정</button>
+          {(c.status === 'failed' || c.status === 'pending') && (
+            <button className="btn" style={{
+              borderColor:'var(--healing-line)', background:'var(--healing-soft)', color:'var(--healing)'
+            }} onClick={() => setHealOpen(true)}>
+              <Icon name="bolt" className="icon icon-sm"/>자가치유 실행
+            </button>
+          )}
+          <div style={{width:1, height:18, background:'var(--border)'}}/>
+          {deleteConfirm ? (
+            <>
+              <span style={{fontSize:12, color:'var(--danger)'}}>정말 삭제하시겠습니까?</span>
+              <button
+                className="btn sm"
+                style={{borderColor:'var(--danger)', color:'var(--danger)', background:'var(--danger-soft)'}}
+                onClick={() => onDelete && onDelete(c.id)}
+              >삭제 확인</button>
+              <button className="btn ghost sm" onClick={() => setDeleteConfirm(false)}>취소</button>
+            </>
+          ) : (
+            <button className="btn ghost sm" onClick={() => setDeleteConfirm(true)}>
+              <Icon name="x" className="icon icon-sm"/>삭제
+            </button>
+          )}
         </div>
       </div>
+      {healOpen && <HealPanel crawler={c} onClose={() => setHealOpen(false)}/>}
 
       {/* tabs */}
       <div style={{display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:20}}>
@@ -452,7 +627,7 @@ function DetailScreen({ crawler, onBack }) {
       </div>
 
       {tab==='Overview' && <DetailOverview crawler={c} scores={scores}/>}
-      {tab==='Runs' && <DetailRuns/>}
+      {tab==='Runs' && <DetailRuns crawlerId={c.id}/>}
       {tab!=='Overview' && tab!=='Runs' && (
         <div className="card" style={{padding:'60px', textAlign:'center', color:'var(--text-mute)'}}>
           <Icon name="cube" className="icon icon-lg" style={{margin:'0 auto 12px', display:'block', color:'var(--text-dim)'}}/>
@@ -471,13 +646,69 @@ function seedSpark30(){
 }
 
 function DetailOverview({ crawler, scores }) {
-  const w = 760, h = 180;
-  const max = 100, min = 50;
-  const step = w/(scores.length-1);
-  const pts = scores.map((v,i)=>[i*step, h - ((v-min)/(max-min))*(h-20) - 10]);
-  const line = pts.map(p=>`${p[0]},${p[1]}`).join(' ');
-  const area = `0,${h} ${line} ${w},${h}`;
-  const thresholdY = h - ((crawler.threshold-min)/(max-min))*(h-20) - 10;
+  const [results, setResults] = React.useState(null); // null = 로딩 중
+
+  React.useEffect(() => {
+    fetch(`/api/crawlers/${crawler.id}/results`)
+      .then(r => r.json())
+      .then(data => setResults(Array.isArray(data) ? data : []))
+      .catch(() => setResults([]));
+  }, [crawler.id]);
+
+  // ── 실행 이력 기반 통계 계산 ──────────────────────────────────────────────
+  const hasResults = results && results.length > 0;
+  const latest     = hasResults ? results[0] : null;
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const runs7d = hasResults
+    ? results.filter(r => new Date(r.run_at) >= sevenDaysAgo).length
+    : null;
+  const successRate = hasResults
+    ? (results.filter(r => r.status === 'healthy').length / results.length * 100).toFixed(1) + '%'
+    : null;
+  const avgMs = hasResults
+    ? results.reduce((s, r) => s + (r.duration_ms || 0), 0) / results.length
+    : null;
+  const avgDur = avgMs != null
+    ? (avgMs >= 1000 ? (avgMs / 1000).toFixed(2) + 's' : Math.round(avgMs) + 'ms')
+    : null;
+
+  // ── Score 차트 ───────────────────────────────────────────────────────────
+  const isRealSpark = scores.length > 0 && scores !== seedSpark30._cache;
+  const safeScores  = scores.length >= 2 ? scores : [0, 0];
+  const w = 760, h = 180, max = 100, min = 0;
+  const step       = w / (safeScores.length - 1);
+  const pts        = safeScores.map((v, i) => [i * step, h - ((v - min) / (max - min)) * (h - 20) - 10]);
+  const line       = pts.map(p => `${p[0]},${p[1]}`).join(' ');
+  const area       = `0,${h} ${line} ${w},${h}`;
+  const thresholdY = h - ((crawler.threshold - min) / (max - min)) * (h - 20) - 10;
+  const lineColor  = crawler.score >= crawler.threshold ? 'var(--ok)' : crawler.score >= 60 ? 'var(--warn)' : 'var(--danger)';
+
+  // ── 최근 수집 결과 JSON ───────────────────────────────────────────────────
+  const jsonPayload = latest
+    ? JSON.stringify({
+        crawler_id:  crawler.id,
+        target:      crawler.url,
+        collected_at: latest.run_at,
+        value:       latest.value || null,
+        status:      latest.status,
+        score:       latest.score,
+        duration_ms: latest.duration_ms,
+        self_healing: {
+          applied:   latest.note ? latest.note.includes('자가치유') || latest.note.includes('healed') : false,
+          score:     latest.score,
+          threshold: crawler.threshold,
+        },
+        note: latest.note,
+      }, null, 2)
+    : JSON.stringify({
+        crawler_id:  crawler.id,
+        target:      crawler.url,
+        collected_at: null,
+        value:       null,
+        status:      'no_data',
+        note:        '아직 실행 기록이 없습니다. "지금 실행"을 눌러 첫 수집을 시작하세요.',
+      }, null, 2);
 
   return (
     <div style={{display:'grid', gridTemplateColumns:'1.7fr 1fr', gap:16}}>
@@ -487,92 +718,95 @@ function DetailOverview({ crawler, scores }) {
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14}}>
             <div>
               <div style={{fontWeight:600, marginBottom:2}}>Score 추이</div>
-              <div className="dim" style={{fontSize:11.5}}>지난 30일</div>
-            </div>
-            <div style={{display:'flex', gap:6}}>
-              <button className="btn ghost sm">7d</button>
-              <button className="btn sm">30d</button>
-              <button className="btn ghost sm">90d</button>
+              <div className="dim" style={{fontSize:11.5}}>
+                {isRealSpark
+                  ? `최근 ${scores.length}회 실행 기록`
+                  : hasResults === null ? '로딩 중…' : '실행 기록 없음'}
+              </div>
             </div>
           </div>
-          <div style={{position:'relative'}}>
-            <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-              {[60,70,80,90,100].map(g=>{
-                const y = h - ((g-min)/(max-min))*(h-20) - 10;
-                return <line key={g} x1="0" x2={w} y1={y} y2={y} stroke="rgba(255,255,255,0.04)"/>;
-              })}
-              <line x1="0" x2={w} y1={thresholdY} y2={thresholdY} stroke="var(--warn)" strokeWidth="1" strokeDasharray="4 4" opacity="0.65"/>
-              <polygon points={area} fill="var(--ok)" opacity="0.10"/>
-              <polyline points={line} fill="none" stroke="var(--ok)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-              {pts.map((p,i)=>i%4===0 && <circle key={i} cx={p[0]} cy={p[1]} r="2" fill="var(--bg-1)" stroke="var(--ok)" strokeWidth="1.2"/>)}
-            </svg>
-            <div className="mono" style={{
-              position:'absolute', right:8, top:thresholdY-9, fontSize:10,
-              color:'var(--warn)', background:'var(--bg-2)', padding:'1px 6px', borderRadius:4, border:'1px solid var(--warn-line)'
-            }}>임계값 {crawler.threshold}</div>
-          </div>
-          <div className="ticks">
-            <span>30d 전</span><span>21d</span><span>14d</span><span>7d</span><span>오늘</span>
+          {safeScores[0] === 0 && safeScores[1] === 0 ? (
+            <div style={{height:h, display:'flex', alignItems:'center', justifyContent:'center'}}>
+              <div className="muted" style={{fontSize:13}}>첫 실행 후 차트가 표시됩니다.</div>
+            </div>
+          ) : (
+            <div style={{position:'relative'}}>
+              <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+                {[0,25,50,75,100].map(g => {
+                  const y = h - ((g - min) / (max - min)) * (h - 20) - 10;
+                  return <line key={g} x1="0" x2={w} y1={y} y2={y} stroke="rgba(255,255,255,0.04)"/>;
+                })}
+                <line x1="0" x2={w} y1={thresholdY} y2={thresholdY} stroke="var(--warn)" strokeWidth="1" strokeDasharray="4 4" opacity="0.65"/>
+                <polygon points={area} fill={lineColor} opacity="0.10"/>
+                <polyline points={line} fill="none" stroke={lineColor} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                {pts.map((p, i) => i % 4 === 0 &&
+                  <circle key={i} cx={p[0]} cy={p[1]} r="2" fill="var(--bg-1)" stroke={lineColor} strokeWidth="1.2"/>
+                )}
+              </svg>
+              <div className="mono" style={{
+                position:'absolute', right:8, top: Math.max(4, thresholdY - 9), fontSize:10,
+                color:'var(--warn)', background:'var(--bg-2)', padding:'1px 6px', borderRadius:4, border:'1px solid var(--warn-line)'
+              }}>임계값 {crawler.threshold}</div>
+            </div>
+          )}
+          <div className="ticks" style={{marginTop:6}}>
+            <span>이전</span><span/><span/><span/><span>최신</span>
           </div>
         </div>
 
-        {/* sample payload */}
+        {/* 최근 수집 결과 JSON */}
         <div className="card" style={{padding:18}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10}}>
             <div style={{fontWeight:600}}>최근 수집 결과 (JSON)</div>
-            <button className="btn ghost sm"><Icon name="download" className="icon icon-sm"/>다운로드</button>
+            {latest && (
+              <span className="dim mono" style={{fontSize:11}}>{latest.run_at}</span>
+            )}
           </div>
-          <pre className="code" style={{margin:0}}>{`{
-  "crawler_id": "${crawler.id}",
-  "target": "${crawler.url}",
-  "collected_at": "2026-05-12T09:14:22+09:00",
-  "value": "${crawler.lastValue}",
-  "schema": { "type": "number", "decimals": 2, "currency": "KRW" },
-  "context_label": "매매기준율",
-  "self_healing": {
-    "applied": false,
-    "score": ${crawler.score.toFixed(2)},
-    "threshold": ${crawler.threshold}
-  }
-}`}</pre>
+          {results === null ? (
+            <div className="muted" style={{fontSize:12, padding:'16px 0'}}>로딩 중…</div>
+          ) : (
+            <pre className="code" style={{margin:0, fontSize:12}}>{jsonPayload}</pre>
+          )}
         </div>
       </div>
 
       <div style={{display:'flex', flexDirection:'column', gap:16}}>
+        {/* 현재 셀렉터 */}
         <div className="card" style={{padding:18}}>
           <div style={{fontWeight:600, marginBottom:12}}>현재 셀렉터</div>
-          <pre className="code" style={{margin:0, fontSize:11}}>
-{`div.val_new.bold-num`}
+          <pre className="code" style={{margin:0, fontSize:11, wordBreak:'break-all', whiteSpace:'pre-wrap'}}>
+            {crawler.css_selector || '셀렉터가 등록되지 않았습니다.'}
           </pre>
-          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginTop:14, fontSize:12}}>
-            <div>
-              <div className="dim" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'}}>데이터 타입</div>
-              <div style={{marginTop:3}}>숫자 · 소수점 2자리</div>
-            </div>
-            <div>
-              <div className="dim" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'}}>주변 라벨</div>
-              <div style={{marginTop:3}}>"매매기준율"</div>
-            </div>
-            <div>
-              <div className="dim" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'}}>DOM 깊이</div>
-              <div className="mono" style={{marginTop:3}}>7 → 9</div>
-            </div>
-            <div>
-              <div className="dim" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'}}>임계값</div>
-              <div className="mono" style={{marginTop:3}}>{crawler.threshold} / 100</div>
+          <div style={{display:'flex', flexDirection:'column', gap:10, marginTop:14, fontSize:12}}>
+            {crawler.user_intent && (
+              <div>
+                <div className="dim" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)', marginBottom:3}}>수집 의도</div>
+                <div style={{color:'var(--text-mute)', lineHeight:1.5}}>{crawler.user_intent}</div>
+              </div>
+            )}
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
+              <div>
+                <div className="dim" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'}}>임계값</div>
+                <div className="mono" style={{marginTop:3}}>{crawler.threshold} / 100</div>
+              </div>
+              <div>
+                <div className="dim" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'}}>도메인</div>
+                <div style={{marginTop:3}}>{crawler.altCategory || crawler.type || '—'}</div>
+              </div>
             </div>
           </div>
         </div>
 
+        {/* 운영 통계 */}
         <div className="card" style={{padding:18}}>
           <div style={{fontWeight:600, marginBottom:12}}>운영 통계</div>
           <div style={{display:'flex', flexDirection:'column', gap:12}}>
             {[
-              ['7일 실행', crawler.runs7d.toString(), 'spark'],
-              ['성공률', '98.81%', 'check'],
-              ['자가치유 발동', crawler.healed + '회', 'bolt'],
-              ['평균 응답', '1.12s', 'activity'],
-            ].map(([k,v,ic])=>(
+              ['최근 7일 실행', runs7d != null ? runs7d + '회' : '—', 'spark'],
+              ['성공률', successRate || '—', 'check'],
+              ['자가치유 발동', (crawler.healed || 0) + '회', 'bolt'],
+              ['평균 응답', avgDur || '—', 'activity'],
+            ].map(([k, v, ic]) => (
               <div key={k} style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
                 <div style={{display:'flex', alignItems:'center', gap:8, color:'var(--text-mute)', fontSize:12.5}}>
                   <Icon name={ic} className="icon icon-sm" style={{color:'var(--text-dim)'}}/>{k}
@@ -580,13 +814,19 @@ function DetailOverview({ crawler, scores }) {
                 <div className="mono" style={{fontSize:13, fontWeight:500}}>{v}</div>
               </div>
             ))}
+            {!hasResults && results !== null && (
+              <div className="dim" style={{fontSize:11, marginTop:4}}>
+                "지금 실행"을 눌러 첫 수집을 시작하면 통계가 집계됩니다.
+              </div>
+            )}
           </div>
         </div>
 
+        {/* 전송 채널 */}
         <div className="card" style={{padding:18}}>
           <div style={{fontWeight:600, marginBottom:12}}>전송 채널</div>
           <div style={{display:'flex', flexDirection:'column', gap:10}}>
-            {crawler.delivery.map(d => (
+            {(crawler.delivery || []).map(d => (
               <div key={d} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 12px',
                 background:'var(--bg-3)', borderRadius:8, border:'1px solid var(--border)'}}>
                 <div style={{display:'flex', alignItems:'center', gap:10}}>
@@ -595,9 +835,9 @@ function DetailOverview({ crawler, scores }) {
                     <div style={{fontSize:13, fontWeight:500}}>{d}</div>
                     <div className="dim mono" style={{fontSize:11}}>
                       {d==='REST API' ? `GET /api/v1/data/${crawler.id}` :
-                       d==='Webhook' ? 'POST https://hooks.…/cr_4n1p' :
-                       d==='Slack' ? '#crawler-alerts' :
-                       'daily_export.csv'}
+                       d==='Webhook'  ? `POST https://hooks.mender.io/${crawler.id}` :
+                       d==='Slack'    ? '#crawler-alerts' :
+                       `${crawler.id}_export.csv`}
                     </div>
                   </div>
                 </div>
@@ -611,7 +851,37 @@ function DetailOverview({ crawler, scores }) {
   );
 }
 
-function DetailRuns(){
+function DetailRuns({ crawlerId }) {
+  const [runs, setRuns] = React.useState(null); // null = loading
+
+  React.useEffect(() => {
+    if (!crawlerId) { setRuns([]); return; }
+    // DB에 실행 이력 있으면 그걸 쓰고, 없으면 목업 데이터 표시
+    fetch(`/api/crawlers/${crawlerId}/results`)
+      .then(r => r.json())
+      .then(data => setRuns(Array.isArray(data) ? data : []))
+      .catch(() => setRuns(null));
+  }, [crawlerId]);
+
+  // 로딩 중
+  if (runs === null) {
+    return (
+      <div className="card" style={{padding:'40px', textAlign:'center', color:'var(--text-dim)'}}>
+        <div className="spin" style={{width:18,height:18,borderRadius:999,border:'2px solid var(--border-strong)',borderTopColor:'var(--accent)',margin:'0 auto 10px'}}/>
+        <div style={{fontSize:12}}>실행 이력 로드 중…</div>
+      </div>
+    );
+  }
+
+  // 실데이터가 없으면 목업 표시
+  const rows = runs.length > 0 ? runs.map(r => ({
+    ts:     r.run_at ? r.run_at.slice(11, 19) : '—',
+    status: r.status,
+    score:  r.score,
+    dur:    r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : '—',
+    note:   r.note,
+  })) : RUN_HISTORY;
+
   return (
     <div className="card" style={{padding:0, overflow:'hidden'}}>
       <div style={{
@@ -621,25 +891,30 @@ function DetailRuns(){
       }}>
         <div>시간</div><div>상태</div><div>Score</div><div>응답시간</div><div>로그</div>
       </div>
-      {RUN_HISTORY.map((r,i)=>(
+      {rows.map((r, i) => (
         <div key={i} style={{
           display:'grid', gridTemplateColumns:'120px 130px 80px 110px 1fr',
           padding:'12px 18px', alignItems:'center',
-          borderBottom: i===RUN_HISTORY.length-1?'none':'1px solid var(--border)'
+          borderBottom: i === rows.length - 1 ? 'none' : '1px solid var(--border)'
         }}>
           <div className="mono" style={{fontSize:12}}>{r.ts}</div>
-          <div><StatusChip status={r.status==='healed'?'healing':r.status}/></div>
-          <div className="mono" style={{fontSize:12.5}}>{r.score===null ? '—' : r.score.toFixed(1)}</div>
+          <div><StatusChip status={r.status === 'healed' ? 'healing' : r.status}/></div>
+          <div className="mono" style={{fontSize:12.5}}>{r.score == null ? '—' : Number(r.score).toFixed(1)}</div>
           <div className="mono dim" style={{fontSize:12}}>{r.dur}</div>
           <div className="muted" style={{fontSize:12.5}}>{r.note}</div>
         </div>
       ))}
+      {rows.length === 0 && (
+        <div style={{padding:'40px', textAlign:'center', color:'var(--text-dim)', fontSize:12}}>
+          아직 실행 이력이 없습니다. "지금 실행"을 눌러 첫 수집을 시작하세요.
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── New Crawler Wizard ────────────────────────────────────────────────────
-function NewCrawlerScreen({ onClose }) {
+function NewCrawlerScreen({ onClose, onRegister }) {
   const [step, setStep] = React.useState(0);
   const [url, setUrl] = React.useState('coupang.com/np/categories/178794');
   const [intent, setIntent] = React.useState('쿠팡 노트북 카테고리 베스트 페이지의 실시간 1위 상품명');
@@ -647,6 +922,7 @@ function NewCrawlerScreen({ onClose }) {
   const [threshold, setThreshold] = React.useState(85);
   const [schedule, setSchedule] = React.useState('daily-9');
   const [channels, setChannels] = React.useState(['api']);
+  const [selected, setSelected] = React.useState(null);
 
   const steps = [
     { id:0, label:'대상 페이지',  sub:'URL 입력 및 렌더링' },
@@ -658,10 +934,33 @@ function NewCrawlerScreen({ onClose }) {
   const canNext = () => {
     if (step===0) return url.trim().length > 3;
     if (step===1) return intent.trim().length > 2;
+    if (step===2) return !!selected?.selector;
     return true;
   };
   const next = () => canNext() && setStep(s => Math.min(s+1, steps.length-1));
   const prev = () => setStep(s => Math.max(s-1, 0));
+
+  const SCHEDULE_LABEL = { 'daily-9':'매일 09:00', 'hourly':'매시간', '15m':'15분마다', 'custom':'Cron' };
+  const DOMAIN_ALTS = { commerce:'소비 수요', labor:'노동 시장', realestate:'부동산', regulatory:'규제·공시', media:'미디어', finance:'금융' };
+  const CHANNEL_LABEL = { api:'REST API', webhook:'Webhook', slack:'Slack', csv:'CSV' };
+
+  const handleCreate = () => {
+    const newCrawler = {
+      id:           'cr_' + Math.random().toString(36).slice(2, 6),
+      name:         intent.slice(0, 40) || url,
+      url,
+      org:          ORGS[0],
+      domain,
+      threshold,
+      css_selector: selected?.selector || '',
+      user_intent:  intent,
+      schedule,
+      channels:     channels.map(c => CHANNEL_LABEL[c] || c),
+      owner:        'me',
+    };
+    if (onRegister) onRegister(newCrawler);
+    else onClose();
+  };
 
   return (
     <div className="fadein" style={{padding:'var(--s-7) var(--s-7) var(--s-11)', maxWidth:1180, margin:'0 auto'}}>
@@ -702,7 +1001,7 @@ function NewCrawlerScreen({ onClose }) {
       <div className="card" style={{padding:'var(--s-6)', minHeight:440}}>
         {step===0 && <WizardStep1 url={url} setUrl={setUrl}/>}
         {step===1 && <WizardStep2 intent={intent} setIntent={setIntent} domain={domain} setDomain={setDomain}/>}
-        {step===2 && <WizardStep3 url={url} intent={intent} domain={domain}/>}
+        {step===2 && <WizardStep3 url={url} intent={intent} domain={domain} selected={selected} setSelected={setSelected}/>}
         {step===3 && <WizardStep4 threshold={threshold} setThreshold={setThreshold} schedule={schedule} setSchedule={setSchedule} channels={channels} setChannels={setChannels}/>}
       </div>
 
@@ -711,7 +1010,7 @@ function NewCrawlerScreen({ onClose }) {
         <div style={{display:'flex', gap:'var(--s-2)'}}>
           {step>0 && <button className="btn" onClick={prev}><Icon name="arrow_l" className="icon icon-sm"/>이전</button>}
           {step<steps.length-1 && <button className="btn primary" onClick={next} disabled={!canNext()} style={{opacity: canNext()?1:0.5}}>다음<Icon name="arrow_r" className="icon icon-sm"/></button>}
-          {step===steps.length-1 && <button className="btn primary" onClick={onClose}><Icon name="check" className="icon icon-sm"/>크롤러 생성</button>}
+          {step===steps.length-1 && <button className="btn primary" onClick={handleCreate}><Icon name="check" className="icon icon-sm"/>크롤러 생성</button>}
         </div>
       </div>
     </div>
@@ -1086,7 +1385,7 @@ user_intent: """${intent || '(여기에 입력하신 문장)'}"""
   );
 }
 
-function WizardStep3({ url }) {
+function WizardStep3({ url, selected, setSelected }) {
   const canvasRef  = React.useRef(null);
   const wsRef      = React.useRef(null);
   const stateRef   = React.useRef('connecting');
@@ -1094,7 +1393,7 @@ function WizardStep3({ url }) {
 
   const [connState, _setConn] = React.useState('connecting');
   const [nodeCount, setNodeCount] = React.useState(null);
-  const [selected,  setSelected]  = React.useState(null);
+  const [removeMode, setRemoveMode] = React.useState(false);
 
   const setConn = (s) => { stateRef.current = s; _setConn(s); };
 
@@ -1174,7 +1473,22 @@ function WizardStep3({ url }) {
 
   const onClick = (e) => {
     if (stateRef.current !== 'ready') return;
-    wsRef.current?.send(JSON.stringify({ type: 'click', ...coords(e) }));
+    const c = coords(e);
+    if (removeMode) {
+      wsRef.current?.send(JSON.stringify({ type: 'remove_element', ...c }));
+    } else {
+      wsRef.current?.send(JSON.stringify({ type: 'click', ...c }));
+    }
+  };
+
+  const sendEsc = () => {
+    if (stateRef.current !== 'ready') return;
+    wsRef.current?.send(JSON.stringify({ type: 'keypress', key: 'Escape' }));
+  };
+
+  const removeOverlays = () => {
+    if (stateRef.current !== 'ready') return;
+    wsRef.current?.send(JSON.stringify({ type: 'remove_overlays' }));
   };
 
   const stateLabel = {
@@ -1308,6 +1622,52 @@ function WizardStep3({ url }) {
           }
         </div>
 
+        {/* 팝업 제거 툴바 */}
+        <div style={{
+          display:'flex', alignItems:'center', gap:'var(--s-2)', padding:'6px var(--s-3)',
+          background:'var(--bg-3)', borderBottom:'1px solid var(--border)', flexShrink:0,
+          fontSize:11.5
+        }}>
+          <span className="dim" style={{ fontSize:11, marginRight:'var(--s-1)' }}>팝업 제거:</span>
+          <button
+            className="btn ghost sm"
+            title="ESC 키 전송 (팝업 닫기)"
+            disabled={!isReady}
+            onClick={sendEsc}
+            style={{ padding:'3px 8px', fontSize:11.5 }}
+          >
+            <kbd style={{
+              fontFamily:'inherit', fontSize:10.5, padding:'1px 5px',
+              background:'var(--bg-2)', border:'1px solid var(--border)', borderRadius:4
+            }}>ESC</kbd>
+          </button>
+          <button
+            className="btn ghost sm"
+            title="페이지 내 팝업·오버레이 자동 제거"
+            disabled={!isReady}
+            onClick={removeOverlays}
+            style={{ padding:'3px 8px', fontSize:11.5 }}
+          >
+            자동 제거
+          </button>
+          <button
+            className={`btn sm${removeMode ? ' primary' : ' ghost'}`}
+            title="클릭한 요소를 DOM에서 제거하는 모드"
+            disabled={!isReady}
+            onClick={() => setRemoveMode(m => !m)}
+            style={{ padding:'3px 8px', fontSize:11.5 }}
+          >
+            {removeMode ? '요소 지우기 ON' : '요소 지우기'}
+          </button>
+          {removeMode && (
+            <span style={{
+              fontSize:11, color:'var(--warn)', marginLeft:'var(--s-1)', fontWeight:500
+            }}>
+              클릭하면 요소가 삭제됩니다
+            </span>
+          )}
+        </div>
+
         {/* 캔버스 + 로딩 오버레이 */}
         <div style={{ position:'relative', flex:1 }}>
           {!isReady && (
@@ -1346,7 +1706,7 @@ function WizardStep3({ url }) {
             style={{
               width:'100%', display:'block',
               aspectRatio:`${REMOTE_W} / ${REMOTE_H}`,
-              cursor: isReady ? 'crosshair' : 'default',
+              cursor: isReady ? (removeMode ? 'not-allowed' : 'crosshair') : 'default',
             }}
             onMouseMove={onMouseMove}
             onClick={onClick}
@@ -1663,6 +2023,264 @@ function TemplatesScreen({ onUse }){
         ))}
       </div>
     </div>
+  );
+}
+
+// ─── HealPanel ─────────────────────────────────────────────────────────────
+function HealPanel({ crawler, onClose }) {
+  const [v1Html,   setV1Html]   = React.useState('');
+  const [v2Html,   setV2Html]   = React.useState('');
+  const [selector, setSelector] = React.useState(crawler.css_selector || '');
+  const [intent,   setIntent]   = React.useState(crawler.user_intent  || '');
+  const [phase,    setPhase]    = React.useState('idle'); // idle | fetching | healing | done | error
+  const [result,   setResult]   = React.useState(null);
+  const [errMsg,   setErrMsg]   = React.useState('');
+
+  const readFile = (file) => new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = rej;
+    r.readAsText(file, 'utf-8');
+  });
+
+  const fetchV2 = async () => {
+    const fullUrl = /^https?:\/\//i.test(crawler.url) ? crawler.url : 'https://' + crawler.url;
+    setPhase('fetching'); setErrMsg('');
+    try {
+      const resp = await fetch('/fetch-html', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: fullUrl }),
+      });
+      const data = await resp.json();
+      if (data.html) { setV2Html(data.html); setPhase('idle'); }
+      else throw new Error(data.error || '알 수 없는 오류');
+    } catch (e) {
+      setErrMsg(`V2 HTML 가져오기 실패: ${e.message}`); setPhase('error');
+    }
+  };
+
+  const runHeal = async () => {
+    setPhase('healing'); setResult(null); setErrMsg('');
+    try {
+      const resp = await fetch('/heal', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          v1_html: v1Html, v2_html: v2Html,
+          css_selector: selector, user_intent: intent,
+          target_name: crawler.name,
+        }),
+      });
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error);
+      setResult(data); setPhase('done');
+    } catch (e) {
+      setErrMsg(`치유 실패: ${e.message}`); setPhase('error');
+    }
+  };
+
+  const isBusy = phase === 'healing' || phase === 'fetching';
+  const canRun = v1Html && v2Html && selector && !isBusy;
+
+  return (
+    <>
+      {/* 딤드 배경 */}
+      <div onClick={onClose} style={{
+        position:'fixed', inset:0, zIndex:19,
+        background:'rgba(0,0,0,0.28)', backdropFilter:'blur(2px)'
+      }}/>
+
+      {/* 패널 */}
+      <div style={{
+        position:'fixed', right:0, top:0, bottom:0, width:460, zIndex:20,
+        background:'var(--bg-2)', borderLeft:'1px solid var(--border)',
+        boxShadow:'var(--shadow-lg)', display:'flex', flexDirection:'column',
+        overflowY:'auto'
+      }}>
+        {/* 헤더 */}
+        <div style={{
+          padding:'16px 20px', borderBottom:'1px solid var(--border)',
+          display:'flex', alignItems:'center', gap:10,
+          position:'sticky', top:0, background:'var(--bg-2)', zIndex:1
+        }}>
+          <div style={{
+            width:30, height:30, borderRadius:8,
+            background:'var(--healing-soft)', color:'var(--healing)',
+            display:'flex', alignItems:'center', justifyContent:'center'
+          }}>
+            <Icon name="bolt" className="icon icon-sm"/>
+          </div>
+          <div>
+            <div style={{fontWeight:600, fontSize:14}}>자가치유 실행</div>
+            <div className="dim" style={{fontSize:11}}>ML + GPT-4o-mini 하이브리드</div>
+          </div>
+          <button className="btn ghost sm" style={{marginLeft:'auto', padding:6}} onClick={onClose}>
+            <Icon name="x" className="icon icon-sm"/>
+          </button>
+        </div>
+
+        {/* 폼 */}
+        <div style={{padding:20, display:'flex', flexDirection:'column', gap:16, flex:1}}>
+
+          {/* 셀렉터 */}
+          <div>
+            <FieldLabel>기존 CSS 셀렉터 (깨진 것)</FieldLabel>
+            <input value={selector} onChange={e => setSelector(e.target.value)} style={{
+              width:'100%', padding:'8px 12px', background:'var(--bg-3)',
+              border:'1px solid var(--border)', borderRadius:8,
+              color:'var(--text)', fontSize:12, fontFamily:'var(--mono)',
+              outline:'none', boxSizing:'border-box'
+            }}/>
+          </div>
+
+          {/* 의도 */}
+          <div>
+            <FieldLabel>수집 의도 (User Intent)</FieldLabel>
+            <textarea value={intent} onChange={e => setIntent(e.target.value)} rows={2} style={{
+              width:'100%', padding:'8px 12px', background:'var(--bg-3)',
+              border:'1px solid var(--border)', borderRadius:8,
+              color:'var(--text)', fontSize:13, fontFamily:'var(--sans)',
+              outline:'none', resize:'vertical', boxSizing:'border-box'
+            }}/>
+          </div>
+
+          {/* V1 HTML */}
+          <div>
+            <FieldLabel>V1 HTML (깨지기 전 원본)</FieldLabel>
+            <label style={{
+              display:'flex', alignItems:'center', gap:8, padding:'9px 12px',
+              background: v1Html ? 'var(--ok-soft)' : 'var(--bg-3)',
+              border:'1px solid '+(v1Html ? 'var(--ok-line)' : 'var(--border)'),
+              borderRadius:8, cursor:'pointer'
+            }}>
+              <Icon name={v1Html ? 'check' : 'download'} className="icon icon-sm"
+                style={{color: v1Html ? 'var(--ok)' : 'var(--text-mute)'}}/>
+              <span style={{fontSize:12.5, color: v1Html ? 'var(--ok)' : 'var(--text-mute)'}}>
+                {v1Html ? 'V1 HTML 로드됨' : 'HTML 파일 선택…'}
+              </span>
+              <input type="file" accept=".html,.htm" style={{display:'none'}}
+                onChange={async e => { if (e.target.files[0]) setV1Html(await readFile(e.target.files[0])); }}/>
+            </label>
+          </div>
+
+          {/* V2 HTML */}
+          <div>
+            <FieldLabel>V2 HTML (변경 후 현재)</FieldLabel>
+            <div style={{display:'flex', gap:6}}>
+              <label style={{
+                flex:1, display:'flex', alignItems:'center', gap:8, padding:'9px 12px',
+                background: v2Html ? 'var(--ok-soft)' : 'var(--bg-3)',
+                border:'1px solid '+(v2Html ? 'var(--ok-line)' : 'var(--border)'),
+                borderRadius:8, cursor:'pointer'
+              }}>
+                <Icon name={v2Html ? 'check' : 'download'} className="icon icon-sm"
+                  style={{color: v2Html ? 'var(--ok)' : 'var(--text-mute)'}}/>
+                <span style={{fontSize:12.5, color: v2Html ? 'var(--ok)' : 'var(--text-mute)'}}>
+                  {v2Html ? 'V2 HTML 로드됨' : 'HTML 파일 선택…'}
+                </span>
+                <input type="file" accept=".html,.htm" style={{display:'none'}}
+                  onChange={async e => { if (e.target.files[0]) setV2Html(await readFile(e.target.files[0])); }}/>
+              </label>
+              <button className="btn" style={{padding:'8px 12px', fontSize:12, flexShrink:0, gap:6}}
+                onClick={fetchV2} disabled={phase === 'fetching'}>
+                {phase === 'fetching'
+                  ? <div className="spin" style={{width:12, height:12, borderRadius:999,
+                      border:'2px solid var(--border-strong)', borderTopColor:'var(--accent)'}}/>
+                  : <Icon name="refresh" className="icon icon-sm"/>
+                }
+                URL에서 가져오기
+              </button>
+            </div>
+          </div>
+
+          {/* 에러 */}
+          {errMsg && (
+            <div style={{
+              padding:'10px 12px', background:'var(--danger-soft)',
+              border:'1px solid var(--danger-line)', borderRadius:8,
+              fontSize:12.5, color:'var(--danger)'
+            }}>{errMsg}</div>
+          )}
+
+          {/* 실행 버튼 */}
+          <button className="btn primary" onClick={runHeal} disabled={!canRun}
+            style={{justifyContent:'center', padding:11, opacity: canRun ? 1 : 0.5}}>
+            {phase === 'healing' ? (
+              <>
+                <div className="spin" style={{width:14, height:14, borderRadius:999,
+                  border:'2px solid rgba(255,255,255,0.4)', borderTopColor:'#fff'}}/>
+                ML 필터링 + GPT 추론 중…
+              </>
+            ) : (
+              <><Icon name="bolt" className="icon icon-sm"/>자가치유 실행</>
+            )}
+          </button>
+
+          {/* 결과 */}
+          {result && (
+            <div style={{display:'flex', flexDirection:'column', gap:12}}>
+              <div style={{height:1, background:'var(--border)'}}/>
+              <div style={{display:'flex', alignItems:'center', gap:8}}>
+                <span className={`chip ${
+                  result.status === 'healed'           ? 'ok'     :
+                  result.status === 'no_change_needed' ? 'accent' : 'danger'
+                }`}>
+                  <span className="dot"/>
+                  {result.status === 'healed'           ? '치유 성공'   :
+                   result.status === 'no_change_needed' ? '셀렉터 유효' : '치유 실패'}
+                </span>
+                {result.confidence > 0 && (
+                  <span className="mono dim" style={{fontSize:12, marginLeft:'auto'}}>
+                    신뢰도 {Math.round(result.confidence * 100)}%
+                  </span>
+                )}
+              </div>
+
+              {result.extracted_text && (
+                <div>
+                  <FieldLabel small>복구된 값</FieldLabel>
+                  <div style={{
+                    padding:'10px 14px', background:'var(--ok-soft)',
+                    border:'1px solid var(--ok-line)', borderRadius:8,
+                    fontWeight:600, fontSize:15
+                  }}>{result.extracted_text}</div>
+                </div>
+              )}
+
+              {result.robust_selector && (
+                <div>
+                  <FieldLabel small>새 CSS 셀렉터</FieldLabel>
+                  <pre style={{
+                    margin:0, padding:'8px 12px', background:'var(--bg-3)',
+                    border:'1px solid var(--border)', borderRadius:8,
+                    fontSize:11, fontFamily:'var(--mono)',
+                    whiteSpace:'pre-wrap', wordBreak:'break-all'
+                  }}>{result.robust_selector}</pre>
+                </div>
+              )}
+
+              {result.reasoning && (
+                <div>
+                  <FieldLabel small>AI 추론 근거</FieldLabel>
+                  <div style={{
+                    padding:'10px 12px', background:'var(--bg-3)',
+                    border:'1px solid var(--border)', borderRadius:8,
+                    fontSize:12.5, lineHeight:1.65, color:'var(--text-mute)'
+                  }}>{result.reasoning}</div>
+                </div>
+              )}
+
+              {result.reason && (
+                <div style={{
+                  padding:'10px 12px', background:'var(--danger-soft)',
+                  border:'1px solid var(--danger-line)', borderRadius:8,
+                  fontSize:12.5, color:'var(--danger)'
+                }}>{result.reason}</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 

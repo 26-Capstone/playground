@@ -11,6 +11,43 @@ function App(){
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [route, setRoute] = React.useState({ name: 'overview' });
   const [currentOrg, setCurrentOrg] = React.useState(ORGS[0]);
+  const [crawlerList, setCrawlerList] = React.useState(CRAWLERS);
+  const [approvalCount, setApprovalCount] = React.useState(0);
+  const [stats, setStats] = React.useState(null);
+
+  // 서버 DB에서 크롤러 목록 + 승인 큐 카운트 + 통계 로드, 30초마다 자동 갱신
+  const refreshCrawlers = React.useCallback(() => {
+    fetch('/api/crawlers')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setCrawlerList(data.length > 0 ? data : CRAWLERS); })
+      .catch(() => {});
+  }, []);
+
+  const refreshApprovals = React.useCallback(() => {
+    fetch('/api/approvals')
+      .then(r => r.json())
+      .then(data => { if (Array.isArray(data)) setApprovalCount(data.length); })
+      .catch(() => {});
+  }, []);
+
+  const refreshStats = React.useCallback(() => {
+    fetch('/api/stats')
+      .then(r => r.json())
+      .then(data => setStats(data))
+      .catch(() => {});
+  }, []);
+
+  const handleRefresh = React.useCallback(() => {
+    refreshCrawlers();
+    refreshApprovals();
+    refreshStats();
+  }, [refreshCrawlers, refreshApprovals, refreshStats]);
+
+  React.useEffect(() => {
+    handleRefresh();
+    const timer = setInterval(handleRefresh, 30000);
+    return () => clearInterval(timer);
+  }, [handleRefresh]);
 
   // theme — also persisted in localStorage so refresh keeps state
   React.useEffect(()=>{
@@ -38,23 +75,64 @@ function App(){
   const go = (name, payload) => setRoute({ name, payload });
   const toggleTheme = () => setTweak('theme', t.theme==='light'?'dark':'light');
 
+  const handleCrawlerUpdate = (updated) => {
+    setCrawlerList(prev => prev.map(c => c.id === updated.id ? updated : c));
+  };
+
+  const handleDeleteCrawler = async (id) => {
+    try { await fetch(`/api/crawlers/${id}`, { method: 'DELETE' }); } catch {}
+    setCrawlerList(prev => prev.filter(c => c.id !== id));
+    refreshStats();
+    go('overview');
+  };
+
+  const handleApprovalAction = () => {
+    refreshApprovals();
+    refreshCrawlers();
+    go('approvals');
+  };
+
+  const handleRegister = async (newCrawler) => {
+    try {
+      const resp = await fetch('/api/crawlers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCrawler),
+      });
+      const saved = await resp.json();
+      if (resp.ok) {
+        setCrawlerList(prev => [saved, ...prev]);
+      } else {
+        // 저장 실패 시에도 UI에는 추가 (오프라인 대응)
+        setCrawlerList(prev => [newCrawler, ...prev]);
+      }
+    } catch {
+      setCrawlerList(prev => [newCrawler, ...prev]);
+    }
+    go('overview');
+  };
+
   return (
     <>
-      <Sidebar route={route} onGo={go} currentOrg={currentOrg} onChangeOrg={setCurrentOrg}/>
+      <Sidebar route={route} onGo={go} currentOrg={currentOrg} onChangeOrg={setCurrentOrg} approvalCount={approvalCount}/>
       <main style={{flex:1, overflowY:'auto', overflowX:'hidden', background:'var(--bg-1)', position:'relative'}}>
         <TopBar route={route} onGo={go} currentOrg={currentOrg} theme={t.theme} onToggleTheme={toggleTheme}/>
         {route.name==='overview' && <OverviewScreen
+          crawlers={crawlerList}
+          stats={stats}
+          approvalCount={approvalCount}
           onOpenCrawler={(c)=>go('detail', c)}
           onGoApprovals={()=>go('approvals')}
           onNewCrawler={()=>go('new')}
+          onRefresh={handleRefresh}
+          onDeleteCrawler={handleDeleteCrawler}
         />}
         {route.name==='approvals' && <ApprovalsScreen
           onBack={()=>go('overview')}
-          onApprove={()=>go('overview')}
-          onReject={()=>go('overview')}
+          onAction={handleApprovalAction}
         />}
-        {route.name==='detail' && <DetailScreen crawler={route.payload} onBack={()=>go('overview')}/>}
-        {route.name==='new' && <NewCrawlerScreen onClose={()=>go('overview')}/>}
+        {route.name==='detail' && <DetailScreen crawler={route.payload} onBack={()=>go('overview')} onCrawlerUpdate={handleCrawlerUpdate} onDelete={handleDeleteCrawler}/>}
+        {route.name==='new' && <NewCrawlerScreen onClose={()=>go('overview')} onRegister={handleRegister}/>}
         {route.name==='delivery' && <DeliveryScreen/>}
         {route.name==='settings' && <BlankScreen title="Settings" subtitle="조직 · 멤버 · API 토큰 · 알림"/>}
         {route.name==='activity' && <BlankScreen title="Activity" subtitle="조직 단위 자가치유 이벤트 타임라인"/>}
@@ -104,11 +182,11 @@ function BlankScreen({title, subtitle}){
 }
 
 // ─── Sidebar ───────────────────────────────────────────────────────────────
-function Sidebar({route, onGo, currentOrg}){
+function Sidebar({route, onGo, currentOrg, approvalCount}){
   const sections = [
     { hdr:'워크스페이스', items:[
-      {id:'overview',  label:'크롤러',     icon:'crawler', count:42},
-      {id:'approvals', label:'승인 큐',    icon:'inbox',   count:3, accent:'warn'},
+      {id:'overview',  label:'크롤러',     icon:'crawler'},
+      {id:'approvals', label:'승인 큐',    icon:'inbox',   count:approvalCount||null, accent:'warn'},
       {id:'templates', label:'템플릿',     icon:'sparkles'},
       {id:'activity',  label:'활동',       icon:'history'},
     ]},

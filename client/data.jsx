@@ -163,6 +163,8 @@ const CRAWLERS = [
     status: 'pending',
     score: 86.3,
     threshold: 90,
+    css_selector: 'span.price_old',
+    user_intent: '광고·배송비 제외, 실제 판매가(원 단위 숫자)를 추출해줘.',
     schedule: '5분마다',
     lastRun: '4분 전',
     lastValue: '529,000원',
@@ -239,6 +241,8 @@ const CRAWLERS = [
     status: 'failed',
     score: 24.1,
     threshold: 90,
+    css_selector: '#itembest_T > ul.uxb-img.first > li.first > div > div.info > em > a',
+    user_intent: '종합 베스트 상품 목록에서 1위 상품의 이름을 찾아줘.',
     schedule: '15분마다',
     lastRun: '38분 전',
     lastValue: '—',
@@ -394,9 +398,36 @@ const Stat = ({ label, value, sub, accent, icon }) => (
   </div>
 );
 
+// ── 다음 실행 시각 계산 ────────────────────────────────────────────────────────
+function nextRunLabel(scheduleKey) {
+  const now = new Date();
+  const next = new Date(now);
+
+  if (scheduleKey === 'daily-9' || scheduleKey === '매일 09:00') {
+    next.setHours(9, 0, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+  } else if (scheduleKey === 'hourly' || scheduleKey === '매시간') {
+    next.setMinutes(0, 0, 0);
+    next.setHours(next.getHours() + 1);
+  } else if (scheduleKey === '15m' || scheduleKey === '15분마다') {
+    const m = Math.ceil((now.getMinutes() + 1) / 15) * 15;
+    next.setMinutes(m, 0, 0);
+    if (m >= 60) { next.setHours(next.getHours() + 1); next.setMinutes(0, 0, 0); }
+  } else {
+    return '—';
+  }
+
+  const diffMs  = next - now;
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin < 1)   return '곧 실행';
+  if (diffMin < 60)  return `${diffMin}분 후`;
+  const h = Math.floor(diffMin / 60), m = diffMin % 60;
+  return m > 0 ? `${h}시간 ${m}분 후` : `${h}시간 후`;
+}
+
 // expose
 Object.assign(window, {
   Icon, ScoreRing, Spark, StatusChip, STATUS_LABEL,
   CRAWLERS, PENDING_APPROVAL, RUN_HISTORY, ORGS, TEMPLATES,
-  SectionTitle, Stat,
+  SectionTitle, Stat, nextRunLabel,
 });

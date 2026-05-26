@@ -3,9 +3,162 @@ const { WebSocketServer } = require('ws');
 const { chromium } = require('playwright');
 const http = require('http');
 const path = require('path');
+const db = require('./db');
+const { runCrawler } = require('./crawler');
+const scheduler = require('./scheduler');
+
+const PYTHON_API_URL = process.env.PYTHON_API_URL || 'http://localhost:8000';
 
 const app = express();
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../client')));
+
+// ─── Crawlers CRUD ────────────────────────────────────────────────────────────
+
+app.get('/api/crawlers', (req, res) => {
+  const crawlers = db.crawlers.list();
+  const withSpark = crawlers.map(c => ({
+    ...c,
+    spark: db.results.sparkScores(c.id),
+  }));
+  res.json(withSpark);
+});
+
+app.get('/api/stats', (req, res) => {
+  res.json(db.stats.summary());
+});
+
+app.post('/api/crawlers', (req, res) => {
+  const b = req.body;
+  if (!b.url || !b.name) return res.status(400).json({ error: 'name, url 필드가 필요합니다.' });
+  const data = {
+    id:           b.id           || 'cr_' + Math.random().toString(36).slice(2, 6),
+    name:         b.name,
+    url:          b.url,
+    css_selector: b.css_selector || '',
+    user_intent:  b.user_intent  || '',
+    threshold:    b.threshold    ?? 85,
+    schedule:     b.schedule     || 'daily-9',
+    channels:     JSON.stringify(Array.isArray(b.channels) ? b.channels : ['REST API']),
+    domain:       b.domain       || 'commerce',
+    org:          b.org          || '',
+    owner:        b.owner        || '',
+    status:       'pending',
+  };
+  const created = db.crawlers.insert(data);
+  scheduler.addJob(created);
+  res.status(201).json(created);
+});
+
+app.get('/api/crawlers/:id', (req, res) => {
+  const c = db.crawlers.get(req.params.id);
+  if (!c) return res.status(404).json({ error: '크롤러를 찾을 수 없습니다.' });
+  res.json(c);
+});
+
+app.delete('/api/crawlers/:id', (req, res) => {
+  scheduler.removeJob(req.params.id);
+  db.crawlers.delete(req.params.id);
+  res.json({ ok: true });
+});
+
+app.get('/api/scheduler/status', (req, res) => {
+  res.json(scheduler.getStatus());
+});
+
+app.get('/api/crawlers/:id/results', (req, res) => {
+  res.json(db.results.list(req.params.id));
+});
+
+app.post('/api/crawlers/:id/run', async (req, res) => {
+  try {
+    const result = await runCrawler(req.params.id);
+    const updated = db.crawlers.get(req.params.id);
+    res.json({ result, crawler: updated });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ─── Approvals (heal_proposals) ──────────────────────────────────────────────
+
+app.get('/api/approvals', (req, res) => {
+  res.json(db.proposals.listPending());
+});
+
+app.post('/api/approvals/:id/approve', (req, res) => {
+  const proposal = db.proposals.get(req.params.id);
+  if (!proposal) return res.status(404).json({ error: '승인 요청을 찾을 수 없습니다.' });
+
+  const crawler = db.crawlers.get(proposal.crawler_id);
+  if (!crawler) return res.status(404).json({ error: '크롤러를 찾을 수 없습니다.' });
+
+  db.crawlers.update({
+    id:           proposal.crawler_id,
+    status:       'healthy',
+    score:        Math.round(proposal.confidence * 1000) / 10,
+    last_value:   proposal.extracted_text || '—',
+    last_run_at:  new Date().toLocaleString('ko-KR'),
+    healed_count: (crawler.healed || 0) + 1,
+    css_selector: proposal.proposed_selector,
+  });
+  db.proposals.updateStatus(proposal.id, 'approved');
+
+  res.json({ ok: true, crawler: db.crawlers.get(proposal.crawler_id) });
+});
+
+app.post('/api/approvals/:id/reject', (req, res) => {
+  const proposal = db.proposals.get(req.params.id);
+  if (!proposal) return res.status(404).json({ error: '승인 요청을 찾을 수 없습니다.' });
+
+  const crawler = db.crawlers.get(proposal.crawler_id);
+  if (crawler) {
+    db.crawlers.update({
+      id:           proposal.crawler_id,
+      status:       'failed',
+      score:        crawler.score,
+      last_value:   '—',
+      last_run_at:  new Date().toLocaleString('ko-KR'),
+      healed_count: crawler.healed,
+      css_selector: crawler.css_selector,
+    });
+  }
+  db.proposals.updateStatus(proposal.id, 'rejected');
+
+  res.json({ ok: true });
+});
+
+// ─── /heal: Python FastAPI 프록시 ──────────────────────────────────────────
+app.post('/heal', async (req, res) => {
+  try {
+    const upstream = await fetch(`${PYTHON_API_URL}/heal`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(req.body),
+    });
+    const data = await upstream.json();
+    res.json(data);
+  } catch (e) {
+    res.status(502).json({ error: `Python API 연결 실패: ${e.message}` });
+  }
+});
+
+// ─── /fetch-html: Playwright로 현재 페이지 HTML 수집 ──────────────────────
+app.post('/fetch-html', async (req, res) => {
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ error: 'url 필드가 필요합니다.' });
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    const html = await page.content();
+    res.json({ html });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    await browser.close();
+  }
+});
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
@@ -150,6 +303,52 @@ wss.on('connection', (ws) => {
         await page.mouse.wheel(0, msg.dy);
       }
 
+      if (msg.type === 'keypress' && ready) {
+        await page.keyboard.press(msg.key);
+      }
+
+      if (msg.type === 'remove_overlays' && ready) {
+        const removed = await page.evaluate(() => {
+          const isOverlay = (el) => {
+            const s = getComputedStyle(el);
+            const pos = s.position;
+            if (pos !== 'fixed' && pos !== 'sticky' && pos !== 'absolute') return false;
+            const z = parseInt(s.zIndex, 10);
+            if (isNaN(z) || z < 10) return false;
+            const r = el.getBoundingClientRect();
+            // Must cover a meaningful area of the viewport
+            return r.width > 80 && r.height > 80;
+          };
+          let count = 0;
+          // dialog / role patterns first
+          document.querySelectorAll('[role="dialog"],[role="alertdialog"],[aria-modal="true"]').forEach(el => {
+            el.remove(); count++;
+          });
+          // high-z overlays
+          [...document.querySelectorAll('*')].filter(isOverlay).forEach(el => {
+            el.remove(); count++;
+          });
+          // common overlay class names
+          document.querySelectorAll([
+            '.modal,.modal-backdrop,.overlay,.popup,.popup-overlay',
+            '.dialog,.cookie-banner,.cookie-notice,.gdpr-banner',
+            '[class*="modal"],[class*="popup"],[class*="overlay"],[class*="cookie"]',
+          ].join(',')).forEach(el => { el.remove(); count++; });
+          // restore body scroll lock
+          document.body.style.overflow = '';
+          document.documentElement.style.overflow = '';
+          return count;
+        });
+        send({ type: 'overlays_removed', count: removed });
+      }
+
+      if (msg.type === 'remove_element' && ready) {
+        await page.evaluate(({ x, y }) => {
+          const el = document.elementFromPoint(x, y);
+          if (el && el !== document.body && el !== document.documentElement) el.remove();
+        }, { x: msg.x, y: msg.y });
+      }
+
     } catch (err) {
       send({ type: 'error', message: err.message });
     }
@@ -160,7 +359,8 @@ wss.on('connection', (ws) => {
   });
 });
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`Mender → http://localhost:${PORT}/Mender.html`);
+  scheduler.initScheduler();
 });

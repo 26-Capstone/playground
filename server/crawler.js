@@ -26,23 +26,25 @@ async function runCrawler(crawlerId) {
     });
     const page = await ctx.newPage();
     await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
-    html = await page.content();
 
-    // V1 스냅샷 저장 (크롤러당 최초 1회)
-    const v1Path = path.join(SNAPSHOTS_DIR, `${crawlerId}_v1.html`);
-    if (!fs.existsSync(v1Path)) {
-      fs.writeFileSync(v1Path, html, 'utf-8');
-      console.log(`[crawler] V1 스냅샷 저장: ${v1Path}`);
-    }
-
-    // CSS 셀렉터로 값 추출
+    // CSS 셀렉터로 값 추출 (최대 5초 대기 후 시도)
     try {
+      await page.waitForSelector(crawler.css_selector, { timeout: 5000 }).catch(() => {});
       value = await page.$eval(
         crawler.css_selector,
         el => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 200)
       );
     } catch (e) {
       extractError = e.message;
+    }
+
+    // $eval 이후에 HTML 캡처 — JS 렌더링이 완료된 DOM 상태를 저장
+    html = await page.content();
+
+    // V1 스냅샷: 셀렉터가 성공할 때만 저장/갱신 (= 마지막으로 정상 동작한 HTML)
+    if (value && !extractError) {
+      const v1Path = path.join(SNAPSHOTS_DIR, `${crawlerId}_v1.html`);
+      fs.writeFileSync(v1Path, html, 'utf-8');
     }
   } finally {
     await browser.close();
@@ -63,12 +65,9 @@ async function runCrawler(crawlerId) {
       : `셀렉터 매칭 실패: ${extractError || '값 없음'}`,
   });
 
-  // score 재계산 (최근 20건 성공률)
+  // score = 가장 최근 실행의 신뢰도 (성공=99, 실패=0, 힐링=실제 confidence%)
   const recent = db.results.list(crawlerId).slice(0, 20);
-  const successRate = recent.length
-    ? recent.filter(r => r.status === 'healthy').length / recent.length
-    : 0;
-  const score = Math.round(successRate * 1000) / 10;
+  const score = recent.length ? recent[0].score : 0;
 
   const now = new Date().toLocaleString('ko-KR');
 
@@ -133,9 +132,11 @@ async function tryHeal(crawlerId, crawler, v2Html) {
 
     if (result.status === 'healed' && confidence >= thresholdRatio) {
       // 신뢰도 충족 → 자동 복구
+      const confidenceScore = Math.round(confidence * 1000) / 10;
+      db.results.updateLastScore(crawlerId, confidenceScore);
       db.crawlers.update({
         id: crawlerId, status: 'healthy',
-        score: Math.round(confidence * 1000) / 10,
+        score: confidenceScore,
         last_value: result.extracted_text || '—', last_run_at: now,
         healed_count: (current.healed || 0) + 1,
         css_selector: result.robust_selector || crawler.css_selector,
@@ -145,9 +146,11 @@ async function tryHeal(crawlerId, crawler, v2Html) {
 
     } else if (result.status === 'healed' && confidence < thresholdRatio) {
       // 셀렉터는 찾았으나 신뢰도 미달 → 승인 큐에 저장
+      const confidenceScore = Math.round(confidence * 1000) / 10;
+      db.results.updateLastScore(crawlerId, confidenceScore);
       db.crawlers.update({
         id: crawlerId, status: 'pending',
-        score: Math.round(confidence * 1000) / 10,
+        score: confidenceScore,
         last_value: '—', last_run_at: now,
         healed_count: current.healed, css_selector: crawler.css_selector,
       });

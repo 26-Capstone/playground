@@ -67,6 +67,11 @@ const stmts = {
       healed_count = @healed_count, css_selector = @css_selector
     WHERE id = @id
   `),
+  updateSelector: db.prepare(`
+    UPDATE crawlers SET css_selector = @css_selector, user_intent = @user_intent,
+      status = 'pending', score = 0, last_value = '—'
+    WHERE id = @id
+  `),
   _deleteResults: db.prepare('DELETE FROM crawl_results WHERE crawler_id = ?'),
   _deleteCrawler:  db.prepare('DELETE FROM crawlers WHERE id = ?'),
 };
@@ -78,6 +83,10 @@ const resultStmts = {
   `),
   list:        db.prepare('SELECT * FROM crawl_results WHERE crawler_id = ? ORDER BY run_at DESC LIMIT 50'),
   sparkScores: db.prepare('SELECT score FROM crawl_results WHERE crawler_id = ? ORDER BY run_at ASC'),
+  updateLastScore: db.prepare(`
+    UPDATE crawl_results SET score = @score
+    WHERE id = (SELECT id FROM crawl_results WHERE crawler_id = @crawler_id ORDER BY run_at DESC LIMIT 1)
+  `),
 };
 
 const statsStmts = {
@@ -142,7 +151,7 @@ function domainToAlt(d) {
 }
 
 function scheduleLabel(s) {
-  return { 'daily-9':'매일 09:00', 'hourly':'매시간', '15m':'15분마다', 'custom':'Cron' }[s] || s;
+  return { 'daily-9':'매일 09:00', 'hourly':'매시간', '15m':'15분마다' }[s] || `Cron: ${s}`;
 }
 
 module.exports = {
@@ -151,6 +160,10 @@ module.exports = {
     get:    (id)   => dbRowToCrawler(stmts.get.get(id)),
     insert: (data) => { stmts.insert.run(data); return module.exports.crawlers.get(data.id); },
     update: (data) => { stmts.update.run(data); return module.exports.crawlers.get(data.id); },
+    updateSelector: (id, css_selector, user_intent) => {
+      stmts.updateSelector.run({ id, css_selector, user_intent });
+      return module.exports.crawlers.get(id);
+    },
     delete: db.transaction((id) => {
       proposalStmts._deleteByCrawford.run(id);
       stmts._deleteResults.run(id);
@@ -158,9 +171,10 @@ module.exports = {
     }),
   },
   results: {
-    insert:      (data) => resultStmts.insert.run(data),
-    list:        (cid)  => resultStmts.list.all(cid),
-    sparkScores: (cid)  => resultStmts.sparkScores.all(cid).map(r => r.score).slice(-20),
+    insert:          (data) => resultStmts.insert.run(data),
+    list:            (cid)  => resultStmts.list.all(cid),
+    sparkScores:     (cid)  => resultStmts.sparkScores.all(cid).map(r => r.score).slice(-20),
+    updateLastScore: (crawler_id, score) => resultStmts.updateLastScore.run({ crawler_id, score }),
   },
   stats: {
     summary: () => {

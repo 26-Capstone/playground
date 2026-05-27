@@ -10,8 +10,8 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 function App(){
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [route, setRoute] = React.useState({ name: 'overview' });
-  const [currentOrg, setCurrentOrg] = React.useState(ORGS[0]);
-  const [crawlerList, setCrawlerList] = React.useState(CRAWLERS);
+  const [currentOrg, setCurrentOrg] = React.useState('');
+  const [crawlerList, setCrawlerList] = React.useState([]);
   const [approvalCount, setApprovalCount] = React.useState(0);
   const [stats, setStats] = React.useState(null);
 
@@ -19,7 +19,7 @@ function App(){
   const refreshCrawlers = React.useCallback(() => {
     fetch('/api/crawlers')
       .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setCrawlerList(data.length > 0 ? data : CRAWLERS); })
+      .then(data => { if (Array.isArray(data)) setCrawlerList(data); })
       .catch(() => {});
   }, []);
 

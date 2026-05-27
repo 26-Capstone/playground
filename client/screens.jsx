@@ -2,7 +2,7 @@
 // Components are attached to window for cross-script access.
 
 // ─── Overview (Dashboard) ──────────────────────────────────────────────────
-function OverviewScreen({ crawlers = CRAWLERS, stats, approvalCount = 0, onOpenCrawler, onGoApprovals, onNewCrawler, onRefresh, onDeleteCrawler }) {
+function OverviewScreen({ crawlers = [], stats, approvalCount = 0, onOpenCrawler, onGoApprovals, onNewCrawler, onRefresh, onDeleteCrawler }) {
   const [filter, setFilter] = React.useState('all');
   const [query, setQuery] = React.useState('');
   const [refreshing, setRefreshing] = React.useState(false);
@@ -512,16 +512,16 @@ function ApprovalsScreen({ onBack, onAction }) {
 
 // ─── Crawler Detail ────────────────────────────────────────────────────────
 function DetailScreen({ crawler, onBack, onCrawlerUpdate, onDelete }) {
-  const [c, setC] = React.useState(crawler || CRAWLERS[0]);
+  const [c, setC] = React.useState(crawler);
   const tabs = ['Overview', 'Runs', 'Healing log', 'Schema', 'Settings'];
   const [tab, setTab] = React.useState('Overview');
   const [healOpen, setHealOpen] = React.useState(false);
+  const [repickOpen, setRepickOpen] = React.useState(false);
   const [runState, setRunState] = React.useState('idle'); // idle | running | done | error
   const [runMsg, setRunMsg]   = React.useState('');
   const [deleteConfirm, setDeleteConfirm] = React.useState(false);
 
-  // synthetic 30-day score chart
-  const scores = c.spark.length ? c.spark : seedSpark30();
+  const scores = c.spark || [];
 
   return (
     <div className="fadein" style={{padding:'28px 32px 80px', maxWidth:1480, margin:'0 auto'}}>
@@ -531,87 +531,103 @@ function DetailScreen({ crawler, onBack, onCrawlerUpdate, onDelete }) {
         <span>{c.id}</span>
       </div>
 
-      <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:16, marginBottom:24}}>
-        <div style={{display:'flex', alignItems:'center', gap:18}}>
+      {/* 헤더: 좌(이름/메타) + 우(버튼) */}
+      <div style={{display:'flex', alignItems:'flex-start', gap:16, marginBottom:24}}>
+        {/* 좌 */}
+        <div style={{display:'flex', alignItems:'center', gap:18, minWidth:0, flex:1}}>
           <ScoreRing value={c.score} threshold={c.threshold} size={72} stroke={7}/>
-          <div>
+          <div style={{minWidth:0}}>
             <h2 style={{fontSize:24, fontWeight:600, marginBottom:6}}>{c.name}</h2>
-            <div style={{display:'flex', alignItems:'center', gap:10, fontSize:12, color:'var(--text-mute)'}}>
+            <div style={{display:'flex', alignItems:'center', gap:8, fontSize:12, color:'var(--text-mute)', flexWrap:'wrap'}}>
               <StatusChip status={c.status}/>
-              <span className="mono">{c.url}</span>
+              <span className="mono" style={{overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:280}}>{c.url}</span>
               <span className="dim">·</span>
               <span>{c.schedule}</span>
               <span className="chip" style={{fontSize:10, padding:'1px 7px'}}>
                 <Icon name="history" className="icon icon-sm"/>
                 {nextRunLabel(c.scheduleKey || c.schedule)}
               </span>
-              <span className="dim">·</span>
-              <span>owner: <span className="mono" style={{color:'var(--text)'}}>{c.owner}</span></span>
             </div>
           </div>
         </div>
-        <div style={{display:'flex', gap:8, alignItems:'center'}}>
-          <button className="btn ghost"><Icon name="pause" className="icon icon-sm"/>일시중지</button>
-          <button
-            className="btn ghost"
-            disabled={runState === 'running'}
-            onClick={async () => {
-              setRunState('running'); setRunMsg('');
-              try {
-                const resp = await fetch(`/api/crawlers/${c.id}/run`, { method: 'POST' });
-                const data = await resp.json();
-                if (!resp.ok) throw new Error(data.error || '실행 실패');
-                setC(data.crawler);
-                if (onCrawlerUpdate) onCrawlerUpdate(data.crawler);
-                const r = data.result;
-                setRunMsg(
-                  r.status === 'healthy'  ? `✓ 수집 완료 — "${r.value}"` :
-                  r.heal?.status === 'healed'  ? `⚡ 자가치유 성공` :
-                  r.heal?.status === 'pending' ? `⏳ 신뢰도 미달 — 승인 대기` :
-                  `✗ 실패: ${r.heal?.reason || '셀렉터 오류'}`
-                );
-                setRunState('done');
-              } catch (e) {
-                setRunMsg(`오류: ${e.message}`); setRunState('error');
+
+        {/* 우: 버튼 묶음 */}
+        <div style={{display:'flex', flexDirection:'column', gap:6, flexShrink:0, alignItems:'flex-end'}}>
+          <div style={{display:'flex', gap:6, alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end'}}>
+            <button className="btn ghost sm"><Icon name="pause" className="icon icon-sm"/>일시중지</button>
+            <button
+              className="btn ghost sm"
+              disabled={runState === 'running'}
+              onClick={async () => {
+                setRunState('running'); setRunMsg('');
+                try {
+                  const resp = await fetch(`/api/crawlers/${c.id}/run`, { method: 'POST' });
+                  const data = await resp.json();
+                  if (!resp.ok) throw new Error(data.error || '실행 실패');
+                  setC(data.crawler);
+                  if (onCrawlerUpdate) onCrawlerUpdate(data.crawler);
+                  const r = data.result;
+                  setRunMsg(
+                    r.status === 'healthy'           ? `✓ 수집 완료 — "${r.value}"` :
+                    r.heal?.status === 'healed'      ? `⚡ 자가치유 성공` :
+                    r.heal?.status === 'pending'     ? `⏳ 신뢰도 미달 — 승인 대기` :
+                    r.heal?.status === 'skipped'     ? `✗ 셀렉터 불일치 — '셀렉터 재선택'을 사용하세요` :
+                    `✗ 셀렉터 불일치 — ${r.heal?.reason || '요소를 찾지 못했습니다'}`
+                  );
+                  setRunState('done');
+                } catch (e) {
+                  setRunMsg(`오류: ${e.message}`); setRunState('error');
+                }
+              }}>
+              {runState === 'running'
+                ? <><div className="spin" style={{width:11,height:11,borderRadius:999,border:'2px solid var(--border-strong)',borderTopColor:'var(--accent)'}}/> 실행 중…</>
+                : <><Icon name="play" className="icon icon-sm"/>지금 실행</>
               }
-            }}>
-            {runState === 'running'
-              ? <><div className="spin" style={{width:11,height:11,borderRadius:999,border:'2px solid var(--border-strong)',borderTopColor:'var(--accent)'}}/> 실행 중…</>
-              : <><Icon name="play" className="icon icon-sm"/>지금 실행</>
-            }
-          </button>
+            </button>
+            <button className="btn sm" onClick={() => setRepickOpen(true)}>
+              <Icon name="target" className="icon icon-sm"/>셀렉터 재선택
+            </button>
+            {(c.status === 'failed' || c.status === 'pending') && (
+              <button className="btn sm" style={{
+                borderColor:'var(--healing-line)', background:'var(--healing-soft)', color:'var(--healing)'
+              }} onClick={() => setHealOpen(true)}>
+                <Icon name="bolt" className="icon icon-sm"/>자가치유
+              </button>
+            )}
+            <div style={{width:1, height:16, background:'var(--border)'}}/>
+            {deleteConfirm ? (
+              <>
+                <button className="btn sm"
+                  style={{borderColor:'var(--danger)', color:'var(--danger)', background:'var(--danger-soft)'}}
+                  onClick={() => onDelete && onDelete(c.id)}>확인</button>
+                <button className="btn ghost sm" onClick={() => setDeleteConfirm(false)}>취소</button>
+              </>
+            ) : (
+              <button className="btn ghost sm" onClick={() => setDeleteConfirm(true)}>
+                <Icon name="x" className="icon icon-sm"/>삭제
+              </button>
+            )}
+          </div>
+          {/* 실행 결과 메시지 — 버튼 아래 별도 줄 */}
           {runMsg && (
-            <span style={{fontSize:12, color: runState==='done' ? 'var(--ok)' : 'var(--danger)', maxWidth:260, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
+            <div style={{fontSize:12, color: runState==='done' ? 'var(--ok)' : 'var(--danger)'}}>
               {runMsg}
-            </span>
-          )}
-          <button className="btn"><Icon name="settings" className="icon icon-sm"/>설정</button>
-          {(c.status === 'failed' || c.status === 'pending') && (
-            <button className="btn" style={{
-              borderColor:'var(--healing-line)', background:'var(--healing-soft)', color:'var(--healing)'
-            }} onClick={() => setHealOpen(true)}>
-              <Icon name="bolt" className="icon icon-sm"/>자가치유 실행
-            </button>
-          )}
-          <div style={{width:1, height:18, background:'var(--border)'}}/>
-          {deleteConfirm ? (
-            <>
-              <span style={{fontSize:12, color:'var(--danger)'}}>정말 삭제하시겠습니까?</span>
-              <button
-                className="btn sm"
-                style={{borderColor:'var(--danger)', color:'var(--danger)', background:'var(--danger-soft)'}}
-                onClick={() => onDelete && onDelete(c.id)}
-              >삭제 확인</button>
-              <button className="btn ghost sm" onClick={() => setDeleteConfirm(false)}>취소</button>
-            </>
-          ) : (
-            <button className="btn ghost sm" onClick={() => setDeleteConfirm(true)}>
-              <Icon name="x" className="icon icon-sm"/>삭제
-            </button>
+            </div>
           )}
         </div>
       </div>
       {healOpen && <HealPanel crawler={c} onClose={() => setHealOpen(false)}/>}
+      {repickOpen && (
+        <SelectorRepickPanel
+          crawler={c}
+          onClose={() => setRepickOpen(false)}
+          onSaved={(updated) => {
+            setC(updated);
+            if (onCrawlerUpdate) onCrawlerUpdate(updated);
+            setRepickOpen(false);
+          }}
+        />
+      )}
 
       {/* tabs */}
       <div style={{display:'flex', gap:0, borderBottom:'1px solid var(--border)', marginBottom:20}}>
@@ -639,12 +655,6 @@ function DetailScreen({ crawler, onBack, onCrawlerUpdate, onDelete }) {
   );
 }
 
-function seedSpark30(){
-  const out=[]; let v=95;
-  for (let i=0;i<30;i++){v += (Math.random()-0.5)*4; out.push(Math.max(50, Math.min(100, v)));}
-  return out;
-}
-
 function DetailOverview({ crawler, scores }) {
   const [results, setResults] = React.useState(null); // null = 로딩 중
 
@@ -663,8 +673,8 @@ function DetailOverview({ crawler, scores }) {
   const runs7d = hasResults
     ? results.filter(r => new Date(r.run_at) >= sevenDaysAgo).length
     : null;
-  const successRate = hasResults
-    ? (results.filter(r => r.status === 'healthy').length / results.length * 100).toFixed(1) + '%'
+  const avgConfidence = hasResults
+    ? results[0].score.toFixed(1) + '%'
     : null;
   const avgMs = hasResults
     ? results.reduce((s, r) => s + (r.duration_ms || 0), 0) / results.length
@@ -674,7 +684,7 @@ function DetailOverview({ crawler, scores }) {
     : null;
 
   // ── Score 차트 ───────────────────────────────────────────────────────────
-  const isRealSpark = scores.length > 0 && scores !== seedSpark30._cache;
+  const isRealSpark = scores.length > 0;
   const safeScores  = scores.length >= 2 ? scores : [0, 0];
   const w = 760, h = 180, max = 100, min = 0;
   const step       = w / (safeScores.length - 1);
@@ -803,7 +813,7 @@ function DetailOverview({ crawler, scores }) {
           <div style={{display:'flex', flexDirection:'column', gap:12}}>
             {[
               ['최근 7일 실행', runs7d != null ? runs7d + '회' : '—', 'spark'],
-              ['성공률', successRate || '—', 'check'],
+              ['최근 신뢰도', avgConfidence || '—', 'check'],
               ['자가치유 발동', (crawler.healed || 0) + '회', 'bolt'],
               ['평균 응답', avgDur || '—', 'activity'],
             ].map(([k, v, ic]) => (
@@ -856,7 +866,6 @@ function DetailRuns({ crawlerId }) {
 
   React.useEffect(() => {
     if (!crawlerId) { setRuns([]); return; }
-    // DB에 실행 이력 있으면 그걸 쓰고, 없으면 목업 데이터 표시
     fetch(`/api/crawlers/${crawlerId}/results`)
       .then(r => r.json())
       .then(data => setRuns(Array.isArray(data) ? data : []))
@@ -873,14 +882,13 @@ function DetailRuns({ crawlerId }) {
     );
   }
 
-  // 실데이터가 없으면 목업 표시
-  const rows = runs.length > 0 ? runs.map(r => ({
+  const rows = runs.map(r => ({
     ts:     r.run_at ? r.run_at.slice(11, 19) : '—',
     status: r.status,
     score:  r.score,
     dur:    r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : '—',
     note:   r.note,
-  })) : RUN_HISTORY;
+  }));
 
   return (
     <div className="card" style={{padding:0, overflow:'hidden'}}>
@@ -889,7 +897,7 @@ function DetailRuns({ crawlerId }) {
         padding:'10px 18px', borderBottom:'1px solid var(--border)',
         fontSize:11, color:'var(--text-dim)', letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'
       }}>
-        <div>시간</div><div>상태</div><div>Score</div><div>응답시간</div><div>로그</div>
+        <div>시간</div><div>상태</div><div>신뢰도</div><div>응답시간</div><div>로그</div>
       </div>
       {rows.map((r, i) => (
         <div key={i} style={{
@@ -920,8 +928,9 @@ function NewCrawlerScreen({ onClose, onRegister }) {
   const [intent, setIntent] = React.useState('쿠팡 노트북 카테고리 베스트 페이지의 실시간 1위 상품명');
   const [domain, setDomain] = React.useState('commerce');
   const [threshold, setThreshold] = React.useState(85);
-  const [schedule, setSchedule] = React.useState('daily-9');
-  const [channels, setChannels] = React.useState(['api']);
+  const [schedule,   setSchedule]   = React.useState('daily-9');
+  const [customCron, setCustomCron] = React.useState('');
+  const [channels,   setChannels]   = React.useState(['api']);
   const [selected, setSelected] = React.useState(null);
 
   const steps = [
@@ -931,16 +940,19 @@ function NewCrawlerScreen({ onClose, onRegister }) {
     { id:3, label:'운영 정책',    sub:'임계값 · 스케줄 · 출력' },
   ];
 
+  const isValidCron = (expr) => /^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/.test(expr.trim());
+
   const canNext = () => {
     if (step===0) return url.trim().length > 3;
     if (step===1) return intent.trim().length > 2;
     if (step===2) return !!selected?.selector;
+    if (step===3 && schedule === 'custom') return isValidCron(customCron);
     return true;
   };
   const next = () => canNext() && setStep(s => Math.min(s+1, steps.length-1));
   const prev = () => setStep(s => Math.max(s-1, 0));
 
-  const SCHEDULE_LABEL = { 'daily-9':'매일 09:00', 'hourly':'매시간', '15m':'15분마다', 'custom':'Cron' };
+  const SCHEDULE_LABEL = { 'daily-9':'매일 09:00', 'hourly':'매시간', '15m':'15분마다' };
   const DOMAIN_ALTS = { commerce:'소비 수요', labor:'노동 시장', realestate:'부동산', regulatory:'규제·공시', media:'미디어', finance:'금융' };
   const CHANNEL_LABEL = { api:'REST API', webhook:'Webhook', slack:'Slack', csv:'CSV' };
 
@@ -949,12 +961,12 @@ function NewCrawlerScreen({ onClose, onRegister }) {
       id:           'cr_' + Math.random().toString(36).slice(2, 6),
       name:         intent.slice(0, 40) || url,
       url,
-      org:          ORGS[0],
+      org:          '',
       domain,
       threshold,
       css_selector: selected?.selector || '',
       user_intent:  intent,
-      schedule,
+      schedule: schedule === 'custom' ? customCron.trim() : schedule,
       channels:     channels.map(c => CHANNEL_LABEL[c] || c),
       owner:        'me',
     };
@@ -1002,7 +1014,7 @@ function NewCrawlerScreen({ onClose, onRegister }) {
         {step===0 && <WizardStep1 url={url} setUrl={setUrl}/>}
         {step===1 && <WizardStep2 intent={intent} setIntent={setIntent} domain={domain} setDomain={setDomain}/>}
         {step===2 && <WizardStep3 url={url} intent={intent} domain={domain} selected={selected} setSelected={setSelected}/>}
-        {step===3 && <WizardStep4 threshold={threshold} setThreshold={setThreshold} schedule={schedule} setSchedule={setSchedule} channels={channels} setChannels={setChannels}/>}
+        {step===3 && <WizardStep4 threshold={threshold} setThreshold={setThreshold} schedule={schedule} setSchedule={setSchedule} customCron={customCron} setCustomCron={setCustomCron} channels={channels} setChannels={setChannels}/>}
       </div>
 
       <div style={{display:'flex', justifyContent:'space-between', marginTop:'var(--s-4)'}}>
@@ -1779,7 +1791,8 @@ function FieldLabel({children, small, style}){
   );
 }
 
-function WizardStep4({threshold, setThreshold, schedule, setSchedule, channels, setChannels}){
+function WizardStep4({threshold, setThreshold, schedule, setSchedule, customCron, setCustomCron, channels, setChannels}){
+  const isValidCron = (expr) => /^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/.test(expr.trim());
   const toggleCh = c => setChannels(channels.includes(c) ? channels.filter(x=>x!==c) : [...channels, c]);
 
   const action = threshold >= 95 ? '금융 등급 — 매우 보수적'
@@ -1830,7 +1843,7 @@ function WizardStep4({threshold, setThreshold, schedule, setSchedule, channels, 
         <div style={{fontSize:11, color:'var(--text-dim)', letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)', marginBottom:10}}>
           수집 주기
         </div>
-        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:24}}>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom: schedule==='custom' ? 12 : 24}}>
           {[
             ['daily-9', '매일 09:00'],
             ['hourly', '매시간'],
@@ -1846,6 +1859,46 @@ function WizardStep4({threshold, setThreshold, schedule, setSchedule, channels, 
               }}>{l}</button>
           ))}
         </div>
+
+        {schedule === 'custom' && (
+          <div style={{marginBottom:24}}>
+            <input
+              type="text"
+              className="input mono"
+              placeholder="0 9 * * 1-5  (분 시 일 월 요일)"
+              value={customCron}
+              onChange={e => setCustomCron(e.target.value)}
+              style={{
+                width:'100%', boxSizing:'border-box',
+                borderColor: customCron && !isValidCron(customCron) ? 'var(--danger)' : undefined,
+              }}
+            />
+            <div style={{marginTop:8, display:'flex', flexDirection:'column', gap:4}}>
+              {customCron && !isValidCron(customCron) && (
+                <div style={{fontSize:11, color:'var(--danger)'}}>올바른 cron 표현식을 입력하세요 (5개 필드: 분 시 일 월 요일)</div>
+              )}
+              <div style={{fontSize:11, color:'var(--text-dim)', lineHeight:1.7}}>
+                예시&nbsp;&nbsp;
+                {[
+                  ['0 9 * * 1-5', '평일 09:00'],
+                  ['0 */6 * * *', '6시간마다'],
+                  ['30 8 * * 1', '매주 월요일 08:30'],
+                ].map(([expr, label]) => (
+                  <span
+                    key={expr}
+                    onClick={() => setCustomCron(expr)}
+                    className="mono"
+                    style={{
+                      marginRight:10, cursor:'default',
+                      color:'var(--accent)', textDecoration:'underline', textDecorationStyle:'dotted',
+                    }}
+                    title={label}
+                  >{expr}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div style={{fontSize:11, color:'var(--text-dim)', letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)', marginBottom:10}}>
           전송 채널
@@ -2026,38 +2079,358 @@ function TemplatesScreen({ onUse }){
   );
 }
 
+// ─── SelectorRepickPanel ──────────────────────────────────────────────────
+function SelectorRepickPanel({ crawler, onClose, onSaved }) {
+  const canvasRef       = React.useRef(null);
+  const wsRef           = React.useRef(null);
+  const stateRef        = React.useRef('connecting');
+  const lastMoveAt      = React.useRef(0);
+  const testResolveRef  = React.useRef(null);
+
+  const [connState, _setConn] = React.useState('connecting');
+  const [nodeCount, setNodeCount] = React.useState(null);
+  const [selected,  setSelected]  = React.useState(null);
+  const [saving,    setSaving]    = React.useState(false);
+  const [saveErr,   setSaveErr]   = React.useState('');
+  const [removeMode, setRemoveMode] = React.useState(false);
+
+  const setConn = (s) => { stateRef.current = s; _setConn(s); };
+  const REMOTE_W = 1280, REMOTE_H = 800;
+  const isReady = connState === 'ready';
+
+  React.useEffect(() => {
+    let ws;
+    try { ws = new WebSocket('ws://localhost:3001'); } catch { setConn('error'); return; }
+    wsRef.current = ws;
+    ws.onerror = () => setConn('error');
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'frame') {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const img = new Image();
+        img.onload = () => canvas.getContext('2d').drawImage(img, 0, 0, REMOTE_W, REMOTE_H);
+        img.src = 'data:image/jpeg;base64,' + msg.data;
+        return;
+      }
+      if (msg.type === 'status') {
+        setConn(msg.status);
+        if (msg.nodeCount) setNodeCount(msg.nodeCount);
+        if (msg.status === 'connected') {
+          const full = /^https?:\/\//i.test(crawler.url) ? crawler.url : 'https://' + crawler.url;
+          ws.send(JSON.stringify({ type: 'navigate', url: full }));
+        }
+        return;
+      }
+      if (msg.type === 'selector') { setSelected(msg); setSaveErr(''); return; }
+      if (msg.type === 'test_result') {
+        if (testResolveRef.current) { testResolveRef.current(msg); testResolveRef.current = null; }
+        return;
+      }
+      if (msg.type === 'error')    { setConn('error'); }
+    };
+    return () => ws.close();
+  }, []);
+
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const handler = (e) => {
+      e.preventDefault();
+      if (stateRef.current !== 'ready') return;
+      wsRef.current?.send(JSON.stringify({ type: 'scroll', dy: e.deltaY }));
+    };
+    canvas.addEventListener('wheel', handler, { passive: false });
+    return () => canvas.removeEventListener('wheel', handler);
+  }, []);
+
+  const coords = (e) => {
+    const r = canvasRef.current.getBoundingClientRect();
+    return {
+      x: Math.round((e.clientX - r.left) * REMOTE_W / r.width),
+      y: Math.round((e.clientY - r.top)  * REMOTE_H / r.height),
+    };
+  };
+
+  const handleSave = async () => {
+    if (!selected) return;
+    setSaving(true); setSaveErr('');
+    try {
+      // 1) 저장 전 라이브 세션에서 셀렉터 검증
+      const testResult = await new Promise((resolve) => {
+        testResolveRef.current = resolve;
+        wsRef.current?.send(JSON.stringify({ type: 'test_selector', selector: selected.selector }));
+        setTimeout(() => {
+          if (testResolveRef.current) { testResolveRef.current({ found: false, error: '응답 시간 초과' }); testResolveRef.current = null; }
+        }, 6000);
+      });
+
+      if (!testResult.found) {
+        setSaveErr(`셀렉터가 현재 페이지에서 매칭되지 않습니다${testResult.error ? ': ' + testResult.error : ' — 다른 요소를 선택해 주세요'}`);
+        setSaving(false);
+        return;
+      }
+
+      // 2) DB 저장
+      const resp = await fetch(`/api/crawlers/${crawler.id}/selector`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ css_selector: selected.selector, user_intent: crawler.user_intent }),
+      });
+      const updated = await resp.json();
+      if (!resp.ok) { setSaveErr(updated.error || '저장 실패'); return; }
+      onSaved(updated);
+    } catch (e) {
+      setSaveErr('저장 중 오류: ' + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const stateLabel = {
+    connecting: '서버 연결 중…', connected: '페이지 로딩 중…',
+    navigating: '페이지 로딩 중…',
+    ready: nodeCount ? `${nodeCount.toLocaleString()}개 노드 수집됨` : '준비됨',
+    error: '연결 실패',
+  }[connState] || connState;
+
+  return (
+    <>
+      <div onClick={onClose} style={{
+        position:'fixed', inset:0, zIndex:19,
+        background:'rgba(0,0,0,0.35)', backdropFilter:'blur(2px)'
+      }}/>
+      <div style={{
+        position:'fixed', right:0, top:0, bottom:0, width:900, zIndex:20,
+        background:'var(--bg-2)', borderLeft:'1px solid var(--border)',
+        boxShadow:'var(--shadow-lg)', display:'flex', flexDirection:'column',
+      }}>
+        {/* 헤더 */}
+        <div style={{
+          padding:'14px 20px', borderBottom:'1px solid var(--border)',
+          display:'flex', alignItems:'center', gap:10, flexShrink:0,
+        }}>
+          <div style={{
+            width:30, height:30, borderRadius:8,
+            background:'var(--accent-soft)', color:'var(--accent)',
+            display:'flex', alignItems:'center', justifyContent:'center',
+          }}>
+            <Icon name="target" className="icon icon-sm"/>
+          </div>
+          <div>
+            <div style={{fontWeight:600, fontSize:14}}>셀렉터 재선택</div>
+            <div className="dim mono" style={{fontSize:11}}>{crawler.url}</div>
+          </div>
+          <button className="btn ghost sm" style={{marginLeft:'auto', padding:6}} onClick={onClose}>
+            <Icon name="x" className="icon icon-sm"/>
+          </button>
+        </div>
+
+        {/* 본문: 좌(결과) + 우(브라우저) */}
+        <div style={{display:'grid', gridTemplateColumns:'260px 1fr', flex:1, overflow:'hidden'}}>
+
+          {/* 좌: 상태 + 선택 결과 + 저장 */}
+          <div style={{
+            padding:18, borderRight:'1px solid var(--border)',
+            display:'flex', flexDirection:'column', gap:14, overflowY:'auto',
+          }}>
+            <div style={{
+              display:'flex', alignItems:'center', gap:8, padding:'8px 12px',
+              background:'var(--bg-3)', border:'1px solid var(--border)', borderRadius:8,
+            }}>
+              {isReady
+                ? <span className="chip ok"><span className="dot"/>Live</span>
+                : connState === 'error'
+                ? <span className="chip danger"><span className="dot"/>오류</span>
+                : <div className="spin" style={{width:13, height:13, borderRadius:999, flexShrink:0,
+                    border:'2px solid var(--border-strong)', borderTopColor:'var(--accent)'}}/>
+              }
+              <span className="muted" style={{fontSize:12}}>{stateLabel}</span>
+            </div>
+
+            <div style={{fontSize:12, color:'var(--text-mute)', lineHeight:1.6}}>
+              오른쪽 브라우저에서 수집할 요소를 <strong style={{color:'var(--text)'}}>클릭</strong>하세요.
+            </div>
+
+            {/* 팝업 제거 */}
+            <div style={{display:'flex', gap:6, flexWrap:'wrap'}}>
+              <button className="btn ghost sm" disabled={!isReady} style={{fontSize:11, padding:'4px 8px'}}
+                onClick={() => wsRef.current?.send(JSON.stringify({ type: 'keypress', key: 'Escape' }))}>
+                ESC
+              </button>
+              <button className="btn ghost sm" disabled={!isReady} style={{fontSize:11, padding:'4px 8px'}}
+                onClick={() => wsRef.current?.send(JSON.stringify({ type: 'remove_overlays' }))}>
+                팝업 제거
+              </button>
+              <button className={`btn sm${removeMode?' primary':' ghost'}`} disabled={!isReady}
+                style={{fontSize:11, padding:'4px 8px'}}
+                onClick={() => setRemoveMode(m => !m)}>
+                요소 지우기
+              </button>
+            </div>
+
+            {/* 기존 셀렉터 */}
+            <div>
+              <div className="dim mono" style={{fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:4}}>현재 셀렉터</div>
+              <pre className="code" style={{margin:0, fontSize:10.5, whiteSpace:'pre-wrap', wordBreak:'break-all', opacity:0.6}}>
+                {crawler.css_selector || '(없음)'}
+              </pre>
+            </div>
+
+            {/* 선택 결과 */}
+            {selected ? (
+              <div style={{
+                padding:12, background:'var(--bg-2)',
+                border:'1px solid var(--accent-line)', borderRadius:8,
+                display:'flex', flexDirection:'column', gap:10,
+              }}>
+                <div style={{display:'flex', alignItems:'center', gap:6}}>
+                  <Icon name="check" className="icon icon-sm" style={{color:'var(--ok)'}}/>
+                  <span style={{fontSize:13, fontWeight:600}}>요소 선택됨</span>
+                  <button className="btn ghost sm" style={{marginLeft:'auto', fontSize:11}} onClick={() => setSelected(null)}>다시 선택</button>
+                </div>
+                <div>
+                  <div className="dim mono" style={{fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:4}}>새 셀렉터</div>
+                  <pre className="code" style={{margin:0, fontSize:10.5, whiteSpace:'pre-wrap', wordBreak:'break-all'}}>{selected.selector}</pre>
+                </div>
+                {selected.text && (
+                  <div>
+                    <div className="dim mono" style={{fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:4}}>현재 값</div>
+                    <div style={{fontSize:13, fontWeight:500}}>{selected.text}</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{
+                padding:20, background:'var(--bg-3)',
+                border:'1px dashed var(--border-strong)', borderRadius:8,
+                display:'flex', flexDirection:'column', alignItems:'center',
+                gap:8, color:'var(--text-dim)', textAlign:'center',
+              }}>
+                <Icon name="target" className="icon icon-lg" style={{opacity:0.35}}/>
+                <div style={{fontSize:12}}>아직 선택된 요소 없음</div>
+              </div>
+            )}
+
+            <div style={{flex:1}}/>
+            {saveErr && (
+              <div style={{
+                padding:'8px 10px', borderRadius:6,
+                background:'var(--danger-soft)', color:'var(--danger)',
+                fontSize:11, lineHeight:1.5,
+              }}>{saveErr}</div>
+            )}
+            <button className="btn primary" disabled={!selected || saving} onClick={handleSave}
+              style={{justifyContent:'center', padding:10, opacity: selected ? 1 : 0.45}}>
+              {saving
+                ? <><div className="spin" style={{width:13, height:13, borderRadius:999,
+                    border:'2px solid rgba(255,255,255,0.4)', borderTopColor:'#fff'}}/>검증 중…</>
+                : <><Icon name="check" className="icon icon-sm"/>셀렉터 저장</>
+              }
+            </button>
+          </div>
+
+          {/* 우: 실시간 브라우저 */}
+          <div style={{display:'flex', flexDirection:'column', background:'var(--bg-3)', overflow:'hidden'}}>
+            <div style={{position:'relative', flex:1}}>
+              {!isReady && (
+                <div style={{
+                  position:'absolute', inset:0, zIndex:1,
+                  display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+                  gap:12, background:'var(--bg-3)', color:'var(--text-dim)',
+                }}>
+                  {connState === 'error' ? (
+                    <>
+                      <Icon name="x" className="icon icon-lg" style={{opacity:0.45}}/>
+                      <div style={{fontSize:12, textAlign:'center', lineHeight:1.65}}>
+                        서버에 연결할 수 없습니다<br/>
+                        <span className="mono dim" style={{fontSize:10.5}}>npm start 를 먼저 실행해 주세요</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="spin" style={{width:26, height:26, borderRadius:999,
+                        border:'3px solid var(--border-strong)', borderTopColor:'var(--accent)'}}/>
+                      <div style={{fontSize:12}}>{stateLabel}</div>
+                    </>
+                  )}
+                </div>
+              )}
+              <canvas
+                ref={canvasRef}
+                width={REMOTE_W} height={REMOTE_H}
+                style={{
+                  width:'100%', display:'block',
+                  aspectRatio:`${REMOTE_W} / ${REMOTE_H}`,
+                  cursor: isReady ? (removeMode ? 'not-allowed' : 'crosshair') : 'default',
+                }}
+                onMouseMove={(e) => {
+                  if (stateRef.current !== 'ready') return;
+                  const now = Date.now();
+                  if (now - lastMoveAt.current < 32) return;
+                  lastMoveAt.current = now;
+                  const r = canvasRef.current.getBoundingClientRect();
+                  wsRef.current?.send(JSON.stringify({ type: 'mousemove',
+                    x: Math.round((e.clientX - r.left) * REMOTE_W / r.width),
+                    y: Math.round((e.clientY - r.top)  * REMOTE_H / r.height),
+                  }));
+                }}
+                onClick={(e) => {
+                  if (stateRef.current !== 'ready') return;
+                  const r = canvasRef.current.getBoundingClientRect();
+                  const c = {
+                    x: Math.round((e.clientX - r.left) * REMOTE_W / r.width),
+                    y: Math.round((e.clientY - r.top)  * REMOTE_H / r.height),
+                  };
+                  wsRef.current?.send(JSON.stringify({
+                    type: removeMode ? 'remove_element' : 'click', ...c,
+                  }));
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── HealPanel ─────────────────────────────────────────────────────────────
 function HealPanel({ crawler, onClose }) {
   const [v1Html,   setV1Html]   = React.useState('');
   const [v2Html,   setV2Html]   = React.useState('');
+  const [v1State,  setV1State]  = React.useState('loading'); // loading | ok | error
+  const [v2State,  setV2State]  = React.useState('loading'); // loading | ok | error
   const [selector, setSelector] = React.useState(crawler.css_selector || '');
   const [intent,   setIntent]   = React.useState(crawler.user_intent  || '');
-  const [phase,    setPhase]    = React.useState('idle'); // idle | fetching | healing | done | error
+  const [phase,    setPhase]    = React.useState('idle'); // idle | healing | done | error
   const [result,   setResult]   = React.useState(null);
   const [errMsg,   setErrMsg]   = React.useState('');
 
-  const readFile = (file) => new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = e => res(e.target.result);
-    r.onerror = rej;
-    r.readAsText(file, 'utf-8');
-  });
+  // 마운트 시 V1(스냅샷) + V2(현재 페이지) 자동 수집
+  React.useEffect(() => {
+    // V1: 서버에 저장된 스냅샷
+    fetch(`/api/crawlers/${crawler.id}/snapshot`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.html) { setV1Html(data.html); setV1State('ok'); }
+        else throw new Error(data.error || '스냅샷 없음');
+      })
+      .catch(e => setV1State('error'));
 
-  const fetchV2 = async () => {
+    // V2: Playwright로 현재 페이지 수집
     const fullUrl = /^https?:\/\//i.test(crawler.url) ? crawler.url : 'https://' + crawler.url;
-    setPhase('fetching'); setErrMsg('');
-    try {
-      const resp = await fetch('/fetch-html', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: fullUrl }),
-      });
-      const data = await resp.json();
-      if (data.html) { setV2Html(data.html); setPhase('idle'); }
-      else throw new Error(data.error || '알 수 없는 오류');
-    } catch (e) {
-      setErrMsg(`V2 HTML 가져오기 실패: ${e.message}`); setPhase('error');
-    }
-  };
+    fetch('/fetch-html', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: fullUrl }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.html) { setV2Html(data.html); setV2State('ok'); }
+        else throw new Error(data.error || '수집 실패');
+      })
+      .catch(() => setV2State('error'));
+  }, []);
 
   const runHeal = async () => {
     setPhase('healing'); setResult(null); setErrMsg('');
@@ -2078,8 +2451,32 @@ function HealPanel({ crawler, onClose }) {
     }
   };
 
-  const isBusy = phase === 'healing' || phase === 'fetching';
-  const canRun = v1Html && v2Html && selector && !isBusy;
+  const dataReady = v1State === 'ok' && v2State === 'ok';
+  const canRun    = dataReady && selector && phase === 'idle';
+
+  const HtmlStatus = ({ state, label }) => {
+    const icon  = state === 'loading' ? null : state === 'ok' ? 'check' : 'x';
+    const color = state === 'ok' ? 'var(--ok)' : state === 'error' ? 'var(--danger)' : 'var(--text-mute)';
+    const bg    = state === 'ok' ? 'var(--ok-soft)' : state === 'error' ? 'var(--danger-soft)' : 'var(--bg-3)';
+    const border = state === 'ok' ? 'var(--ok-line)' : state === 'error' ? 'var(--danger-line)' : 'var(--border)';
+    return (
+      <div style={{
+        display:'flex', alignItems:'center', gap:8, padding:'9px 12px',
+        background:bg, border:`1px solid ${border}`, borderRadius:8,
+      }}>
+        {state === 'loading'
+          ? <div className="spin" style={{width:13, height:13, borderRadius:999,
+              border:'2px solid var(--border-strong)', borderTopColor:'var(--accent)', flexShrink:0}}/>
+          : <Icon name={icon} className="icon icon-sm" style={{color, flexShrink:0}}/>
+        }
+        <span style={{fontSize:12.5, color}}>
+          {state === 'loading' ? `${label} 수집 중…` :
+           state === 'ok'      ? `${label} 수집 완료` :
+                                 `${label} 수집 실패`}
+        </span>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -2121,6 +2518,25 @@ function HealPanel({ crawler, onClose }) {
         {/* 폼 */}
         <div style={{padding:20, display:'flex', flexDirection:'column', gap:16, flex:1}}>
 
+          {/* HTML 수집 상태 */}
+          <div>
+            <FieldLabel>HTML 수집 상태</FieldLabel>
+            <div style={{display:'flex', flexDirection:'column', gap:6}}>
+              <HtmlStatus state={v1State} label="V1 (첫 실행 스냅샷)"/>
+              <HtmlStatus state={v2State} label="V2 (현재 페이지)"/>
+            </div>
+            {(v1State === 'error' || v2State === 'error') && (
+              <div style={{
+                marginTop:8, padding:'8px 12px', background:'var(--warn-soft)',
+                border:'1px solid var(--warn-line)', borderRadius:8,
+                fontSize:12, color:'var(--warn)', lineHeight:1.55,
+              }}>
+                {v1State === 'error' && <div>V1 스냅샷 없음 — "지금 실행" 버튼으로 크롤러를 한 번 이상 실행해야 생성됩니다.</div>}
+                {v2State === 'error' && <div>현재 페이지 수집 실패 — URL을 확인하거나 네트워크 상태를 점검하세요.</div>}
+              </div>
+            )}
+          </div>
+
           {/* 셀렉터 */}
           <div>
             <FieldLabel>기존 CSS 셀렉터 (깨진 것)</FieldLabel>
@@ -2141,55 +2557,6 @@ function HealPanel({ crawler, onClose }) {
               color:'var(--text)', fontSize:13, fontFamily:'var(--sans)',
               outline:'none', resize:'vertical', boxSizing:'border-box'
             }}/>
-          </div>
-
-          {/* V1 HTML */}
-          <div>
-            <FieldLabel>V1 HTML (깨지기 전 원본)</FieldLabel>
-            <label style={{
-              display:'flex', alignItems:'center', gap:8, padding:'9px 12px',
-              background: v1Html ? 'var(--ok-soft)' : 'var(--bg-3)',
-              border:'1px solid '+(v1Html ? 'var(--ok-line)' : 'var(--border)'),
-              borderRadius:8, cursor:'pointer'
-            }}>
-              <Icon name={v1Html ? 'check' : 'download'} className="icon icon-sm"
-                style={{color: v1Html ? 'var(--ok)' : 'var(--text-mute)'}}/>
-              <span style={{fontSize:12.5, color: v1Html ? 'var(--ok)' : 'var(--text-mute)'}}>
-                {v1Html ? 'V1 HTML 로드됨' : 'HTML 파일 선택…'}
-              </span>
-              <input type="file" accept=".html,.htm" style={{display:'none'}}
-                onChange={async e => { if (e.target.files[0]) setV1Html(await readFile(e.target.files[0])); }}/>
-            </label>
-          </div>
-
-          {/* V2 HTML */}
-          <div>
-            <FieldLabel>V2 HTML (변경 후 현재)</FieldLabel>
-            <div style={{display:'flex', gap:6}}>
-              <label style={{
-                flex:1, display:'flex', alignItems:'center', gap:8, padding:'9px 12px',
-                background: v2Html ? 'var(--ok-soft)' : 'var(--bg-3)',
-                border:'1px solid '+(v2Html ? 'var(--ok-line)' : 'var(--border)'),
-                borderRadius:8, cursor:'pointer'
-              }}>
-                <Icon name={v2Html ? 'check' : 'download'} className="icon icon-sm"
-                  style={{color: v2Html ? 'var(--ok)' : 'var(--text-mute)'}}/>
-                <span style={{fontSize:12.5, color: v2Html ? 'var(--ok)' : 'var(--text-mute)'}}>
-                  {v2Html ? 'V2 HTML 로드됨' : 'HTML 파일 선택…'}
-                </span>
-                <input type="file" accept=".html,.htm" style={{display:'none'}}
-                  onChange={async e => { if (e.target.files[0]) setV2Html(await readFile(e.target.files[0])); }}/>
-              </label>
-              <button className="btn" style={{padding:'8px 12px', fontSize:12, flexShrink:0, gap:6}}
-                onClick={fetchV2} disabled={phase === 'fetching'}>
-                {phase === 'fetching'
-                  ? <div className="spin" style={{width:12, height:12, borderRadius:999,
-                      border:'2px solid var(--border-strong)', borderTopColor:'var(--accent)'}}/>
-                  : <Icon name="refresh" className="icon icon-sm"/>
-                }
-                URL에서 가져오기
-              </button>
-            </div>
           </div>
 
           {/* 에러 */}

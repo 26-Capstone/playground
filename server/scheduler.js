@@ -2,7 +2,7 @@ const cron = require('node-cron');
 const db = require('./db');
 const { runCrawler } = require('./crawler');
 
-// scheduleKey → cron 표현식
+// scheduleKey → cron 표현식 (없으면 scheduleKey 자체를 raw cron으로 사용)
 const CRON_MAP = {
   'daily-9': '0 9 * * *',
   'hourly':  '0 * * * *',
@@ -14,7 +14,11 @@ const running = new Set(); // 현재 실행 중인 crawlerId
 
 // ── 단일 크롤러 job 등록 ───────────────────────────────────────────────────────
 function addJob(crawler) {
-  const expr = CRON_MAP[crawler.scheduleKey] || CRON_MAP['hourly'];
+  const expr = CRON_MAP[crawler.scheduleKey] || crawler.scheduleKey;
+  if (!cron.validate(expr)) {
+    console.warn(`[scheduler] ${crawler.name}: 유효하지 않은 cron 표현식 — "${expr}" (건너뜀)`);
+    return;
+  }
   if (jobs.has(crawler.id)) removeJob(crawler.id);
 
   const task = cron.schedule(expr, async () => {

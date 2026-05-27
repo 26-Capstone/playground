@@ -3,6 +3,7 @@ const { WebSocketServer } = require('ws');
 const { chromium } = require('playwright');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const db = require('./db');
 const { runCrawler } = require('./crawler');
 const scheduler = require('./scheduler');
@@ -62,8 +63,27 @@ app.delete('/api/crawlers/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+app.patch('/api/crawlers/:id/selector', (req, res) => {
+  const { css_selector, user_intent } = req.body;
+  const crawler = db.crawlers.get(req.params.id);
+  if (!crawler) return res.status(404).json({ error: '크롤러를 찾을 수 없습니다.' });
+  db.crawlers.updateSelector(req.params.id, css_selector, user_intent ?? crawler.user_intent);
+  // 셀렉터가 바뀌면 기존 V1 스냅샷 삭제 (새 셀렉터 기준으로 다시 쌓아야 함)
+  const snapshotPath = path.join(__dirname, 'snapshots', `${req.params.id}_v1.html`);
+  if (fs.existsSync(snapshotPath)) fs.unlinkSync(snapshotPath);
+  res.json(db.crawlers.get(req.params.id));
+});
+
 app.get('/api/scheduler/status', (req, res) => {
   res.json(scheduler.getStatus());
+});
+
+app.get('/api/crawlers/:id/snapshot', (req, res) => {
+  const snapshotPath = path.join(__dirname, 'snapshots', `${req.params.id}_v1.html`);
+  if (!fs.existsSync(snapshotPath)) {
+    return res.status(404).json({ error: 'V1 스냅샷 없음 — 크롤러를 한 번 이상 실행해야 생성됩니다.' });
+  }
+  res.json({ html: fs.readFileSync(snapshotPath, 'utf-8') });
 });
 
 app.get('/api/crawlers/:id/results', (req, res) => {
@@ -171,6 +191,26 @@ const GET_SELECTOR_FN = `
   const el = document.elementFromPoint(x, y);
   if (!el || el.id === '__mender_hl__') return null;
 
+  // CSS-in-JS 해시 클래스 감지: 하이픈 없고 모음 비율 < 25%
+  function isHashClass(c) {
+    if (!c || c.includes('-')) return false;
+    const letters = c.replace(/[^a-zA-Z]/g, '');
+    if (letters.length < 3) return false;
+    const vowels = (letters.match(/[aeiouAEIOU]/g) || []).length;
+    return vowels / letters.length < 0.25;
+  }
+
+  // 안정적인 속성 (data-testid, aria-label 등) 우선 사용
+  function stableAttr(el) {
+    for (const attr of ['data-testid','data-test','data-id','data-name','aria-label','name']) {
+      if (el.hasAttribute(attr)) {
+        const v = el.getAttribute(attr);
+        return '[' + attr + '=' + JSON.stringify(v) + ']';
+      }
+    }
+    return '';
+  }
+
   function buildSelector(el) {
     if (el.id) return '#' + CSS.escape(el.id);
     const parts = [];
@@ -178,12 +218,18 @@ const GET_SELECTOR_FN = `
     while (cur && cur.tagName && cur !== document.documentElement) {
       if (cur.id) { parts.unshift('#' + CSS.escape(cur.id)); break; }
       let s = cur.tagName.toLowerCase();
-      const cls = Array.from(cur.classList)
-        .filter(c => c !== '__mender_hl__')
-        .slice(0, 3)
-        .map(c => '.' + CSS.escape(c))
-        .join('');
-      s += cls;
+      const attr = stableAttr(cur);
+      if (attr) {
+        s += attr;
+      } else {
+        // 해시 클래스 걸러내고 의미있는 클래스만 사용
+        const cls = Array.from(cur.classList)
+          .filter(c => c !== '__mender_hl__' && !isHashClass(c))
+          .slice(0, 2)
+          .map(c => '.' + CSS.escape(c))
+          .join('');
+        s += cls;
+      }
       const sameTagSibs = Array.from(cur.parentElement?.children || [])
         .filter(n => n.tagName === cur.tagName);
       if (sameTagSibs.length > 1)
@@ -297,6 +343,23 @@ wss.on('connection', (ws) => {
           { x: msg.x, y: msg.y }
         );
         if (result) send({ type: 'selector', ...result });
+      }
+
+      if (msg.type === 'test_selector' && ready) {
+        try {
+          const result = await page.evaluate((sel) => {
+            try {
+              const el = document.querySelector(sel);
+              if (!el) return { found: false };
+              return { found: true, text: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120) };
+            } catch (e) {
+              return { found: false, error: e.message };
+            }
+          }, msg.selector);
+          send({ type: 'test_result', ...result });
+        } catch (e) {
+          send({ type: 'test_result', found: false, error: e.message });
+        }
       }
 
       if (msg.type === 'scroll' && ready) {

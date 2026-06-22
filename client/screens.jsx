@@ -722,7 +722,7 @@ function DetailOverview({ crawler, scores }) {
 
   return (
     <div style={{display:'grid', gridTemplateColumns:'1.7fr 1fr', gap:16}}>
-      <div style={{display:'flex', flexDirection:'column', gap:16}}>
+      <div style={{display:'flex', flexDirection:'column', gap:16, minWidth:0}}>
         {/* score chart */}
         <div className="card" style={{padding:18}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14}}>
@@ -764,6 +764,8 @@ function DetailOverview({ crawler, scores }) {
           </div>
         </div>
 
+        {hasResults && <ValueTrendCard results={results} crawlerId={crawler.id}/>}
+
         {/* 최근 수집 결과 JSON */}
         <div className="card" style={{padding:18}}>
           <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10}}>
@@ -780,7 +782,7 @@ function DetailOverview({ crawler, scores }) {
         </div>
       </div>
 
-      <div style={{display:'flex', flexDirection:'column', gap:16}}>
+      <div style={{display:'flex', flexDirection:'column', gap:16, minWidth:0}}>
         {/* 현재 셀렉터 */}
         <div className="card" style={{padding:18}}>
           <div style={{fontWeight:600, marginBottom:12}}>현재 셀렉터</div>
@@ -862,7 +864,7 @@ function DetailOverview({ crawler, scores }) {
 }
 
 function DetailRuns({ crawlerId }) {
-  const [runs, setRuns] = React.useState(null); // null = loading
+  const [runs, setRuns] = React.useState(null);
 
   React.useEffect(() => {
     if (!crawlerId) { setRuns([]); return; }
@@ -872,7 +874,6 @@ function DetailRuns({ crawlerId }) {
       .catch(() => setRuns(null));
   }, [crawlerId]);
 
-  // 로딩 중
   if (runs === null) {
     return (
       <div className="card" style={{padding:'40px', textAlign:'center', color:'var(--text-dim)'}}>
@@ -882,41 +883,328 @@ function DetailRuns({ crawlerId }) {
     );
   }
 
-  const rows = runs.map(r => ({
-    ts:     r.run_at ? r.run_at.slice(11, 19) : '—',
-    status: r.status,
-    score:  r.score,
-    dur:    r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : '—',
-    note:   r.note,
+  // runs are DESC (newest first); index i+1 is the chronologically previous run
+  const rows = runs.map((r, i) => ({
+    ts:           r.run_at || '—',
+    status:       r.status,
+    value:        r.value || '—',
+    valueChanged: i < runs.length - 1 && !!r.value && r.value !== runs[i + 1].value,
+    score:        r.score,
+    dur:          r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : '—',
+    note:         r.note,
   }));
 
   return (
-    <div className="card" style={{padding:0, overflow:'hidden'}}>
-      <div style={{
-        display:'grid', gridTemplateColumns:'120px 130px 80px 110px 1fr',
-        padding:'10px 18px', borderBottom:'1px solid var(--border)',
-        fontSize:11, color:'var(--text-dim)', letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'
-      }}>
-        <div>시간</div><div>상태</div><div>신뢰도</div><div>응답시간</div><div>로그</div>
+    <div style={{display:'flex', flexDirection:'column', gap:10}}>
+      <div style={{display:'flex', justifyContent:'flex-end'}}>
+        <a
+          href={`/api/crawlers/${crawlerId}/results/csv`}
+          download
+          className="btn ghost sm"
+          style={{textDecoration:'none', display:'inline-flex', alignItems:'center', gap:6}}
+        >
+          <Icon name="download" className="icon icon-sm"/>CSV 내보내기
+        </a>
       </div>
-      {rows.map((r, i) => (
-        <div key={i} style={{
-          display:'grid', gridTemplateColumns:'120px 130px 80px 110px 1fr',
-          padding:'12px 18px', alignItems:'center',
-          borderBottom: i === rows.length - 1 ? 'none' : '1px solid var(--border)'
+      <div className="card" style={{padding:0, overflow:'hidden'}}>
+        <div style={{
+          display:'grid', gridTemplateColumns:'160px 120px minmax(100px,1.4fr) 80px 100px 1fr',
+          padding:'10px 18px', borderBottom:'1px solid var(--border)',
+          fontSize:11, color:'var(--text-dim)', letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'
         }}>
-          <div className="mono" style={{fontSize:12}}>{r.ts}</div>
-          <div><StatusChip status={r.status === 'healed' ? 'healing' : r.status}/></div>
-          <div className="mono" style={{fontSize:12.5}}>{r.score == null ? '—' : Number(r.score).toFixed(1)}</div>
-          <div className="mono dim" style={{fontSize:12}}>{r.dur}</div>
-          <div className="muted" style={{fontSize:12.5}}>{r.note}</div>
+          <div>수집 시각</div><div>상태</div><div>추출값</div><div>신뢰도</div><div>응답시간</div><div>로그</div>
         </div>
-      ))}
-      {rows.length === 0 && (
-        <div style={{padding:'40px', textAlign:'center', color:'var(--text-dim)', fontSize:12}}>
-          아직 실행 이력이 없습니다. "지금 실행"을 눌러 첫 수집을 시작하세요.
+        {rows.map((r, i) => (
+          <div key={i} style={{
+            display:'grid', gridTemplateColumns:'160px 120px minmax(100px,1.4fr) 80px 100px 1fr',
+            padding:'12px 18px', alignItems:'center',
+            borderBottom: i === rows.length - 1 ? 'none' : '1px solid var(--border)',
+          }}>
+            <div className="mono" style={{fontSize:11.5}}>{r.ts}</div>
+            <div><StatusChip status={r.status === 'healed' ? 'healing' : r.status}/></div>
+            <div style={{display:'flex', alignItems:'center', gap:6, minWidth:0}}>
+              <div className="mono" style={{fontSize:12.5, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{r.value}</div>
+              {r.valueChanged && (
+                <span style={{
+                  flexShrink:0, fontSize:9.5, padding:'1px 6px', borderRadius:4,
+                  background:'var(--warn-soft)', color:'var(--warn)',
+                  border:'1px solid var(--warn-line)', fontFamily:'var(--mono)', fontWeight:600,
+                }}>변경</span>
+              )}
+            </div>
+            <div className="mono" style={{fontSize:12.5}}>{r.score == null ? '—' : Number(r.score).toFixed(1)}</div>
+            <div className="mono dim" style={{fontSize:12}}>{r.dur}</div>
+            <div className="muted" style={{fontSize:12.5}}>{r.note}</div>
+          </div>
+        ))}
+        {rows.length === 0 && (
+          <div style={{padding:'40px', textAlign:'center', color:'var(--text-dim)', fontSize:12}}>
+            아직 실행 이력이 없습니다. "지금 실행"을 눌러 첫 수집을 시작하세요.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StockChart({ runs, parseNum, chartId }) {
+  const [hoverIdx, setHoverIdx] = React.useState(null);
+  const svgRef = React.useRef(null);
+
+  const vals  = runs.map(r => parseNum(r.value));
+  const times = runs.map(r => r.run_at || '');
+  const n = vals.length;
+  if (n < 2) return null;
+
+  const rawMin = Math.min(...vals), rawMax = Math.max(...vals);
+  const vPad  = (rawMax - rawMin) * 0.14 || rawMax * 0.05 || 1;
+  const lo = rawMin - vPad, hi = rawMax + vPad;
+  const vRange = hi - lo;
+
+  const W = 700, H = 160, PT = 10;
+  const chartH = H - PT;
+
+  const toX = i => (i / (n - 1)) * W;
+  const toY = v => PT + chartH - ((v - lo) / vRange) * chartH;
+
+  const pts     = vals.map((v, i) => ({ x: toX(i), y: toY(v) }));
+  const linePts = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const areaPts = `0,${H} ${linePts} ${W},${H}`;
+
+  const isUp  = vals[n - 1] >= vals[0];
+  const color = isUp ? '#00BD83' : '#E04A4A';
+  const gradId = `sg_${chartId}`;
+
+  // 4 horizontal grid lines
+  const yTicks = [0, 1/3, 2/3, 1].map(t => ({
+    val: lo + t * vRange,
+    y:   PT + chartH * (1 - t),
+  }));
+
+  // X-axis: first · mid · last
+  const xIdxs = [...new Set([0, Math.floor((n - 1) / 2), n - 1])];
+
+  const fmtVal = v => {
+    if (Math.abs(v) >= 10000) return Math.round(v).toLocaleString('ko-KR');
+    if (Math.abs(v) >= 100)   return v.toFixed(0);
+    return v.toFixed(2);
+  };
+
+  const handleMouseMove = e => {
+    if (!svgRef.current) return;
+    const rect  = svgRef.current.getBoundingClientRect();
+    const ratio = (e.clientX - rect.left) / rect.width;
+    setHoverIdx(Math.max(0, Math.min(n - 1, Math.round(ratio * (n - 1)))));
+  };
+
+  const hov = hoverIdx !== null
+    ? { x: pts[hoverIdx].x, y: pts[hoverIdx].y, val: vals[hoverIdx], time: times[hoverIdx] }
+    : null;
+
+  return (
+    <div style={{ position: 'relative', marginBottom: 8, overflow: 'hidden' }}>
+      {/* Y-axis labels (HTML, avoids SVG text distortion) */}
+      <div style={{
+        position: 'absolute', left: 0, top: 0, bottom: 20, width: 56,
+        display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+        paddingTop: PT, pointerEvents: 'none',
+      }}>
+        {[...yTicks].reverse().map((t, i) => (
+          <div key={i} style={{
+            fontSize: 9.5, fontFamily: 'var(--mono)', color: 'var(--text-dim)',
+            textAlign: 'right', paddingRight: 8, transform: 'translateY(50%)',
+          }}>
+            {fmtVal(t.val)}
+          </div>
+        ))}
+      </div>
+
+      {/* Chart */}
+      <div style={{ marginLeft: 56, position: 'relative' }}>
+        <svg
+          ref={svgRef}
+          width="100%" height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          preserveAspectRatio="none"
+          style={{ display: 'block', cursor: 'crosshair' }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setHoverIdx(null)}
+        >
+          <defs>
+            <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%"   stopColor={color} stopOpacity="0.28"/>
+              <stop offset="100%" stopColor={color} stopOpacity="0"/>
+            </linearGradient>
+          </defs>
+
+          {/* Grid lines */}
+          {yTicks.map((t, i) => (
+            <line key={i} x1={0} x2={W} y1={t.y} y2={t.y}
+              stroke="rgba(128,128,128,0.09)" strokeWidth="1"/>
+          ))}
+
+          {/* Baseline */}
+          <line x1={0} x2={W} y1={H} y2={H} stroke="rgba(128,128,128,0.18)" strokeWidth="1"/>
+
+          {/* Area fill */}
+          <polygon points={areaPts} fill={`url(#${gradId})`}/>
+
+          {/* Price line */}
+          <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.8"
+            strokeLinecap="round" strokeLinejoin="round"/>
+
+          {/* Latest-value dot */}
+          <circle cx={pts[n-1].x} cy={pts[n-1].y} r="3.5"
+            fill="var(--bg-1)" stroke={color} strokeWidth="2"/>
+
+          {/* Hover crosshair */}
+          {hov && <>
+            <line x1={hov.x} x2={hov.x} y1={PT} y2={H}
+              stroke={color} strokeWidth="1" strokeDasharray="4 3" opacity="0.6"/>
+            <line x1={0} x2={W} y1={hov.y} y2={hov.y}
+              stroke={color} strokeWidth="1" strokeDasharray="4 3" opacity="0.35"/>
+            <circle cx={hov.x} cy={hov.y} r="4.5"
+              fill="var(--bg-1)" stroke={color} strokeWidth="2"/>
+          </>}
+        </svg>
+
+        {/* Tooltip — HTML div to avoid SVG text distortion */}
+        {hov && (
+          <div style={{
+            position: 'absolute',
+            top: `${(hov.y / H) * 100}%`,
+            transform: 'translateY(-50%)',
+            ...(hov.x / W > 0.62
+              ? { right: `${((W - hov.x) / W) * 100 + 1.2}%` }
+              : { left:  `${(hov.x / W) * 100 + 1.2}%` }),
+            background: 'var(--bg-2)',
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            padding: '6px 11px',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+            pointerEvents: 'none',
+            zIndex: 10,
+            whiteSpace: 'nowrap',
+          }}>
+            <div style={{
+              fontFamily: 'var(--mono)', fontWeight: 700, fontSize: 13.5, color,
+            }}>
+              {fmtVal(hov.val)}
+            </div>
+            <div style={{
+              fontFamily: 'var(--mono)', fontSize: 10, color: 'var(--text-dim)', marginTop: 2,
+            }}>
+              {hov.time?.slice(5, 16) || ''}
+            </div>
+          </div>
+        )}
+
+        {/* X-axis time labels */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
+          {xIdxs.map((i, j) => (
+            <div key={i} style={{
+              fontSize: 9.5, fontFamily: 'var(--mono)', color: 'var(--text-dim)',
+              textAlign: j === 0 ? 'left' : j === xIdxs.length - 1 ? 'right' : 'center',
+            }}>
+              {times[i]?.slice(5, 16) || ''}
+            </div>
+          ))}
         </div>
-      )}
+      </div>
+    </div>
+  );
+}
+
+function ValueTrendCard({ results, crawlerId }) {
+  if (!results || results.length === 0) return null;
+
+  const annotated = results.map((r, i) => ({
+    ...r,
+    changed: i < results.length - 1 && !!r.value && r.value !== results[i + 1].value,
+  }));
+  const changeCount = annotated.filter(r => r.changed).length;
+
+  const parseNum = v => parseFloat(String(v || '').replace(/[^0-9.-]/g, ''));
+  const numericRuns = [...results].reverse()
+    .filter(r => r.value && r.status !== 'failed' && !isNaN(parseNum(r.value)) && parseNum(r.value) !== 0);
+  const isNumeric = numericRuns.length >= 3;
+
+  // ±% change from oldest to latest numeric sample
+  let pctChange = null;
+  if (isNumeric && numericRuns.length >= 2) {
+    const first = parseNum(numericRuns[0].value);
+    const last  = parseNum(numericRuns[numericRuns.length - 1].value);
+    if (first !== 0) pctChange = ((last - first) / Math.abs(first)) * 100;
+  }
+  const isUp = pctChange !== null && pctChange >= 0;
+
+  return (
+    <div className="card" style={{ padding: 18 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+            <div style={{ fontWeight: 600 }}>값 추이</div>
+            {pctChange !== null && (
+              <span style={{
+                fontSize: 12, fontFamily: 'var(--mono)', fontWeight: 700,
+                color: isUp ? '#00BD83' : '#E04A4A',
+                padding: '1px 7px', borderRadius: 5,
+                background: isUp ? 'rgba(0,189,131,0.11)' : 'rgba(224,74,74,0.11)',
+              }}>
+                {isUp ? '▲' : '▼'} {Math.abs(pctChange).toFixed(2)}%
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>
+            {changeCount > 0 ? `${changeCount}회 값 변경 감지됨` : '수집 간 값 변화 이력'}
+          </div>
+        </div>
+        <a
+          href={`/api/crawlers/${crawlerId}/results/csv`}
+          download
+          className="btn ghost sm"
+          style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        >
+          <Icon name="download" className="icon icon-sm"/>CSV
+        </a>
+      </div>
+
+      {/* Stock chart (numeric only) */}
+      {isNumeric && <StockChart runs={numericRuns} parseNum={parseNum} chartId={crawlerId}/>}
+
+      {/* Value history list */}
+      <div style={{ display: 'flex', flexDirection: 'column', marginTop: isNumeric ? 12 : 0 }}>
+        {annotated.slice(0, 15).map((r, i) => (
+          <div key={r.id || i} style={{
+            display: 'grid', gridTemplateColumns: '1fr auto auto',
+            gap: 10, padding: '7px 0', alignItems: 'center',
+            borderBottom: i < Math.min(annotated.length, 15) - 1 ? '1px solid var(--border)' : 'none',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+              <div style={{
+                fontFamily: 'var(--mono)', fontSize: 13,
+                fontWeight: r.changed ? 600 : 400,
+                color: r.changed ? 'var(--text)' : 'var(--text-mute)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {r.value || '—'}
+              </div>
+              {r.changed && (
+                <span style={{
+                  flexShrink: 0, fontSize: 9.5, padding: '1px 6px', borderRadius: 4,
+                  background: 'var(--warn-soft)', color: 'var(--warn)',
+                  border: '1px solid var(--warn-line)', fontFamily: 'var(--mono)', fontWeight: 600,
+                }}>변경</span>
+              )}
+            </div>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>
+              {r.run_at || '—'}
+            </div>
+            <StatusChip status={r.status === 'healed' ? 'healing' : r.status}/>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

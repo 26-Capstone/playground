@@ -14,6 +14,7 @@ const running = new Set(); // 현재 실행 중인 crawlerId
 
 // ── 단일 크롤러 job 등록 ───────────────────────────────────────────────────────
 function addJob(crawler) {
+  if (!crawler.css_selector) return;
   const expr = CRON_MAP[crawler.scheduleKey] || crawler.scheduleKey;
   if (!cron.validate(expr)) {
     console.warn(`[scheduler] ${crawler.name}: 유효하지 않은 cron 표현식 — "${expr}" (건너뜀)`);
@@ -53,7 +54,7 @@ function removeJob(crawlerId) {
 
 // ── 서버 시작 시 DB의 모든 크롤러 로드해서 등록 ──────────────────────────────────
 function initScheduler() {
-  const crawlers = db.crawlers.list();
+  const crawlers = db.crawlers.list().filter(c => c.status !== 'paused');
   for (const c of crawlers) addJob(c);
   console.log(`[scheduler] 초기화 완료 — ${crawlers.length}개 크롤러 등록됨`);
 }

@@ -71,7 +71,9 @@ app.patch('/api/crawlers/:id/selector', (req, res) => {
   // 셀렉터가 바뀌면 기존 V1 스냅샷 삭제 (새 셀렉터 기준으로 다시 쌓아야 함)
   const snapshotPath = path.join(__dirname, 'snapshots', `${req.params.id}_v1.html`);
   if (fs.existsSync(snapshotPath)) fs.unlinkSync(snapshotPath);
-  res.json(db.crawlers.get(req.params.id));
+  const updated = db.crawlers.get(req.params.id);
+  scheduler.addJob(updated);
+  res.json(updated);
 });
 
 app.get('/api/scheduler/status', (req, res) => {
@@ -88,6 +90,18 @@ app.get('/api/crawlers/:id/snapshot', (req, res) => {
 
 app.get('/api/crawlers/:id/results', (req, res) => {
   res.json(db.results.list(req.params.id));
+});
+
+app.get('/api/crawlers/:id/results/csv', (req, res) => {
+  const crawler = db.crawlers.get(req.params.id);
+  if (!crawler) return res.status(404).json({ error: '크롤러를 찾을 수 없습니다.' });
+  const rows = db.results.list(req.params.id);
+  const esc = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const header = ['수집시각', '상태', '추출값', '신뢰도', '응답시간(ms)', '비고'].join(',');
+  const lines = rows.map(r => [r.run_at, r.status, esc(r.value), r.score, r.duration_ms, esc(r.note)].join(','));
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${req.params.id}_results.csv"`);
+  res.send('﻿' + [header, ...lines].join('\r\n'));
 });
 
 app.post('/api/crawlers/:id/run', async (req, res) => {

@@ -1,4 +1,4 @@
-# 로컬 환경 검증 가이드 — Self-Healing Crawler × Mender
+# 로컬 환경 검증 가이드 — Self-Healing Crawler × DOMA
 
 > 두 서버를 띄우고 브라우저에서 실제 기능을 눌러보며 확인하는 절차입니다.
 
@@ -33,7 +33,7 @@ INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 INFO:     Application startup complete.
 ```
 
-### 터미널 B — Mender Node.js (포트 3001)
+### 터미널 B — DOMA Node.js (포트 3001)
 
 ```bash
 cd ~/Desktop/Playground
@@ -42,7 +42,7 @@ npm start
 
 정상 출력:
 ```
-Mender → http://localhost:3001/Mender.html
+DOMA → http://localhost:3001/DOMA.html
 ```
 
 ---
@@ -70,7 +70,7 @@ curl -s http://localhost:3001/heal \
 
 브라우저에서 접속:
 ```
-http://localhost:3001/Mender.html
+http://localhost:3001/DOMA.html
 ```
 
 ---

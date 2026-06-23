@@ -51,12 +51,12 @@ function App(){
 
   // theme — also persisted in localStorage so refresh keeps state
   React.useEffect(()=>{
-    const stored = localStorage.getItem('mender.theme');
+    const stored = localStorage.getItem('doma.theme');
     if (stored && stored !== t.theme) setTweak('theme', stored);
   }, []); // eslint-disable-line
   React.useEffect(()=>{
     document.documentElement.dataset.theme = t.theme;
-    localStorage.setItem('mender.theme', t.theme);
+    localStorage.setItem('doma.theme', t.theme);
   }, [t.theme]);
 
   // density
@@ -207,7 +207,7 @@ function Sidebar({route, onGo, currentOrg, approvalCount}){
       <div style={{padding:'var(--s-4)', borderBottom:'1px solid var(--border)'}}>
         <div style={{display:'flex', alignItems:'center', gap:'var(--s-2)', marginBottom:'var(--s-3)'}}>
           <Logo/>
-          <div style={{fontSize:15, fontWeight:600, letterSpacing:'-0.015em'}}>Mender</div>
+          <div style={{fontSize:15, fontWeight:600, letterSpacing:'-0.015em'}}>DOMA</div>
           <span className="chip" style={{fontSize:10, padding:'1px 7px', marginLeft:'auto'}}>BETA</span>
         </div>
         <button className="btn" style={{

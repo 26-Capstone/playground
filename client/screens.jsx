@@ -1,4 +1,4 @@
-// screens.jsx — All the screens for Mender.
+// screens.jsx — All the screens for DOMA.
 // Components are attached to window for cross-script access.
 
 // ─── Overview (Dashboard) ──────────────────────────────────────────────────
@@ -847,7 +847,7 @@ function DetailOverview({ crawler, scores }) {
                     <div style={{fontSize:13, fontWeight:500}}>{d}</div>
                     <div className="dim mono" style={{fontSize:11}}>
                       {d==='REST API' ? `GET /api/v1/data/${crawler.id}` :
-                       d==='Webhook'  ? `POST https://hooks.mender.io/${crawler.id}` :
+                       d==='Webhook'  ? `POST https://hooks.doma.io/${crawler.id}` :
                        d==='Slack'    ? '#crawler-alerts' :
                        `${crawler.id}_export.csv`}
                     </div>
@@ -1359,7 +1359,7 @@ function WizardStep1({url, setUrl}){
         }}>
           <Icon name="info" className="icon icon-sm" style={{color:'var(--accent)', marginTop:2, flexShrink:0}}/>
           <div style={{fontSize:12.5, lineHeight:1.55}}>
-            Mender는 <strong style={{color:'var(--text)'}}>Playwright headless 렌더</strong>로 페이지를 가져온 뒤
+            DOMA는 <strong style={{color:'var(--text)'}}>Playwright headless 렌더</strong>로 페이지를 가져온 뒤
             <strong style={{color:'var(--text)'}}> 모든 DOM 노드를 후보 풀</strong>로 사용합니다. JS로 그려지는 콘텐츠도 안전합니다.
           </div>
         </div>
@@ -2272,9 +2272,9 @@ function DeliveryScreen(){
             <span className="chip ok" style={{marginLeft:'auto'}}>v1</span>
           </div>
           <div style={{padding:18}}>
-            <pre className="code" style={{margin:0}}>{`# 인증 토큰: env.MENDER_TOKEN
-curl https://api.mender.io/v1/data/cr_8x2k \\
-  -H "Authorization: Bearer $MENDER_TOKEN"
+            <pre className="code" style={{margin:0}}>{`# 인증 토큰: env.DOMA_TOKEN
+curl https://api.doma.io/v1/data/cr_8x2k \\
+  -H "Authorization: Bearer $DOMA_TOKEN"
 
 {
   "crawler_id": "cr_8x2k",

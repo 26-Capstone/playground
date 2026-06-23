@@ -1,4 +1,4 @@
-# Mender B2B 전환 로드맵
+# DOMA B2B 전환 로드맵
 
 > 대안데이터 무중단 스크래핑 플랫폼 — 사내 데이터 전문가 대상 B2B 서비스 기준
 
@@ -139,7 +139,7 @@ GET /api/export.csv?crawlers=id1,id2,id3&from=&to=          ← 복수 크롤러
 **응답 헤더**
 ```
 Content-Type: text/csv; charset=utf-8
-Content-Disposition: attachment; filename="mender_export_20260527.csv"
+Content-Disposition: attachment; filename="doma_export_20260527.csv"
 ```
 
 **구현 포인트**

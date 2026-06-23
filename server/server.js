@@ -203,7 +203,7 @@ const VIEWPORT = { width: 1280, height: 800 };
 const GET_SELECTOR_FN = `
 (function({ x, y }) {
   const el = document.elementFromPoint(x, y);
-  if (!el || el.id === '__mender_hl__') return null;
+  if (!el || el.id === '__doma_hl__') return null;
 
   // CSS-in-JS 해시 클래스 감지: 하이픈 없고 모음 비율 < 25%
   function isHashClass(c) {
@@ -238,7 +238,7 @@ const GET_SELECTOR_FN = `
       } else {
         // 해시 클래스 걸러내고 의미있는 클래스만 사용
         const cls = Array.from(cur.classList)
-          .filter(c => c !== '__mender_hl__' && !isHashClass(c))
+          .filter(c => c !== '__doma_hl__' && !isHashClass(c))
           .slice(0, 2)
           .map(c => '.' + CSS.escape(c))
           .join('');
@@ -268,9 +268,9 @@ const GET_SELECTOR_FN = `
 // 마우스 오버 하이라이트 오버레이를 주입하는 스크립트
 const OVERLAY_SCRIPT = `
 (function() {
-  if (document.getElementById('__mender_hl__')) return;
+  if (document.getElementById('__doma_hl__')) return;
   const ov = document.createElement('div');
-  ov.id = '__mender_hl__';
+  ov.id = '__doma_hl__';
   ov.style.cssText = [
     'position:fixed', 'pointer-events:none', 'z-index:2147483647',
     'outline:2px solid #3182F6', 'background:rgba(49,130,246,0.10)',
@@ -281,7 +281,7 @@ const OVERLAY_SCRIPT = `
 
   document.addEventListener('mousemove', function(e) {
     const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (!el || el.id === '__mender_hl__') { ov.style.display = 'none'; return; }
+    if (!el || el.id === '__doma_hl__') { ov.style.display = 'none'; return; }
     const r = el.getBoundingClientRect();
     ov.style.display = 'block';
     ov.style.left   = r.left   + 'px';
@@ -438,6 +438,6 @@ wss.on('connection', (ws) => {
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`Mender → http://localhost:${PORT}/Mender.html`);
+  console.log(`DOMA → http://localhost:${PORT}/DOMA.html`);
   scheduler.initScheduler();
 });

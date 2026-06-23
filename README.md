@@ -1,4 +1,4 @@
-# Mender — Self-Healing Web Scraper
+# DOMA — Self-Healing Web Scraper
 
 CSS 셀렉터가 깨졌을 때 ML + LLM으로 자동 복구하는 웹 크롤러 관리 플랫폼.
 
@@ -92,7 +92,7 @@ npm start
 npm run dev
 ```
 
-브라우저에서 `http://localhost:3001/Mender.html` 접속.
+브라우저에서 `http://localhost:3001/DOMA.html` 접속.
 
 ### 4. Python ML 서버 실행 (자가치유 기능 사용 시)
 
@@ -230,12 +230,12 @@ Playground/
 │   ├── db.js                   # SQLite 스키마 & 쿼리 (better-sqlite3)
 │   ├── crawler.js              # Playwright 실행 엔진 + 자가치유 로직 (tryHeal 3분기)
 │   ├── scheduler.js            # node-cron 스케줄 관리
-│   ├── mender.db               # SQLite 데이터베이스 파일
+│   ├── doma.db                 # SQLite 데이터베이스 파일
 │   ├── snapshots/              # V1 HTML 스냅샷 ({crawlerId}_v1.html)
 │   └── package.json
 │
 ├── client/
-│   ├── Mender.html             # 진입점 HTML (React CDN, Babel, 스크립트 로드)
+│   ├── DOMA.html               # 진입점 HTML (React CDN, Babel, 스크립트 로드)
 │   ├── app.jsx                 # 앱 루트: 라우팅, 상태 관리, 테마, API 폴링
 │   ├── screens.jsx             # 모든 화면 컴포넌트
 │   ├── data.jsx                # 목 데이터, 공유 컴포넌트 (Icon, ScoreRing, Stat 등)

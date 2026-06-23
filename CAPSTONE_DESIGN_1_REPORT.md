@@ -40,7 +40,7 @@
 
 ```
 [사용자 브라우저]
-       │  React SPA (Mender 대시보드)
+       │  React SPA (DOMA 대시보드)
        ▼
 ┌─────────────────────────────────────────────────┐
 │           Node.js / Express  서버                │
@@ -74,7 +74,7 @@
 | **ML 후보 필터링** | 수천 개 DOM 노드 중 Top-30으로 압축하여 LLM 비용 절감 |
 | **LLM 정밀 선택** | GPT-4o-mini가 의미·구조·순위 맥락을 종합해 최종 노드 결정 |
 | **랭킹 노드 보정** | "1위", "베스트" 등 순위 타겟의 위치를 DOM 탐색으로 자동 교정 |
-| **운영 대시보드** | 크롤러 등록·실행·스케줄·승인을 단일 UI에서 관리 (Mender) |
+| **운영 대시보드** | 크롤러 등록·실행·스케줄·승인을 단일 UI에서 관리 (DOMA) |
 | **REST API 제공** | FastAPI 기반 `/heal` 엔드포인트로 외부 시스템과 연동 |
 
 ### 2.3 입출력 명세
@@ -229,7 +229,7 @@ V2 전체 후보 노드 (수천 개)
 
 ---
 
-### 3.3 운영 플랫폼 — Mender 대시보드
+### 3.3 운영 플랫폼 — DOMA 대시보드
 
 ML 추론 서버(`api/main.py`)를 실제 서비스로 연결하는 **풀스택 운영 플랫폼**이다.
 Node.js + React 기반으로 크롤러의 등록·실행·모니터링·결과 시각화를 단일 UI 안에서 처리한다.
@@ -318,15 +318,15 @@ capstone_dataset/                   # ML 파이프라인
 └── models/
     └── best_self_healing_model.pkl # 최고 성능 모델
 
-Playground/                         # 운영 플랫폼 (Mender)
+Playground/                         # 운영 플랫폼 (DOMA)
 ├── server/
 │   ├── server.js                   # Express + WebSocket 서버
 │   ├── db.js                       # SQLite 스키마 및 CRUD
 │   ├── crawler.js                  # 수집 실행 엔진
 │   ├── scheduler.js                # 스케줄 관리 (node-cron)
-│   └── mender.db                   # 데이터베이스
+│   └── doma.db                     # 데이터베이스
 └── client/
-    ├── Mender.html                 # 앱 진입점
+    ├── DOMA.html                 # 앱 진입점
     ├── app.jsx                     # 라우팅 및 전역 상태
     └── screens.jsx                 # 전체 화면 컴포넌트
         ├── OverviewScreen          대시보드

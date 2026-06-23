@@ -1,4 +1,4 @@
-# 로컬 환경 검증 가이드 — Self-Healing Crawler × DOMA
+# 로컬 환경 검증 가이드 — Self-Healing Scraper × DOMA
 
 > 두 서버를 띄우고 브라우저에서 실제 기능을 눌러보며 확인하는 절차입니다.
 

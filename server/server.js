@@ -5,7 +5,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const db = require('./db');
-const { runCrawler } = require('./crawler');
+const { runScraper } = require('./scraper');
 const scheduler = require('./scheduler');
 
 const PYTHON_API_URL = process.env.PYTHON_API_URL || 'http://localhost:8000';
@@ -14,11 +14,11 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../client')));
 
-// ─── Crawlers CRUD ────────────────────────────────────────────────────────────
+// ─── Scrapers CRUD ────────────────────────────────────────────────────────────
 
-app.get('/api/crawlers', (req, res) => {
-  const crawlers = db.crawlers.list();
-  const withSpark = crawlers.map(c => ({
+app.get('/api/scrapers', (req, res) => {
+  const scrapers = db.scrapers.list();
+  const withSpark = scrapers.map(c => ({
     ...c,
     spark: db.results.sparkScores(c.id),
   }));
@@ -29,7 +29,7 @@ app.get('/api/stats', (req, res) => {
   res.json(db.stats.summary());
 });
 
-app.post('/api/crawlers', (req, res) => {
+app.post('/api/scrapers', (req, res) => {
   const b = req.body;
   if (!b.url || !b.name) return res.status(400).json({ error: 'name, url 필드가 필요합니다.' });
   const data = {
@@ -46,32 +46,32 @@ app.post('/api/crawlers', (req, res) => {
     owner:        b.owner        || '',
     status:       'pending',
   };
-  const created = db.crawlers.insert(data);
+  const created = db.scrapers.insert(data);
   scheduler.addJob(created);
   res.status(201).json(created);
 });
 
-app.get('/api/crawlers/:id', (req, res) => {
-  const c = db.crawlers.get(req.params.id);
-  if (!c) return res.status(404).json({ error: '크롤러를 찾을 수 없습니다.' });
+app.get('/api/scrapers/:id', (req, res) => {
+  const c = db.scrapers.get(req.params.id);
+  if (!c) return res.status(404).json({ error: '스크래퍼를 찾을 수 없습니다.' });
   res.json(c);
 });
 
-app.delete('/api/crawlers/:id', (req, res) => {
+app.delete('/api/scrapers/:id', (req, res) => {
   scheduler.removeJob(req.params.id);
-  db.crawlers.delete(req.params.id);
+  db.scrapers.delete(req.params.id);
   res.json({ ok: true });
 });
 
-app.patch('/api/crawlers/:id/selector', (req, res) => {
+app.patch('/api/scrapers/:id/selector', (req, res) => {
   const { css_selector, user_intent } = req.body;
-  const crawler = db.crawlers.get(req.params.id);
-  if (!crawler) return res.status(404).json({ error: '크롤러를 찾을 수 없습니다.' });
-  db.crawlers.updateSelector(req.params.id, css_selector, user_intent ?? crawler.user_intent);
+  const scraper = db.scrapers.get(req.params.id);
+  if (!scraper) return res.status(404).json({ error: '스크래퍼를 찾을 수 없습니다.' });
+  db.scrapers.updateSelector(req.params.id, css_selector, user_intent ?? scraper.user_intent);
   // 셀렉터가 바뀌면 기존 V1 스냅샷 삭제 (새 셀렉터 기준으로 다시 쌓아야 함)
   const snapshotPath = path.join(__dirname, 'snapshots', `${req.params.id}_v1.html`);
   if (fs.existsSync(snapshotPath)) fs.unlinkSync(snapshotPath);
-  const updated = db.crawlers.get(req.params.id);
+  const updated = db.scrapers.get(req.params.id);
   scheduler.addJob(updated);
   res.json(updated);
 });
@@ -80,21 +80,21 @@ app.get('/api/scheduler/status', (req, res) => {
   res.json(scheduler.getStatus());
 });
 
-app.get('/api/crawlers/:id/snapshot', (req, res) => {
+app.get('/api/scrapers/:id/snapshot', (req, res) => {
   const snapshotPath = path.join(__dirname, 'snapshots', `${req.params.id}_v1.html`);
   if (!fs.existsSync(snapshotPath)) {
-    return res.status(404).json({ error: 'V1 스냅샷 없음 — 크롤러를 한 번 이상 실행해야 생성됩니다.' });
+    return res.status(404).json({ error: 'V1 스냅샷 없음 — 스크래퍼를 한 번 이상 실행해야 생성됩니다.' });
   }
   res.json({ html: fs.readFileSync(snapshotPath, 'utf-8') });
 });
 
-app.get('/api/crawlers/:id/results', (req, res) => {
+app.get('/api/scrapers/:id/results', (req, res) => {
   res.json(db.results.list(req.params.id));
 });
 
-app.get('/api/crawlers/:id/results/csv', (req, res) => {
-  const crawler = db.crawlers.get(req.params.id);
-  if (!crawler) return res.status(404).json({ error: '크롤러를 찾을 수 없습니다.' });
+app.get('/api/scrapers/:id/results/csv', (req, res) => {
+  const scraper = db.scrapers.get(req.params.id);
+  if (!scraper) return res.status(404).json({ error: '스크래퍼를 찾을 수 없습니다.' });
   const rows = db.results.list(req.params.id);
   const esc = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
   const header = ['수집시각', '상태', '추출값', '신뢰도', '응답시간(ms)', '비고'].join(',');
@@ -104,11 +104,11 @@ app.get('/api/crawlers/:id/results/csv', (req, res) => {
   res.send('﻿' + [header, ...lines].join('\r\n'));
 });
 
-app.post('/api/crawlers/:id/run', async (req, res) => {
+app.post('/api/scrapers/:id/run', async (req, res) => {
   try {
-    const result = await runCrawler(req.params.id);
-    const updated = db.crawlers.get(req.params.id);
-    res.json({ result, crawler: updated });
+    const result = await runScraper(req.params.id);
+    const updated = db.scrapers.get(req.params.id);
+    res.json({ result, scraper: updated });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -124,37 +124,37 @@ app.post('/api/approvals/:id/approve', (req, res) => {
   const proposal = db.proposals.get(req.params.id);
   if (!proposal) return res.status(404).json({ error: '승인 요청을 찾을 수 없습니다.' });
 
-  const crawler = db.crawlers.get(proposal.crawler_id);
-  if (!crawler) return res.status(404).json({ error: '크롤러를 찾을 수 없습니다.' });
+  const scraper = db.scrapers.get(proposal.scraper_id);
+  if (!scraper) return res.status(404).json({ error: '스크래퍼를 찾을 수 없습니다.' });
 
-  db.crawlers.update({
-    id:           proposal.crawler_id,
+  db.scrapers.update({
+    id:           proposal.scraper_id,
     status:       'healthy',
     score:        Math.round(proposal.confidence * 1000) / 10,
     last_value:   proposal.extracted_text || '—',
     last_run_at:  new Date().toLocaleString('ko-KR'),
-    healed_count: (crawler.healed || 0) + 1,
+    healed_count: (scraper.healed || 0) + 1,
     css_selector: proposal.proposed_selector,
   });
   db.proposals.updateStatus(proposal.id, 'approved');
 
-  res.json({ ok: true, crawler: db.crawlers.get(proposal.crawler_id) });
+  res.json({ ok: true, scraper: db.scrapers.get(proposal.scraper_id) });
 });
 
 app.post('/api/approvals/:id/reject', (req, res) => {
   const proposal = db.proposals.get(req.params.id);
   if (!proposal) return res.status(404).json({ error: '승인 요청을 찾을 수 없습니다.' });
 
-  const crawler = db.crawlers.get(proposal.crawler_id);
-  if (crawler) {
-    db.crawlers.update({
-      id:           proposal.crawler_id,
+  const scraper = db.scrapers.get(proposal.scraper_id);
+  if (scraper) {
+    db.scrapers.update({
+      id:           proposal.scraper_id,
       status:       'failed',
-      score:        crawler.score,
+      score:        scraper.score,
       last_value:   '—',
       last_run_at:  new Date().toLocaleString('ko-KR'),
-      healed_count: crawler.healed,
-      css_selector: crawler.css_selector,
+      healed_count: scraper.healed,
+      css_selector: scraper.css_selector,
     });
   }
   db.proposals.updateStatus(proposal.id, 'rejected');

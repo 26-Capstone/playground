@@ -2,7 +2,7 @@
 // Components are attached to window for cross-script access.
 
 // ─── Overview (Dashboard) ──────────────────────────────────────────────────
-function OverviewScreen({ crawlers = [], stats, approvalCount = 0, onOpenCrawler, onGoApprovals, onNewCrawler, onRefresh, onDeleteCrawler }) {
+function OverviewScreen({ scrapers = [], stats, approvalCount = 0, onOpenScraper, onGoApprovals, onNewScraper, onRefresh, onDeleteScraper }) {
   const [filter, setFilter] = React.useState('all');
   const [query, setQuery] = React.useState('');
   const [refreshing, setRefreshing] = React.useState(false);
@@ -24,14 +24,14 @@ function OverviewScreen({ crawlers = [], stats, approvalCount = 0, onOpenCrawler
   };
 
   const tabs = [
-    { id:'all',      label:'전체',         count: crawlers.length },
-    { id:'pending',  label:'승인 대기',     count: crawlers.filter(c=>c.status==='pending').length },
-    { id:'healing',  label:'자가치유 중',   count: crawlers.filter(c=>c.status==='healing').length },
-    { id:'failed',   label:'실패',         count: crawlers.filter(c=>c.status==='failed').length },
-    { id:'paused',   label:'일시중지',     count: crawlers.filter(c=>c.status==='paused').length },
+    { id:'all',      label:'전체',         count: scrapers.length },
+    { id:'pending',  label:'승인 대기',     count: scrapers.filter(c=>c.status==='pending').length },
+    { id:'healing',  label:'자가치유 중',   count: scrapers.filter(c=>c.status==='healing').length },
+    { id:'failed',   label:'실패',         count: scrapers.filter(c=>c.status==='failed').length },
+    { id:'paused',   label:'일시중지',     count: scrapers.filter(c=>c.status==='paused').length },
   ];
 
-  const rows = crawlers.filter(c =>
+  const rows = scrapers.filter(c =>
     (filter==='all' || c.status===filter) &&
     (!query || c.name.includes(query) || c.url.includes(query))
   );
@@ -42,7 +42,7 @@ function OverviewScreen({ crawlers = [], stats, approvalCount = 0, onOpenCrawler
     return ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : ms + 'ms';
   };
   const fmtPct = v => v != null ? v.toFixed(2) + '%' : '—';
-  const activeFeeds   = stats ? stats.activeFeedsCount     : crawlers.filter(c => c.status !== 'paused').length;
+  const activeFeeds   = stats ? stats.activeFeedsCount     : scrapers.filter(c => c.status !== 'paused').length;
   const successRate   = stats ? fmtPct(stats.successRate7d) : '—';
   const rateColor     = stats && stats.successRate7d != null
     ? (stats.successRate7d >= 95 ? 'var(--ok)' : stats.successRate7d >= 80 ? 'var(--warn)' : 'var(--danger)')
@@ -64,8 +64,8 @@ function OverviewScreen({ crawlers = [], stats, approvalCount = 0, onOpenCrawler
                 transition:'transform 0.6s', transform: refreshing ? 'rotate(360deg)' : 'none'
               }}/>새로고침
             </button>
-            <button className="btn primary" onClick={onNewCrawler}>
-              <Icon name="plus" className="icon icon-sm"/>새 크롤러
+            <button className="btn primary" onClick={onNewScraper}>
+              <Icon name="plus" className="icon icon-sm"/>새 스크래퍼
             </button>
           </div>
         }
@@ -75,9 +75,9 @@ function OverviewScreen({ crawlers = [], stats, approvalCount = 0, onOpenCrawler
 
       {/* Top stats */}
       <div className="grid" style={{gridTemplateColumns:'repeat(4, 1fr)', marginBottom:18}}>
-        <Stat icon="crawler"  label="ACTIVE FEEDS"
+        <Stat icon="scraper"  label="ACTIVE FEEDS"
           value={String(activeFeeds)}
-          sub={<><span className="mono">{crawlers.length}</span>개 중 활성</>}
+          sub={<><span className="mono">{scrapers.length}</span>개 중 활성</>}
         />
         <Stat icon="activity" label="7D 수집 성공률"
           value={noData ? '—' : successRate}
@@ -157,7 +157,7 @@ function OverviewScreen({ crawlers = [], stats, approvalCount = 0, onOpenCrawler
         <button className="btn ghost"><Icon name="download" className="icon icon-sm"/>내보내기</button>
       </div>
 
-      {/* Crawler table */}
+      {/* Scraper table */}
       <div className="card" style={{overflow:'hidden'}}>
         <div style={{
           display:'grid',
@@ -167,7 +167,7 @@ function OverviewScreen({ crawlers = [], stats, approvalCount = 0, onOpenCrawler
           fontFamily:'var(--mono)',
           borderBottom:'1px solid var(--border)'
         }}>
-          <div>크롤러</div>
+          <div>스크래퍼</div>
           <div>상태</div>
           <div>최근 값</div>
           <div style={{textAlign:'right'}}>Score</div>
@@ -177,7 +177,7 @@ function OverviewScreen({ crawlers = [], stats, approvalCount = 0, onOpenCrawler
         </div>
         {rows.map((c,i) => (
           <div key={c.id} className="row-hover"
-            onClick={()=>onOpenCrawler(c)}
+            onClick={()=>onOpenScraper(c)}
             style={{
               display:'grid',
               gridTemplateColumns:'minmax(280px, 1.6fr) 110px 1.2fr 110px 100px 120px 40px',
@@ -273,8 +273,8 @@ function OverviewScreen({ crawlers = [], stats, approvalCount = 0, onOpenCrawler
             className="btn ghost sm"
             style={{width:'100%', justifyContent:'flex-start', color:'var(--danger)', padding:'7px 10px', gap:8}}
             onClick={() => {
-              if (onDeleteCrawler && window.confirm(`"${menu.name}" 크롤러를 삭제하시겠습니까?\n\n실행 이력과 자가치유 기록도 함께 삭제됩니다.`)) {
-                onDeleteCrawler(menu.id);
+              if (onDeleteScraper && window.confirm(`"${menu.name}" 스크래퍼를 삭제하시겠습니까?\n\n실행 이력과 자가치유 기록도 함께 삭제됩니다.`)) {
+                onDeleteScraper(menu.id);
               }
               setMenu(null);
             }}
@@ -336,7 +336,7 @@ function ApprovalsScreen({ onBack, onAction }) {
           <Icon name="chevron_r" className="icon icon-sm" style={{color:'var(--text-dim)'}}/>
           <a onClick={()=>setSelected(null)} style={{cursor:'default'}} className="muted">목록</a>
           <Icon name="chevron_r" className="icon icon-sm" style={{color:'var(--text-dim)'}}/>
-          <span>{p.crawler_id} — {p.crawler_name}</span>
+          <span>{p.scraper_id} — {p.scraper_name}</span>
           <span className="chip warn" style={{marginLeft:8}}><span className="dot"/>수동 승인 대기</span>
         </div>
 
@@ -354,7 +354,7 @@ function ApprovalsScreen({ onBack, onAction }) {
             </div>
           }
         >
-          AI가 찾은 후보의 확신도가 임계값에 미달했습니다. <strong style={{color:'var(--text)'}}>{p.crawler_name}</strong> 크롤러를 검토해 주세요.
+          AI가 찾은 후보의 확신도가 임계값에 미달했습니다. <strong style={{color:'var(--text)'}}>{p.scraper_name}</strong> 스크래퍼를 검토해 주세요.
         </SectionTitle>
 
         <div style={{display:'grid', gridTemplateColumns:'1.4fr 1fr', gap:16, marginBottom:16}}>
@@ -472,7 +472,7 @@ function ApprovalsScreen({ onBack, onAction }) {
             padding:'10px 18px', borderBottom:'1px solid var(--border)',
             fontSize:11, fontWeight:600, color:'var(--text-dim)', letterSpacing:'0.04em', textTransform:'uppercase'
           }}>
-            <div>크롤러</div><div>이전 셀렉터</div><div>제안 셀렉터</div>
+            <div>스크래퍼</div><div>이전 셀렉터</div><div>제안 셀렉터</div>
             <div>확신도</div><div>요청 시각</div><div/>
           </div>
           {list.map((p, i) => (
@@ -482,8 +482,8 @@ function ApprovalsScreen({ onBack, onAction }) {
               borderBottom: i===list.length-1?'none':'1px solid var(--border)',
             }}>
               <div>
-                <div style={{fontWeight:600, fontSize:13}}>{p.crawler_name}</div>
-                <div className="dim mono" style={{fontSize:11}}>{p.crawler_id}</div>
+                <div style={{fontWeight:600, fontSize:13}}>{p.scraper_name}</div>
+                <div className="dim mono" style={{fontSize:11}}>{p.scraper_id}</div>
               </div>
               <div className="mono muted" style={{fontSize:12, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}} title={p.old_selector}>
                 {p.old_selector}
@@ -510,9 +510,9 @@ function ApprovalsScreen({ onBack, onAction }) {
   );
 }
 
-// ─── Crawler Detail ────────────────────────────────────────────────────────
-function DetailScreen({ crawler, onBack, onCrawlerUpdate, onDelete }) {
-  const [c, setC] = React.useState(crawler);
+// ─── Scraper Detail ────────────────────────────────────────────────────────
+function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
+  const [c, setC] = React.useState(scraper);
   const tabs = ['Overview', 'Runs', 'Healing log', 'Schema', 'Settings'];
   const [tab, setTab] = React.useState('Overview');
   const [healOpen, setHealOpen] = React.useState(false);
@@ -526,7 +526,7 @@ function DetailScreen({ crawler, onBack, onCrawlerUpdate, onDelete }) {
   return (
     <div className="fadein" style={{padding:'28px 32px 80px', maxWidth:1480, margin:'0 auto'}}>
       <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:14, fontSize:12, color:'var(--text-mute)'}}>
-        <a onClick={onBack} className="muted" style={{cursor:'default'}}>Crawlers</a>
+        <a onClick={onBack} className="muted" style={{cursor:'default'}}>Scrapers</a>
         <Icon name="chevron_r" className="icon icon-sm" style={{color:'var(--text-dim)'}}/>
         <span>{c.id}</span>
       </div>
@@ -561,11 +561,11 @@ function DetailScreen({ crawler, onBack, onCrawlerUpdate, onDelete }) {
               onClick={async () => {
                 setRunState('running'); setRunMsg('');
                 try {
-                  const resp = await fetch(`/api/crawlers/${c.id}/run`, { method: 'POST' });
+                  const resp = await fetch(`/api/scrapers/${c.id}/run`, { method: 'POST' });
                   const data = await resp.json();
                   if (!resp.ok) throw new Error(data.error || '실행 실패');
-                  setC(data.crawler);
-                  if (onCrawlerUpdate) onCrawlerUpdate(data.crawler);
+                  setC(data.scraper);
+                  if (onScraperUpdate) onScraperUpdate(data.scraper);
                   const r = data.result;
                   setRunMsg(
                     r.status === 'healthy'           ? `✓ 수집 완료 — "${r.value}"` :
@@ -616,14 +616,14 @@ function DetailScreen({ crawler, onBack, onCrawlerUpdate, onDelete }) {
           )}
         </div>
       </div>
-      {healOpen && <HealPanel crawler={c} onClose={() => setHealOpen(false)}/>}
+      {healOpen && <HealPanel scraper={c} onClose={() => setHealOpen(false)}/>}
       {repickOpen && (
         <SelectorRepickPanel
-          crawler={c}
+          scraper={c}
           onClose={() => setRepickOpen(false)}
           onSaved={(updated) => {
             setC(updated);
-            if (onCrawlerUpdate) onCrawlerUpdate(updated);
+            if (onScraperUpdate) onScraperUpdate(updated);
             setRepickOpen(false);
           }}
         />
@@ -642,8 +642,8 @@ function DetailScreen({ crawler, onBack, onCrawlerUpdate, onDelete }) {
         ))}
       </div>
 
-      {tab==='Overview' && <DetailOverview crawler={c} scores={scores}/>}
-      {tab==='Runs' && <DetailRuns crawlerId={c.id}/>}
+      {tab==='Overview' && <DetailOverview scraper={c} scores={scores}/>}
+      {tab==='Runs' && <DetailRuns scraperId={c.id}/>}
       {tab!=='Overview' && tab!=='Runs' && (
         <div className="card" style={{padding:'60px', textAlign:'center', color:'var(--text-mute)'}}>
           <Icon name="cube" className="icon icon-lg" style={{margin:'0 auto 12px', display:'block', color:'var(--text-dim)'}}/>
@@ -655,15 +655,15 @@ function DetailScreen({ crawler, onBack, onCrawlerUpdate, onDelete }) {
   );
 }
 
-function DetailOverview({ crawler, scores }) {
+function DetailOverview({ scraper, scores }) {
   const [results, setResults] = React.useState(null); // null = 로딩 중
 
   React.useEffect(() => {
-    fetch(`/api/crawlers/${crawler.id}/results`)
+    fetch(`/api/scrapers/${scraper.id}/results`)
       .then(r => r.json())
       .then(data => setResults(Array.isArray(data) ? data : []))
       .catch(() => setResults([]));
-  }, [crawler.id]);
+  }, [scraper.id]);
 
   // ── 실행 이력 기반 통계 계산 ──────────────────────────────────────────────
   const hasResults = results && results.length > 0;
@@ -691,14 +691,14 @@ function DetailOverview({ crawler, scores }) {
   const pts        = safeScores.map((v, i) => [i * step, h - ((v - min) / (max - min)) * (h - 20) - 10]);
   const line       = pts.map(p => `${p[0]},${p[1]}`).join(' ');
   const area       = `0,${h} ${line} ${w},${h}`;
-  const thresholdY = h - ((crawler.threshold - min) / (max - min)) * (h - 20) - 10;
-  const lineColor  = crawler.score >= crawler.threshold ? 'var(--ok)' : crawler.score >= 60 ? 'var(--warn)' : 'var(--danger)';
+  const thresholdY = h - ((scraper.threshold - min) / (max - min)) * (h - 20) - 10;
+  const lineColor  = scraper.score >= scraper.threshold ? 'var(--ok)' : scraper.score >= 60 ? 'var(--warn)' : 'var(--danger)';
 
   // ── 최근 수집 결과 JSON ───────────────────────────────────────────────────
   const jsonPayload = latest
     ? JSON.stringify({
-        crawler_id:  crawler.id,
-        target:      crawler.url,
+        scraper_id:  scraper.id,
+        target:      scraper.url,
         collected_at: latest.run_at,
         value:       latest.value || null,
         status:      latest.status,
@@ -707,13 +707,13 @@ function DetailOverview({ crawler, scores }) {
         self_healing: {
           applied:   latest.note ? latest.note.includes('자가치유') || latest.note.includes('healed') : false,
           score:     latest.score,
-          threshold: crawler.threshold,
+          threshold: scraper.threshold,
         },
         note: latest.note,
       }, null, 2)
     : JSON.stringify({
-        crawler_id:  crawler.id,
-        target:      crawler.url,
+        scraper_id:  scraper.id,
+        target:      scraper.url,
         collected_at: null,
         value:       null,
         status:      'no_data',
@@ -756,7 +756,7 @@ function DetailOverview({ crawler, scores }) {
               <div className="mono" style={{
                 position:'absolute', right:8, top: Math.max(4, thresholdY - 9), fontSize:10,
                 color:'var(--warn)', background:'var(--bg-2)', padding:'1px 6px', borderRadius:4, border:'1px solid var(--warn-line)'
-              }}>임계값 {crawler.threshold}</div>
+              }}>임계값 {scraper.threshold}</div>
             </div>
           )}
           <div className="ticks" style={{marginTop:6}}>
@@ -764,7 +764,7 @@ function DetailOverview({ crawler, scores }) {
           </div>
         </div>
 
-        {hasResults && <ValueTrendCard results={results} crawlerId={crawler.id}/>}
+        {hasResults && <ValueTrendCard results={results} scraperId={scraper.id}/>}
 
         {/* 최근 수집 결과 JSON */}
         <div className="card" style={{padding:18}}>
@@ -787,23 +787,23 @@ function DetailOverview({ crawler, scores }) {
         <div className="card" style={{padding:18}}>
           <div style={{fontWeight:600, marginBottom:12}}>현재 셀렉터</div>
           <pre className="code" style={{margin:0, fontSize:11, wordBreak:'break-all', whiteSpace:'pre-wrap'}}>
-            {crawler.css_selector || '셀렉터가 등록되지 않았습니다.'}
+            {scraper.css_selector || '셀렉터가 등록되지 않았습니다.'}
           </pre>
           <div style={{display:'flex', flexDirection:'column', gap:10, marginTop:14, fontSize:12}}>
-            {crawler.user_intent && (
+            {scraper.user_intent && (
               <div>
                 <div className="dim" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)', marginBottom:3}}>수집 의도</div>
-                <div style={{color:'var(--text-mute)', lineHeight:1.5}}>{crawler.user_intent}</div>
+                <div style={{color:'var(--text-mute)', lineHeight:1.5}}>{scraper.user_intent}</div>
               </div>
             )}
             <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
               <div>
                 <div className="dim" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'}}>임계값</div>
-                <div className="mono" style={{marginTop:3}}>{crawler.threshold} / 100</div>
+                <div className="mono" style={{marginTop:3}}>{scraper.threshold} / 100</div>
               </div>
               <div>
                 <div className="dim" style={{fontSize:10.5, letterSpacing:'0.06em', textTransform:'uppercase', fontFamily:'var(--mono)'}}>도메인</div>
-                <div style={{marginTop:3}}>{crawler.altCategory || crawler.type || '—'}</div>
+                <div style={{marginTop:3}}>{scraper.altCategory || scraper.type || '—'}</div>
               </div>
             </div>
           </div>
@@ -816,7 +816,7 @@ function DetailOverview({ crawler, scores }) {
             {[
               ['최근 7일 실행', runs7d != null ? runs7d + '회' : '—', 'spark'],
               ['최근 신뢰도', avgConfidence || '—', 'check'],
-              ['자가치유 발동', (crawler.healed || 0) + '회', 'bolt'],
+              ['자가치유 발동', (scraper.healed || 0) + '회', 'bolt'],
               ['평균 응답', avgDur || '—', 'activity'],
             ].map(([k, v, ic]) => (
               <div key={k} style={{display:'flex', alignItems:'center', justifyContent:'space-between'}}>
@@ -838,7 +838,7 @@ function DetailOverview({ crawler, scores }) {
         <div className="card" style={{padding:18}}>
           <div style={{fontWeight:600, marginBottom:12}}>전송 채널</div>
           <div style={{display:'flex', flexDirection:'column', gap:10}}>
-            {(crawler.delivery || []).map(d => (
+            {(scraper.delivery || []).map(d => (
               <div key={d} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 12px',
                 background:'var(--bg-3)', borderRadius:8, border:'1px solid var(--border)'}}>
                 <div style={{display:'flex', alignItems:'center', gap:10}}>
@@ -846,10 +846,10 @@ function DetailOverview({ crawler, scores }) {
                   <div>
                     <div style={{fontSize:13, fontWeight:500}}>{d}</div>
                     <div className="dim mono" style={{fontSize:11}}>
-                      {d==='REST API' ? `GET /api/v1/data/${crawler.id}` :
-                       d==='Webhook'  ? `POST https://hooks.doma.io/${crawler.id}` :
-                       d==='Slack'    ? '#crawler-alerts' :
-                       `${crawler.id}_export.csv`}
+                      {d==='REST API' ? `GET /api/v1/data/${scraper.id}` :
+                       d==='Webhook'  ? `POST https://hooks.doma.io/${scraper.id}` :
+                       d==='Slack'    ? '#scraper-alerts' :
+                       `${scraper.id}_export.csv`}
                     </div>
                   </div>
                 </div>
@@ -863,16 +863,16 @@ function DetailOverview({ crawler, scores }) {
   );
 }
 
-function DetailRuns({ crawlerId }) {
+function DetailRuns({ scraperId }) {
   const [runs, setRuns] = React.useState(null);
 
   React.useEffect(() => {
-    if (!crawlerId) { setRuns([]); return; }
-    fetch(`/api/crawlers/${crawlerId}/results`)
+    if (!scraperId) { setRuns([]); return; }
+    fetch(`/api/scrapers/${scraperId}/results`)
       .then(r => r.json())
       .then(data => setRuns(Array.isArray(data) ? data : []))
       .catch(() => setRuns(null));
-  }, [crawlerId]);
+  }, [scraperId]);
 
   if (runs === null) {
     return (
@@ -898,7 +898,7 @@ function DetailRuns({ crawlerId }) {
     <div style={{display:'flex', flexDirection:'column', gap:10}}>
       <div style={{display:'flex', justifyContent:'flex-end'}}>
         <a
-          href={`/api/crawlers/${crawlerId}/results/csv`}
+          href={`/api/scrapers/${scraperId}/results/csv`}
           download
           className="btn ghost sm"
           style={{textDecoration:'none', display:'inline-flex', alignItems:'center', gap:6}}
@@ -1115,7 +1115,7 @@ function StockChart({ runs, parseNum, chartId }) {
   );
 }
 
-function ValueTrendCard({ results, crawlerId }) {
+function ValueTrendCard({ results, scraperId }) {
   if (!results || results.length === 0) return null;
 
   const annotated = results.map((r, i) => ({
@@ -1161,7 +1161,7 @@ function ValueTrendCard({ results, crawlerId }) {
           </div>
         </div>
         <a
-          href={`/api/crawlers/${crawlerId}/results/csv`}
+          href={`/api/scrapers/${scraperId}/results/csv`}
           download
           className="btn ghost sm"
           style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
@@ -1171,7 +1171,7 @@ function ValueTrendCard({ results, crawlerId }) {
       </div>
 
       {/* Stock chart (numeric only) */}
-      {isNumeric && <StockChart runs={numericRuns} parseNum={parseNum} chartId={crawlerId}/>}
+      {isNumeric && <StockChart runs={numericRuns} parseNum={parseNum} chartId={scraperId}/>}
 
       {/* Value history list */}
       <div style={{ display: 'flex', flexDirection: 'column', marginTop: isNumeric ? 12 : 0 }}>
@@ -1209,8 +1209,8 @@ function ValueTrendCard({ results, crawlerId }) {
   );
 }
 
-// ─── New Crawler Wizard ────────────────────────────────────────────────────
-function NewCrawlerScreen({ onClose, onRegister }) {
+// ─── New Scraper Wizard ────────────────────────────────────────────────────
+function NewScraperScreen({ onClose, onRegister }) {
   const [step, setStep] = React.useState(0);
   const [url, setUrl] = React.useState('coupang.com/np/categories/178794');
   const [intent, setIntent] = React.useState('쿠팡 노트북 카테고리 베스트 페이지의 실시간 1위 상품명');
@@ -1245,7 +1245,7 @@ function NewCrawlerScreen({ onClose, onRegister }) {
   const CHANNEL_LABEL = { api:'REST API', webhook:'Webhook', slack:'Slack', csv:'CSV' };
 
   const handleCreate = () => {
-    const newCrawler = {
+    const newScraper = {
       id:           'cr_' + Math.random().toString(36).slice(2, 6),
       name:         intent.slice(0, 40) || url,
       url,
@@ -1258,16 +1258,16 @@ function NewCrawlerScreen({ onClose, onRegister }) {
       channels:     channels.map(c => CHANNEL_LABEL[c] || c),
       owner:        'me',
     };
-    if (onRegister) onRegister(newCrawler);
+    if (onRegister) onRegister(newScraper);
     else onClose();
   };
 
   return (
     <div className="fadein" style={{padding:'var(--s-7) var(--s-7) var(--s-11)', maxWidth:1180, margin:'0 auto'}}>
       <div style={{display:'flex', alignItems:'center', gap:'var(--s-2)', marginBottom:'var(--s-3)', fontSize:12, color:'var(--text-mute)'}}>
-        <a onClick={onClose} className="muted" style={{cursor:'default'}}>크롤러</a>
+        <a onClick={onClose} className="muted" style={{cursor:'default'}}>스크래퍼</a>
         <Icon name="chevron_r" className="icon icon-sm" style={{color:'var(--text-dim)'}}/>
-        <span>새 크롤러</span>
+        <span>새 스크래퍼</span>
       </div>
 
       <SectionTitle eyebrow="NEW CRAWLER" title={steps[step].label}>
@@ -1310,7 +1310,7 @@ function NewCrawlerScreen({ onClose, onRegister }) {
         <div style={{display:'flex', gap:'var(--s-2)'}}>
           {step>0 && <button className="btn" onClick={prev}><Icon name="arrow_l" className="icon icon-sm"/>이전</button>}
           {step<steps.length-1 && <button className="btn primary" onClick={next} disabled={!canNext()} style={{opacity: canNext()?1:0.5}}>다음<Icon name="arrow_r" className="icon icon-sm"/></button>}
-          {step===steps.length-1 && <button className="btn primary" onClick={handleCreate}><Icon name="check" className="icon icon-sm"/>크롤러 생성</button>}
+          {step===steps.length-1 && <button className="btn primary" onClick={handleCreate}><Icon name="check" className="icon icon-sm"/>스크래퍼 생성</button>}
         </div>
       </div>
     </div>
@@ -2195,7 +2195,7 @@ function WizardStep4({threshold, setThreshold, schedule, setSchedule, customCron
           {[
             ['api','REST API','link','GET /api/v1/data/{id}'],
             ['webhook','Webhook','rocket','초 단위 실시간 푸시'],
-            ['slack','Slack','slack','#crawler-alerts'],
+            ['slack','Slack','slack','#scraper-alerts'],
             ['csv','CSV / Excel','csv','대시보드에서 다운로드'],
           ].map(([id,l,ic,sub])=>(
             <label key={id} style={{
@@ -2277,7 +2277,7 @@ curl https://api.doma.io/v1/data/cr_8x2k \\
   -H "Authorization: Bearer $DOMA_TOKEN"
 
 {
-  "crawler_id": "cr_8x2k",
+  "scraper_id": "cr_8x2k",
   "value": "1,342.50",
   "collected_at": "2026-05-12T09:14:22+09:00",
   "self_healing": { "applied": false, "score": 98.4 }
@@ -2291,7 +2291,7 @@ curl https://api.doma.io/v1/data/cr_8x2k \\
           </div>
           <div style={{padding:18, display:'flex', flexDirection:'column', gap:10}}>
             {[
-              ['#crawler-alerts','Slack','slack','ok'],
+              ['#scraper-alerts','Slack','slack','ok'],
               ['hooks.client.io/p/9k2','HTTPS POST','link','ok'],
               ['biz@finch.kr','Email','mail','warn'],
             ].map(([n,kind,ic,t])=>(
@@ -2368,7 +2368,7 @@ function TemplatesScreen({ onUse }){
 }
 
 // ─── SelectorRepickPanel ──────────────────────────────────────────────────
-function SelectorRepickPanel({ crawler, onClose, onSaved }) {
+function SelectorRepickPanel({ scraper, onClose, onSaved }) {
   const canvasRef       = React.useRef(null);
   const wsRef           = React.useRef(null);
   const stateRef        = React.useRef('connecting');
@@ -2405,7 +2405,7 @@ function SelectorRepickPanel({ crawler, onClose, onSaved }) {
         setConn(msg.status);
         if (msg.nodeCount) setNodeCount(msg.nodeCount);
         if (msg.status === 'connected') {
-          const full = /^https?:\/\//i.test(crawler.url) ? crawler.url : 'https://' + crawler.url;
+          const full = /^https?:\/\//i.test(scraper.url) ? scraper.url : 'https://' + scraper.url;
           ws.send(JSON.stringify({ type: 'navigate', url: full }));
         }
         return;
@@ -2460,10 +2460,10 @@ function SelectorRepickPanel({ crawler, onClose, onSaved }) {
       }
 
       // 2) DB 저장
-      const resp = await fetch(`/api/crawlers/${crawler.id}/selector`, {
+      const resp = await fetch(`/api/scrapers/${scraper.id}/selector`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ css_selector: selected.selector, user_intent: crawler.user_intent }),
+        body: JSON.stringify({ css_selector: selected.selector, user_intent: scraper.user_intent }),
       });
       const updated = await resp.json();
       if (!resp.ok) { setSaveErr(updated.error || '저장 실패'); return; }
@@ -2507,7 +2507,7 @@ function SelectorRepickPanel({ crawler, onClose, onSaved }) {
           </div>
           <div>
             <div style={{fontWeight:600, fontSize:14}}>셀렉터 재선택</div>
-            <div className="dim mono" style={{fontSize:11}}>{crawler.url}</div>
+            <div className="dim mono" style={{fontSize:11}}>{scraper.url}</div>
           </div>
           <button className="btn ghost sm" style={{marginLeft:'auto', padding:6}} onClick={onClose}>
             <Icon name="x" className="icon icon-sm"/>
@@ -2561,7 +2561,7 @@ function SelectorRepickPanel({ crawler, onClose, onSaved }) {
             <div>
               <div className="dim mono" style={{fontSize:10, letterSpacing:'0.06em', textTransform:'uppercase', marginBottom:4}}>현재 셀렉터</div>
               <pre className="code" style={{margin:0, fontSize:10.5, whiteSpace:'pre-wrap', wordBreak:'break-all', opacity:0.6}}>
-                {crawler.css_selector || '(없음)'}
+                {scraper.css_selector || '(없음)'}
               </pre>
             </div>
 
@@ -2684,13 +2684,13 @@ function SelectorRepickPanel({ crawler, onClose, onSaved }) {
 }
 
 // ─── HealPanel ─────────────────────────────────────────────────────────────
-function HealPanel({ crawler, onClose }) {
+function HealPanel({ scraper, onClose }) {
   const [v1Html,   setV1Html]   = React.useState('');
   const [v2Html,   setV2Html]   = React.useState('');
   const [v1State,  setV1State]  = React.useState('loading'); // loading | ok | error
   const [v2State,  setV2State]  = React.useState('loading'); // loading | ok | error
-  const [selector, setSelector] = React.useState(crawler.css_selector || '');
-  const [intent,   setIntent]   = React.useState(crawler.user_intent  || '');
+  const [selector, setSelector] = React.useState(scraper.css_selector || '');
+  const [intent,   setIntent]   = React.useState(scraper.user_intent  || '');
   const [phase,    setPhase]    = React.useState('idle'); // idle | healing | done | error
   const [result,   setResult]   = React.useState(null);
   const [errMsg,   setErrMsg]   = React.useState('');
@@ -2698,7 +2698,7 @@ function HealPanel({ crawler, onClose }) {
   // 마운트 시 V1(스냅샷) + V2(현재 페이지) 자동 수집
   React.useEffect(() => {
     // V1: 서버에 저장된 스냅샷
-    fetch(`/api/crawlers/${crawler.id}/snapshot`)
+    fetch(`/api/scrapers/${scraper.id}/snapshot`)
       .then(r => r.json())
       .then(data => {
         if (data.html) { setV1Html(data.html); setV1State('ok'); }
@@ -2707,7 +2707,7 @@ function HealPanel({ crawler, onClose }) {
       .catch(e => setV1State('error'));
 
     // V2: Playwright로 현재 페이지 수집
-    const fullUrl = /^https?:\/\//i.test(crawler.url) ? crawler.url : 'https://' + crawler.url;
+    const fullUrl = /^https?:\/\//i.test(scraper.url) ? scraper.url : 'https://' + scraper.url;
     fetch('/fetch-html', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: fullUrl }),
@@ -2728,7 +2728,7 @@ function HealPanel({ crawler, onClose }) {
         body: JSON.stringify({
           v1_html: v1Html, v2_html: v2Html,
           css_selector: selector, user_intent: intent,
-          target_name: crawler.name,
+          target_name: scraper.name,
         }),
       });
       const data = await resp.json();
@@ -2819,7 +2819,7 @@ function HealPanel({ crawler, onClose }) {
                 border:'1px solid var(--warn-line)', borderRadius:8,
                 fontSize:12, color:'var(--warn)', lineHeight:1.55,
               }}>
-                {v1State === 'error' && <div>V1 스냅샷 없음 — "지금 실행" 버튼으로 크롤러를 한 번 이상 실행해야 생성됩니다.</div>}
+                {v1State === 'error' && <div>V1 스냅샷 없음 — "지금 실행" 버튼으로 스크래퍼를 한 번 이상 실행해야 생성됩니다.</div>}
                 {v2State === 'error' && <div>현재 페이지 수집 실패 — URL을 확인하거나 네트워크 상태를 점검하세요.</div>}
               </div>
             )}
@@ -2940,5 +2940,5 @@ function HealPanel({ crawler, onClose }) {
 }
 
 Object.assign(window, {
-  OverviewScreen, ApprovalsScreen, DetailScreen, NewCrawlerScreen, DeliveryScreen, TemplatesScreen,
+  OverviewScreen, ApprovalsScreen, DetailScreen, NewScraperScreen, DeliveryScreen, TemplatesScreen,
 });

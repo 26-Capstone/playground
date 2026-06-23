@@ -12,14 +12,14 @@
 
 - **값 변화 차트** (크롤러 상세 > 새 탭)
   - X축: 수집 일시, Y축: 수집값 (숫자형 자동 감지 시 라인 차트, 텍스트형은 diff 뷰)
-  - `crawl_results.value` 컬럼을 시계열로 렌더링
+  - `scrape_results.value` 컬럼을 시계열로 렌더링
   - 날짜 범위 필터 (7일 / 30일 / 전체)
 
 - **값 변화 감지 알림 조건**
   - 이전 값 대비 N% 이상 변화 시 플래그 표시
   - 크롤러 생성 시 "값 변화 알림 임계값" 옵션 추가
 
-- **필요한 DB 변경 없음** — `crawl_results.value`에 이미 값이 저장됨. UI + API 쿼리만 추가하면 됨.
+- **필요한 DB 변경 없음** — `scrape_results.value`에 이미 값이 저장됨. UI + API 쿼리만 추가하면 됨.
 
 ---
 
@@ -39,10 +39,10 @@
   | 신뢰도 미달 → 승인 대기 | 즉시 |
   | 크롤러 복구 완료 | 즉시 |
 
-- **구현 위치**: `crawler.js`의 각 상태 전환 시점에 `notify(crawlerId, event)` 호출 추가
+- **구현 위치**: `scraper.js`의 각 상태 전환 시점에 `notify(scraperId, event)` 호출 추가
 
 - **필요한 DB 변경**
-  - `crawlers` 테이블에 `slack_webhook TEXT`, `notify_email TEXT` 컬럼 추가
+  - `scrapers` 테이블에 `slack_webhook TEXT`, `notify_email TEXT` 컬럼 추가
   - 또는 별도 `notification_settings` 테이블
 
 ---
@@ -55,7 +55,7 @@
 
 - **REST API 엔드포인트**
   ```
-  GET /api/v1/crawlers/:id/data?from=&to=&limit=
+  GET /api/v1/scrapers/:id/data?from=&to=&limit=
   ```
   - 응답: `[{ run_at, value, status, score }, ...]`
   - 날짜 범위, 상태 필터, 페이지네이션 지원
@@ -89,7 +89,7 @@
   | Viewer | 조회·CSV 다운로드만 가능 |
 
 - **조직(Org) 격리**
-  - 현재 `crawlers.org` 컬럼 활용
+  - 현재 `scrapers.org` 컬럼 활용
   - 로그인한 사용자의 org에 속한 크롤러만 표시
 
 - **필요한 DB 변경**
@@ -118,7 +118,7 @@
 
 ### 제공할 데이터
 
-`crawl_results` 테이블 기반:
+`scrape_results` 테이블 기반:
 
 ```
 수집일시 | 크롤러명 | URL | 수집값 | 이전값 | 값 변화 | 신뢰도 | 상태 | 응답시간(ms)
@@ -132,8 +132,8 @@
 **엔드포인트**
 
 ```
-GET /api/crawlers/:id/export.csv?from=YYYY-MM-DD&to=YYYY-MM-DD&status=healthy
-GET /api/export.csv?crawlers=id1,id2,id3&from=&to=          ← 복수 크롤러 통합
+GET /api/scrapers/:id/export.csv?from=YYYY-MM-DD&to=YYYY-MM-DD&status=healthy
+GET /api/export.csv?scrapers=id1,id2,id3&from=&to=          ← 복수 크롤러 통합
 ```
 
 **응답 헤더**
@@ -146,11 +146,11 @@ Content-Disposition: attachment; filename="doma_export_20260527.csv"
 - BOM (`﻿`) 삽입 필수 — 엑셀에서 한글 깨짐 방지
 - `value`에 쉼표·줄바꿈 포함 가능 → 큰따옴표 이스케이프 처리
 - 5만 건 이상 시 스트리밍 방식(`res.write` 청크) 권장 — 메모리 한번에 올리지 않음
-- `crawl_results` 쿼리에 날짜 범위 WHERE절 추가 (현재 `LIMIT 50` 쿼리를 범용 쿼리로 분리)
+- `scrape_results` 쿼리에 날짜 범위 WHERE절 추가 (현재 `LIMIT 50` 쿼리를 범용 쿼리로 분리)
 
 **값 변화 계산 (서버에서 처리)**
 ```
-이전값 = 같은 crawler_id 기준 직전 healthy 결과의 value
+이전값 = 같은 scraper_id 기준 직전 healthy 결과의 value
 값 변화 = 숫자 파싱 가능 시 ((현재 - 이전) / 이전 * 100).toFixed(2) + '%'
          텍스트 변경 시 '변경됨' / 동일 시 '—'
 ```
@@ -159,18 +159,18 @@ Content-Disposition: attachment; filename="doma_export_20260527.csv"
 
 **진입점 1 — 크롤러 상세 > 실행 이력 섹션**
 - "CSV 내보내기" 버튼 + 날짜 범위 선택 (선택 사항)
-- 클릭 시 `<a href="/api/crawlers/:id/export.csv" download>` 트리거
+- 클릭 시 `<a href="/api/scrapers/:id/export.csv" download>` 트리거
 
 **진입점 2 — 개요 화면**
 - 크롤러 목록 우상단에 "전체 내보내기" 버튼
-- 체크박스로 크롤러 선택 → `/api/export.csv?crawlers=...` 호출
+- 체크박스로 크롤러 선택 → `/api/export.csv?scrapers=...` 호출
 
 ### 필요한 DB 변경
 
-없음. 현재 `crawl_results` 스키마로 충분. 단, 성능을 위해 `run_at` 컬럼에 인덱스 추가 권장:
+없음. 현재 `scrape_results` 스키마로 충분. 단, 성능을 위해 `run_at` 컬럼에 인덱스 추가 권장:
 
 ```sql
-CREATE INDEX IF NOT EXISTS idx_crawl_results_run_at ON crawl_results(crawler_id, run_at DESC);
+CREATE INDEX IF NOT EXISTS idx_scrape_results_run_at ON scrape_results(scraper_id, run_at DESC);
 ```
 
 ---

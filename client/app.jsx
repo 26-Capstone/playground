@@ -11,15 +11,15 @@ function App(){
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [route, setRoute] = React.useState({ name: 'overview' });
   const [currentOrg, setCurrentOrg] = React.useState('');
-  const [crawlerList, setCrawlerList] = React.useState([]);
+  const [scraperList, setScraperList] = React.useState([]);
   const [approvalCount, setApprovalCount] = React.useState(0);
   const [stats, setStats] = React.useState(null);
 
-  // 서버 DB에서 크롤러 목록 + 승인 큐 카운트 + 통계 로드, 30초마다 자동 갱신
-  const refreshCrawlers = React.useCallback(() => {
-    fetch('/api/crawlers')
+  // 서버 DB에서 스크래퍼 목록 + 승인 큐 카운트 + 통계 로드, 30초마다 자동 갱신
+  const refreshScrapers = React.useCallback(() => {
+    fetch('/api/scrapers')
       .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setCrawlerList(data); })
+      .then(data => { if (Array.isArray(data)) setScraperList(data); })
       .catch(() => {});
   }, []);
 
@@ -38,10 +38,10 @@ function App(){
   }, []);
 
   const handleRefresh = React.useCallback(() => {
-    refreshCrawlers();
+    refreshScrapers();
     refreshApprovals();
     refreshStats();
-  }, [refreshCrawlers, refreshApprovals, refreshStats]);
+  }, [refreshScrapers, refreshApprovals, refreshStats]);
 
   React.useEffect(() => {
     handleRefresh();
@@ -75,39 +75,39 @@ function App(){
   const go = (name, payload) => setRoute({ name, payload });
   const toggleTheme = () => setTweak('theme', t.theme==='light'?'dark':'light');
 
-  const handleCrawlerUpdate = (updated) => {
-    setCrawlerList(prev => prev.map(c => c.id === updated.id ? updated : c));
+  const handleScraperUpdate = (updated) => {
+    setScraperList(prev => prev.map(c => c.id === updated.id ? updated : c));
   };
 
-  const handleDeleteCrawler = async (id) => {
-    try { await fetch(`/api/crawlers/${id}`, { method: 'DELETE' }); } catch {}
-    setCrawlerList(prev => prev.filter(c => c.id !== id));
+  const handleDeleteScraper = async (id) => {
+    try { await fetch(`/api/scrapers/${id}`, { method: 'DELETE' }); } catch {}
+    setScraperList(prev => prev.filter(c => c.id !== id));
     refreshStats();
     go('overview');
   };
 
   const handleApprovalAction = () => {
     refreshApprovals();
-    refreshCrawlers();
+    refreshScrapers();
     go('approvals');
   };
 
-  const handleRegister = async (newCrawler) => {
+  const handleRegister = async (newScraper) => {
     try {
-      const resp = await fetch('/api/crawlers', {
+      const resp = await fetch('/api/scrapers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCrawler),
+        body: JSON.stringify(newScraper),
       });
       const saved = await resp.json();
       if (resp.ok) {
-        setCrawlerList(prev => [saved, ...prev]);
+        setScraperList(prev => [saved, ...prev]);
       } else {
         // 저장 실패 시에도 UI에는 추가 (오프라인 대응)
-        setCrawlerList(prev => [newCrawler, ...prev]);
+        setScraperList(prev => [newScraper, ...prev]);
       }
     } catch {
-      setCrawlerList(prev => [newCrawler, ...prev]);
+      setScraperList(prev => [newScraper, ...prev]);
     }
     go('overview');
   };
@@ -118,21 +118,21 @@ function App(){
       <main style={{flex:1, overflowY:'auto', overflowX:'hidden', background:'var(--bg-1)', position:'relative'}}>
         <TopBar route={route} onGo={go} currentOrg={currentOrg} theme={t.theme} onToggleTheme={toggleTheme}/>
         {route.name==='overview' && <OverviewScreen
-          crawlers={crawlerList}
+          scrapers={scraperList}
           stats={stats}
           approvalCount={approvalCount}
-          onOpenCrawler={(c)=>go('detail', c)}
+          onOpenScraper={(c)=>go('detail', c)}
           onGoApprovals={()=>go('approvals')}
-          onNewCrawler={()=>go('new')}
+          onNewScraper={()=>go('new')}
           onRefresh={handleRefresh}
-          onDeleteCrawler={handleDeleteCrawler}
+          onDeleteScraper={handleDeleteScraper}
         />}
         {route.name==='approvals' && <ApprovalsScreen
           onBack={()=>go('overview')}
           onAction={handleApprovalAction}
         />}
-        {route.name==='detail' && <DetailScreen crawler={route.payload} onBack={()=>go('overview')} onCrawlerUpdate={handleCrawlerUpdate} onDelete={handleDeleteCrawler}/>}
-        {route.name==='new' && <NewCrawlerScreen onClose={()=>go('overview')} onRegister={handleRegister}/>}
+        {route.name==='detail' && <DetailScreen scraper={route.payload} onBack={()=>go('overview')} onScraperUpdate={handleScraperUpdate} onDelete={handleDeleteScraper}/>}
+        {route.name==='new' && <NewScraperScreen onClose={()=>go('overview')} onRegister={handleRegister}/>}
         {route.name==='delivery' && <DeliveryScreen/>}
         {route.name==='settings' && <BlankScreen title="Settings" subtitle="조직 · 멤버 · API 토큰 · 알림"/>}
         {route.name==='activity' && <BlankScreen title="Activity" subtitle="조직 단위 자가치유 이벤트 타임라인"/>}
@@ -151,7 +151,7 @@ function App(){
           options={['#3182F6','#7C5BFF','#00BD83','#E08400','#E04A4A']}
           onChange={(v)=>setTweak('accent', v)}/>
         <TweakSection label="시뮬레이션" />
-        <TweakSelect label="크롤러 상태" value={t.simState}
+        <TweakSelect label="스크래퍼 상태" value={t.simState}
           options={[
             {value:'live',     label:'실시간 운영'},
             {value:'healing',  label:'자가치유 진행 중'},
@@ -185,7 +185,7 @@ function BlankScreen({title, subtitle}){
 function Sidebar({route, onGo, currentOrg, approvalCount}){
   const sections = [
     { hdr:'워크스페이스', items:[
-      {id:'overview',  label:'크롤러',     icon:'crawler'},
+      {id:'overview',  label:'스크래퍼',     icon:'scraper'},
       {id:'approvals', label:'승인 큐',    icon:'inbox',   count:approvalCount||null, accent:'warn'},
       {id:'templates', label:'템플릿',     icon:'sparkles'},
       {id:'activity',  label:'활동',       icon:'history'},
@@ -300,7 +300,7 @@ function Logo(){
 // ─── Top bar ───────────────────────────────────────────────────────────────
 function TopBar({route, onGo, currentOrg, theme, onToggleTheme}){
   const titleMap = {
-    overview:'크롤러', approvals:'승인 큐', detail:'크롤러 상세', new:'새 크롤러',
+    overview:'스크래퍼', approvals:'승인 큐', detail:'스크래퍼 상세', new:'새 스크래퍼',
     delivery:'전송 채널', settings:'설정', activity:'활동', templates:'템플릿'
   };
   return (
@@ -336,7 +336,7 @@ function TopBar({route, onGo, currentOrg, theme, onToggleTheme}){
       </button>
       <div style={{width:1, height:18, background:'var(--border)'}}/>
       <button className="btn primary sm" onClick={()=>onGo('new')}>
-        <Icon name="plus" className="icon icon-sm"/>새 크롤러
+        <Icon name="plus" className="icon icon-sm"/>새 스크래퍼
       </button>
     </div>
   );

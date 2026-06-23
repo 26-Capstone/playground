@@ -7,7 +7,7 @@ import React from 'react'
 const Icon = ({ name, className = "icon", size }) => {
   const paths = {
     grid:        <><rect x="3" y="3" width="7" height="7" rx="1.2"/><rect x="14" y="3" width="7" height="7" rx="1.2"/><rect x="3" y="14" width="7" height="7" rx="1.2"/><rect x="14" y="14" width="7" height="7" rx="1.2"/></>,
-    crawler:     <><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></>,
+    scraper:     <><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></>,
     inbox:       <><path d="M3 13l3-8h12l3 8"/><path d="M3 13v6a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6"/><path d="M3 13h5l1 2h6l1-2h5"/></>,
     deploy:      <><path d="M4 16l8-12 8 12"/><path d="M9 20l3-4 3 4"/></>,
     spark:       <><path d="M12 3v3M12 18v3M5.5 5.5L7.6 7.6M16.4 16.4l2.1 2.1M3 12h3M18 12h3M5.5 18.5l2.1-2.1M16.4 7.6l2.1-2.1"/></>,
@@ -126,7 +126,7 @@ const StatusChip = ({ status }) => {
   return <span className={`chip ${s.cls}`}><span className="dot"/>{s.label}</span>;
 };
 
-// ─── Alt-data templates (used by new-crawler wizard) ───────────────────────
+// ─── Alt-data templates (used by new-scraper wizard) ───────────────────────
 const TEMPLATES = [
   { id:'tpl_coupang_rank', cat:'소비 수요', title:'쿠팡 카테고리 1위 추적',
     desc:'카테고리 베스트 페이지의 1위 상품명을 1분 단위로 추적',

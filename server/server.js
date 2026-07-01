@@ -25,11 +25,10 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 
-// 프론트엔드 정적 파일 서빙 (빌드된 dist 우선, 없으면 개발용 client)
-const clientDir = fs.existsSync(path.join(__dirname, "dist"))
-  ? path.join(__dirname, "dist")
-  : path.join(__dirname, "client");
+// 프론트엔드 정적 파일 서빙
+const clientDir = path.join(__dirname, "client");
 app.use(express.static(clientDir));
+app.get("/", (req, res) => res.sendFile(path.join(clientDir, "DOMA.html")));
 
 // ─── Internal API (Spring Boot 전용) ─────────────────────────────────────────
 

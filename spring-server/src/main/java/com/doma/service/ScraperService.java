@@ -114,6 +114,22 @@ public class ScraperService {
         });
     }
 
+    // ── 운영 설정 업데이트 (스케줄 · 임계값 · 채널) ──────────────────────────────
+
+    public Optional<Scraper> updateSettings(String id, Map<String, Object> body) {
+        return scraperRepository.findById(id).map(s -> {
+            if (body.containsKey("schedule"))
+                s.setSchedule((String) body.get("schedule"));
+            if (body.containsKey("threshold"))
+                s.setThreshold(((Number) body.get("threshold")).intValue());
+            if (body.containsKey("channels")) {
+                Object ch = body.get("channels");
+                s.setChannels(ch instanceof List ? listToJson((List<?>) ch) : s.getChannels());
+            }
+            return scraperRepository.save(s);
+        });
+    }
+
     // ── 즉시 실행 ────────────────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")

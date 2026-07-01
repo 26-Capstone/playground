@@ -72,6 +72,17 @@ public class ScraperController {
             .orElse(ResponseEntity.notFound().build());
     }
 
+    @PatchMapping("/scrapers/{id}/settings")
+    public ResponseEntity<?> updateSettings(@PathVariable String id, @RequestBody Map<String, Object> body) {
+        return scraperService.updateSettings(id, body)
+            .map(updated -> {
+                schedulerService.removeJob(id);
+                schedulerService.addJob(updated);
+                return ResponseEntity.ok(scraperService.toDto(updated));
+            })
+            .orElse(ResponseEntity.notFound().build());
+    }
+
     @PostMapping("/scrapers/{id}/run")
     public ResponseEntity<?> run(@PathVariable String id) {
         try {

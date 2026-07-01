@@ -12,8 +12,8 @@ function OverviewScreen({
   onRefresh,
   onDeleteScraper,
 }) {
-  const [filter, setFilter] = React.useState("all");
-  const [query, setQuery] = React.useState("");
+  const [filter, setFilter] = React.useState('all');
+  const [query, setQuery] = React.useState('');
   const [refreshing, setRefreshing] = React.useState(false);
   const [menu, setMenu] = React.useState(null); // { id, name, x, y }
 
@@ -21,8 +21,8 @@ function OverviewScreen({
   React.useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
   }, [!!menu]);
 
   const handleRefresh = () => {
@@ -33,100 +33,102 @@ function OverviewScreen({
   };
 
   const tabs = [
-    { id: "all", label: "전체", count: scrapers.length },
+    { id: 'all', label: '전체', count: scrapers.length },
     {
-      id: "pending",
-      label: "승인 대기",
-      count: scrapers.filter((c) => c.status === "pending").length,
+      id: 'pending',
+      label: '승인 대기',
+      count: scrapers.filter((c) => c.status === 'pending').length,
     },
     {
-      id: "healing",
-      label: "자가치유 중",
-      count: scrapers.filter((c) => c.status === "healing").length,
+      id: 'healing',
+      label: '자가치유 중',
+      count: scrapers.filter((c) => c.status === 'healing').length,
     },
     {
-      id: "failed",
-      label: "실패",
-      count: scrapers.filter((c) => c.status === "failed").length,
+      id: 'failed',
+      label: '실패',
+      count: scrapers.filter((c) => c.status === 'failed').length,
     },
     {
-      id: "paused",
-      label: "일시중지",
-      count: scrapers.filter((c) => c.status === "paused").length,
+      id: 'paused',
+      label: '일시중지',
+      count: scrapers.filter((c) => c.status === 'paused').length,
     },
   ];
 
   const rows = scrapers.filter(
     (c) =>
-      (filter === "all" || c.status === filter) &&
+      (filter === 'all' || c.status === filter) &&
       (!query || c.name.includes(query) || c.url.includes(query)),
   );
 
   // stats 포맷 헬퍼
   const fmtMs = (ms) => {
-    if (ms == null) return "—";
-    return ms >= 1000 ? (ms / 1000).toFixed(2) + "s" : ms + "ms";
+    if (ms == null) return '—';
+    return ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : ms + 'ms';
   };
-  const fmtPct = (v) => (v != null ? v.toFixed(2) + "%" : "—");
+  const fmtPct = (v) => (v != null ? v.toFixed(2) + '%' : '—');
   const hasStats = stats != null && stats.activeFeedsCount != null;
   const activeFeeds = hasStats
     ? stats.activeFeedsCount
-    : scrapers.filter((c) => c.status !== "paused").length;
-  const successRate = hasStats ? fmtPct(stats.successRate7d) : "—";
+    : scrapers.filter((c) => c.status !== 'paused').length;
+  const successRate = hasStats ? fmtPct(stats.successRate7d) : '—';
   const rateColor =
     hasStats && stats.successRate7d != null
       ? stats.successRate7d >= 95
-        ? "var(--ok)"
+        ? 'var(--ok)'
         : stats.successRate7d >= 80
-          ? "var(--warn)"
-          : "var(--danger)"
-      : "var(--text)";
-  const totalHealed = hasStats ? stats.totalHealed : "—";
-  const avgDur = hasStats ? fmtMs(stats.avgDurationMs) : "—";
-  const p95Dur = hasStats ? fmtMs(stats.p95DurationMs) : "—";
+          ? 'var(--warn)'
+          : 'var(--danger)'
+      : 'var(--text)';
+  const totalHealed = hasStats ? stats.totalHealed : '—';
+  const avgDur = hasStats ? fmtMs(stats.avgDurationMs) : '—';
+  const p95Dur = hasStats ? fmtMs(stats.p95DurationMs) : '—';
   const noData = hasStats && stats.resultCount7d === 0;
 
   return (
     <div
       className="fadein"
-      style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}
-    >
+      style={{ padding: '28px 32px 80px', maxWidth: 1480, margin: '0 auto' }}>
       <SectionTitle
         eyebrow="ALTERNATIVE DATA — REAL-TIME PIPELINES"
         title="대안 데이터 운영 현황"
         action={
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="btn"
               onClick={handleRefresh}
-              disabled={refreshing}
-            >
+              disabled={refreshing}>
               <Icon
                 name="refresh"
                 className="icon icon-sm"
                 style={{
-                  transition: "transform 0.6s",
-                  transform: refreshing ? "rotate(360deg)" : "none",
+                  transition: 'transform 0.6s',
+                  transform: refreshing ? 'rotate(360deg)' : 'none',
                 }}
               />
               새로고침
             </button>
-            <button className="btn primary" onClick={onNewScraper}>
-              <Icon name="plus" className="icon icon-sm" />새 스크래퍼
+            <button
+              className="btn primary"
+              onClick={onNewScraper}>
+              <Icon
+                name="plus"
+                className="icon icon-sm"
+              />
+              새 스크래퍼
             </button>
           </div>
-        }
-      >
-        API로 얻을 수 없는 데이터를, 사이트 구조가 바뀌어도 끊기지 않게{" "}
-        <strong style={{ color: "var(--text)" }}>분 단위</strong>로.{" "}
+        }>
+        API로 얻을 수 없는 데이터를, 사이트 구조가 바뀌어도 끊기지 않게{' '}
+        <strong style={{ color: 'var(--text)' }}>분 단위</strong>로.{' '}
         <span className="kbd">⌘K</span> 로 빠르게 찾기.
       </SectionTitle>
 
       {/* Top stats */}
       <div
         className="grid"
-        style={{ gridTemplateColumns: "repeat(4, 1fr)", marginBottom: 18 }}
-      >
+        style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 18 }}>
         <Stat
           icon="scraper"
           label="ACTIVE FEEDS"
@@ -140,10 +142,10 @@ function OverviewScreen({
         <Stat
           icon="activity"
           label="7D 수집 성공률"
-          value={noData ? "—" : successRate}
+          value={noData ? '—' : successRate}
           sub={
             noData ? (
-              "아직 실행 기록 없음"
+              '아직 실행 기록 없음'
             ) : (
               <>
                 SLA 임계값 <span className="mono">95.00%</span> 기준
@@ -159,20 +161,20 @@ function OverviewScreen({
           sub={
             approvalCount > 0 ? (
               <>
-                <span style={{ color: "var(--warn)" }}>
+                <span style={{ color: 'var(--warn)' }}>
                   승인 대기 {approvalCount}건
                 </span>
               </>
             ) : (
-              "모두 자동 복구됨"
+              '모두 자동 복구됨'
             )
           }
         />
         <Stat
           icon="inbox"
           label="평균 응답시간"
-          value={noData ? "—" : avgDur}
-          sub={noData ? "아직 실행 기록 없음" : `P95 ${p95Dur}`}
+          value={noData ? '—' : avgDur}
+          sub={noData ? '아직 실행 기록 없음' : `P95 ${p95Dur}`}
         />
       </div>
 
@@ -181,41 +183,49 @@ function OverviewScreen({
         <div
           className="card"
           style={{
-            padding: "14px 18px",
-            display: "flex",
-            alignItems: "center",
+            padding: '14px 18px',
+            display: 'flex',
+            alignItems: 'center',
             gap: 14,
             marginBottom: 20,
             background:
-              "linear-gradient(180deg, rgba(245,192,99,0.08), rgba(245,192,99,0.02))",
-            borderColor: "var(--warn-line)",
-          }}
-        >
+              'linear-gradient(180deg, rgba(245,192,99,0.08), rgba(245,192,99,0.02))',
+            borderColor: 'var(--warn-line)',
+          }}>
           <div
             style={{
               width: 36,
               height: 36,
               borderRadius: 10,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "var(--warn-soft)",
-              color: "var(--warn)",
-            }}
-          >
-            <Icon name="bell" className="icon" />
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--warn-soft)',
+              color: 'var(--warn)',
+            }}>
+            <Icon
+              name="bell"
+              className="icon"
+            />
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600 }}>
               {approvalCount}건의 자가치유 결과가 승인을 기다리고 있습니다
             </div>
-            <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+            <div
+              className="muted"
+              style={{ fontSize: 12, marginTop: 2 }}>
               AI 확신도가 임계값 미달 — 대시보드에서 확인 후 승인해 주세요.
             </div>
           </div>
-          <button className="btn" onClick={onGoApprovals}>
+          <button
+            className="btn"
+            onClick={onGoApprovals}>
             승인 큐로 이동
-            <Icon name="arrow_r" className="icon icon-sm" />
+            <Icon
+              name="arrow_r"
+              className="icon icon-sm"
+            />
           </button>
         </div>
       )}
@@ -223,46 +233,42 @@ function OverviewScreen({
       {/* Filter bar */}
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
+          display: 'flex',
+          alignItems: 'center',
           gap: 14,
           marginBottom: 12,
-        }}
-      >
+        }}>
         <div
           style={{
-            display: "flex",
+            display: 'flex',
             gap: 4,
             padding: 3,
-            background: "var(--bg-2)",
-            border: "1px solid var(--border)",
+            background: 'var(--bg-2)',
+            border: '1px solid var(--border)',
             borderRadius: 10,
-          }}
-        >
+          }}>
           {tabs.map((t) => (
             <button
               key={t.id}
               onClick={() => setFilter(t.id)}
               className="btn ghost sm"
               style={{
-                background: filter === t.id ? "var(--bg-3)" : "transparent",
-                color: filter === t.id ? "var(--text)" : "var(--text-mute)",
-                borderColor: "transparent",
+                background: filter === t.id ? 'var(--bg-3)' : 'transparent',
+                color: filter === t.id ? 'var(--text)' : 'var(--text-mute)',
+                borderColor: 'transparent',
                 borderRadius: 7,
-                padding: "5px 11px",
+                padding: '5px 11px',
                 fontWeight: filter === t.id ? 600 : 500,
-              }}
-            >
+              }}>
               {t.label}
               <span
                 className="num"
                 style={{
                   marginLeft: 6,
                   color:
-                    filter === t.id ? "var(--text-mute)" : "var(--text-dim)",
+                    filter === t.id ? 'var(--text-mute)' : 'var(--text-dim)',
                   fontSize: 10.5,
-                }}
-              >
+                }}>
                 {t.count}
               </span>
             </button>
@@ -270,22 +276,21 @@ function OverviewScreen({
         </div>
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
+            display: 'flex',
+            alignItems: 'center',
             gap: 8,
-            padding: "5px 12px",
-            background: "var(--bg-2)",
-            border: "1px solid var(--border)",
+            padding: '5px 12px',
+            background: 'var(--bg-2)',
+            border: '1px solid var(--border)',
             borderRadius: 10,
             minWidth: 280,
             flex: 1,
             maxWidth: 380,
-          }}
-        >
+          }}>
           <Icon
             name="search"
             className="icon icon-sm"
-            style={{ color: "var(--text-dim)" }}
+            style={{ color: 'var(--text-dim)' }}
           />
           <input
             value={query}
@@ -293,49 +298,58 @@ function OverviewScreen({
             placeholder="이름, URL, 태그로 검색…"
             style={{
               flex: 1,
-              background: "transparent",
+              background: 'transparent',
               border: 0,
-              color: "var(--text)",
+              color: 'var(--text)',
               fontSize: 13,
-              fontFamily: "var(--sans)",
+              fontFamily: 'var(--sans)',
             }}
           />
-          <span className="kbd" style={{ fontSize: 10 }}>
+          <span
+            className="kbd"
+            style={{ fontSize: 10 }}>
             ⌘K
           </span>
         </div>
         <div style={{ flex: 1 }} />
         <button className="btn ghost">
-          <Icon name="filter" className="icon icon-sm" />
+          <Icon
+            name="filter"
+            className="icon icon-sm"
+          />
           필터
         </button>
         <button className="btn ghost">
-          <Icon name="download" className="icon icon-sm" />
+          <Icon
+            name="download"
+            className="icon icon-sm"
+          />
           내보내기
         </button>
       </div>
 
       {/* Scraper table */}
-      <div className="card" style={{ overflow: "hidden" }}>
+      <div
+        className="card"
+        style={{ overflow: 'hidden' }}>
         <div
           style={{
-            display: "grid",
+            display: 'grid',
             gridTemplateColumns:
-              "minmax(280px, 1.6fr) 110px 1.2fr 110px 100px 120px 40px",
-            padding: "10px 18px",
+              'minmax(280px, 1.6fr) 110px 1.2fr 110px 100px 120px 40px',
+            padding: '10px 18px',
             fontSize: 11,
-            color: "var(--text-dim)",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            fontFamily: "var(--mono)",
-            borderBottom: "1px solid var(--border)",
-          }}
-        >
+            color: 'var(--text-dim)',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            fontFamily: 'var(--mono)',
+            borderBottom: '1px solid var(--border)',
+          }}>
           <div>스크래퍼</div>
           <div>상태</div>
           <div>최근 값</div>
-          <div style={{ textAlign: "right" }}>Score</div>
-          <div style={{ textAlign: "right" }}>7d 추이</div>
+          <div style={{ textAlign: 'right' }}>Score</div>
+          <div style={{ textAlign: 'right' }}>7d 추이</div>
           <div>스케줄</div>
           <div />
         </div>
@@ -345,53 +359,50 @@ function OverviewScreen({
             className="row-hover"
             onClick={() => onOpenScraper(c)}
             style={{
-              display: "grid",
+              display: 'grid',
               gridTemplateColumns:
-                "minmax(280px, 1.6fr) 110px 1.2fr 110px 100px 120px 40px",
-              padding: "14px 18px",
-              alignItems: "center",
+                'minmax(280px, 1.6fr) 110px 1.2fr 110px 100px 120px 40px',
+              padding: '14px 18px',
+              alignItems: 'center',
               borderBottom:
-                i === rows.length - 1 ? "none" : "1px solid var(--border)",
-              cursor: "default",
-            }}
-          >
+                i === rows.length - 1 ? 'none' : '1px solid var(--border)',
+              cursor: 'default',
+            }}>
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
+                display: 'flex',
+                alignItems: 'center',
                 gap: 12,
                 minWidth: 0,
-              }}
-            >
+              }}>
               <div
                 style={{
                   width: 30,
                   height: 30,
                   borderRadius: 8,
                   flexShrink: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  background: "var(--bg-3)",
-                  color: "var(--text-mute)",
-                  border: "1px solid var(--border-mid)",
-                }}
-              >
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'var(--bg-3)',
+                  color: 'var(--text-mute)',
+                  border: '1px solid var(--border-mid)',
+                }}>
                 <Icon
                   name={
-                    c.type === "commerce"
-                      ? "cube"
-                      : c.type === "labor"
-                        ? "user"
-                        : c.type === "realestate"
-                          ? "layers"
-                          : c.type === "regulatory"
-                            ? "sigma"
-                            : c.type === "media"
-                              ? "activity"
-                              : c.type === "finance"
-                                ? "sigma"
-                                : "target"
+                    c.type === 'commerce'
+                      ? 'cube'
+                      : c.type === 'labor'
+                        ? 'user'
+                        : c.type === 'realestate'
+                          ? 'layers'
+                          : c.type === 'regulatory'
+                            ? 'sigma'
+                            : c.type === 'media'
+                              ? 'activity'
+                              : c.type === 'finance'
+                                ? 'sigma'
+                                : 'target'
                   }
                   className="icon icon-sm"
                 />
@@ -399,22 +410,20 @@ function OverviewScreen({
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "var(--s-2)",
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--s-2)',
                     minWidth: 0,
-                  }}
-                >
+                  }}>
                   <div
                     style={{
                       fontWeight: 500,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
                       flexShrink: 1,
                       minWidth: 0,
-                    }}
-                  >
+                    }}>
                     {c.name}
                   </div>
                   {c.altCategory && (
@@ -422,10 +431,9 @@ function OverviewScreen({
                       className="chip"
                       style={{
                         fontSize: 10,
-                        padding: "1px 6px",
+                        padding: '1px 6px',
                         flexShrink: 0,
-                      }}
-                    >
+                      }}>
                       {c.altCategory}
                     </span>
                   )}
@@ -435,11 +443,10 @@ function OverviewScreen({
                   style={{
                     fontSize: 11,
                     marginTop: 1,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}>
                   {c.url}
                 </div>
               </div>
@@ -448,14 +455,18 @@ function OverviewScreen({
               <StatusChip status={c.status} />
             </div>
             <div>
-              <div className="mono" style={{ fontSize: 13 }}>
+              <div
+                className="mono"
+                style={{ fontSize: 13 }}>
                 {c.lastValue}
               </div>
-              <div className="dim" style={{ fontSize: 11, marginTop: 1 }}>
+              <div
+                className="dim"
+                style={{ fontSize: 11, marginTop: 1 }}>
                 {c.lastRun}
               </div>
             </div>
-            <div style={{ textAlign: "right" }}>
+            <div style={{ textAlign: 'right' }}>
               <div
                 className="mono"
                 style={{
@@ -463,24 +474,22 @@ function OverviewScreen({
                   fontWeight: 600,
                   color:
                     c.score >= c.threshold
-                      ? "var(--ok)"
+                      ? 'var(--ok)'
                       : c.score >= 60
-                        ? "var(--warn)"
+                        ? 'var(--warn)'
                         : c.score === 0
-                          ? "var(--text-dim)"
-                          : "var(--danger)",
-                }}
-              >
-                {c.score > 0 ? c.score.toFixed(1) : "—"}
+                          ? 'var(--text-dim)'
+                          : 'var(--danger)',
+                }}>
+                {c.score > 0 ? c.score.toFixed(1) : '—'}
               </div>
               <div
                 className="dim mono"
-                style={{ fontSize: 10.5, marginTop: 1 }}
-              >
+                style={{ fontSize: 10.5, marginTop: 1 }}>
                 ≥ {c.threshold}
               </div>
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               {c.spark.length ? (
                 <Spark
                   data={c.spark}
@@ -488,10 +497,10 @@ function OverviewScreen({
                   h={28}
                   color={
                     c.score >= c.threshold
-                      ? "var(--ok)"
+                      ? 'var(--ok)'
                       : c.score >= 60
-                        ? "var(--warn)"
-                        : "var(--danger)"
+                        ? 'var(--warn)'
+                        : 'var(--danger)'
                   }
                 />
               ) : (
@@ -499,13 +508,14 @@ function OverviewScreen({
               )}
             </div>
             <div>
-              <div className="muted" style={{ fontSize: 12 }}>
+              <div
+                className="muted"
+                style={{ fontSize: 12 }}>
                 {c.schedule}
               </div>
               <div
                 className="dim mono"
-                style={{ fontSize: 10.5, marginTop: 1 }}
-              >
+                style={{ fontSize: 10.5, marginTop: 1 }}>
                 {nextRunLabel(c.scheduleKey || c.schedule, c.lastRun)}
               </div>
             </div>
@@ -521,9 +531,11 @@ function OverviewScreen({
                   x: r.right,
                   y: r.bottom + 4,
                 });
-              }}
-            >
-              <Icon name="more" className="icon icon-sm" />
+              }}>
+              <Icon
+                name="more"
+                className="icon icon-sm"
+              />
             </button>
           </div>
         ))}
@@ -534,25 +546,24 @@ function OverviewScreen({
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
-            position: "fixed",
+            position: 'fixed',
             top: menu.y,
             right: window.innerWidth - menu.x,
             zIndex: 200,
-            background: "var(--bg-2)",
-            border: "1px solid var(--border)",
+            background: 'var(--bg-2)',
+            border: '1px solid var(--border)',
             borderRadius: 10,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.14)",
+            boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
             padding: 4,
             minWidth: 140,
-          }}
-        >
+          }}>
           <button
             className="btn ghost sm"
             style={{
-              width: "100%",
-              justifyContent: "flex-start",
-              color: "var(--danger)",
-              padding: "7px 10px",
+              width: '100%',
+              justifyContent: 'flex-start',
+              color: 'var(--danger)',
+              padding: '7px 10px',
               gap: 8,
             }}
             onClick={() => {
@@ -565,9 +576,11 @@ function OverviewScreen({
                 onDeleteScraper(menu.id);
               }
               setMenu(null);
-            }}
-          >
-            <Icon name="x" className="icon icon-sm" />
+            }}>
+            <Icon
+              name="x"
+              className="icon icon-sm"
+            />
             삭제
           </button>
         </div>
@@ -577,11 +590,10 @@ function OverviewScreen({
         style={{
           marginTop: 12,
           fontSize: 12,
-          color: "var(--text-dim)",
-          display: "flex",
-          justifyContent: "space-between",
-        }}
-      >
+          color: 'var(--text-dim)',
+          display: 'flex',
+          justifyContent: 'space-between',
+        }}>
         <span>{rows.length}개 · 행을 클릭해 상세를 보세요</span>
         <span className="mono">v1.0.0-beta · region: ap-northeast-2</span>
       </div>
@@ -596,7 +608,7 @@ function ApprovalsScreen({ onBack, onAction }) {
   const [acting, setActing] = React.useState(false);
 
   const load = () => {
-    fetch("/api/approvals")
+    fetch('/api/approvals')
       .then((r) => r.json())
       .then((data) => {
         setList(Array.isArray(data) ? data : []);
@@ -611,7 +623,7 @@ function ApprovalsScreen({ onBack, onAction }) {
   const handleApprove = async (proposal) => {
     setActing(true);
     await fetch(`/api/approvals/${proposal.id}/approve`, {
-      method: "POST",
+      method: 'POST',
     }).catch(() => {});
     setActing(false);
     setSelected(null);
@@ -622,7 +634,7 @@ function ApprovalsScreen({ onBack, onAction }) {
   const handleReject = async (proposal) => {
     setActing(true);
     await fetch(`/api/approvals/${proposal.id}/reject`, {
-      method: "POST",
+      method: 'POST',
     }).catch(() => {});
     setActing(false);
     setSelected(null);
@@ -637,42 +649,44 @@ function ApprovalsScreen({ onBack, onAction }) {
     return (
       <div
         className="fadein"
-        style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}
-      >
+        style={{ padding: '28px 32px 80px', maxWidth: 1480, margin: '0 auto' }}>
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
+            display: 'flex',
+            alignItems: 'center',
             gap: 8,
             marginBottom: 18,
             fontSize: 12,
-            color: "var(--text-mute)",
-          }}
-        >
-          <a onClick={onBack} style={{ cursor: "default" }} className="muted">
+            color: 'var(--text-mute)',
+          }}>
+          <a
+            onClick={onBack}
+            style={{ cursor: 'default' }}
+            className="muted">
             Approvals
           </a>
           <Icon
             name="chevron_r"
             className="icon icon-sm"
-            style={{ color: "var(--text-dim)" }}
+            style={{ color: 'var(--text-dim)' }}
           />
           <a
             onClick={() => setSelected(null)}
-            style={{ cursor: "default" }}
-            className="muted"
-          >
+            style={{ cursor: 'default' }}
+            className="muted">
             목록
           </a>
           <Icon
             name="chevron_r"
             className="icon icon-sm"
-            style={{ color: "var(--text-dim)" }}
+            style={{ color: 'var(--text-dim)' }}
           />
           <span>
             {p.scraper_id} — {p.scraper_name}
           </span>
-          <span className="chip warn" style={{ marginLeft: 8 }}>
+          <span
+            className="chip warn"
+            style={{ marginLeft: 8 }}>
             <span className="dot" />
             수동 승인 대기
           </span>
@@ -682,58 +696,61 @@ function ApprovalsScreen({ onBack, onAction }) {
           eyebrow="HUMAN-IN-THE-LOOP"
           title="자가치유 결과 검토"
           action={
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8 }}>
               <button
                 className="btn"
                 onClick={() => handleReject(p)}
-                disabled={acting}
-              >
-                <Icon name="x" className="icon icon-sm" />
+                disabled={acting}>
+                <Icon
+                  name="x"
+                  className="icon icon-sm"
+                />
                 거부 · 다시 시도
               </button>
               <button
                 className="btn primary"
                 onClick={() => handleApprove(p)}
-                disabled={acting}
-              >
-                <Icon name="check" className="icon icon-sm" />
+                disabled={acting}>
+                <Icon
+                  name="check"
+                  className="icon icon-sm"
+                />
                 승인 후 자동 복구
               </button>
             </div>
-          }
-        >
-          AI가 찾은 후보의 확신도가 임계값에 미달했습니다.{" "}
-          <strong style={{ color: "var(--text)" }}>
-            {p.scraper_name}
-          </strong>{" "}
+          }>
+          AI가 찾은 후보의 확신도가 임계값에 미달했습니다.{' '}
+          <strong style={{ color: 'var(--text)' }}>{p.scraper_name}</strong>{' '}
           스크래퍼를 검토해 주세요.
         </SectionTitle>
 
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1.4fr 1fr",
+            display: 'grid',
+            gridTemplateColumns: '1.4fr 1fr',
             gap: 16,
             marginBottom: 16,
-          }}
-        >
+          }}>
           {/* Selector diff */}
-          <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+          <div
+            className="card"
+            style={{ padding: 0, overflow: 'hidden' }}>
             <div
               style={{
-                padding: "14px 18px",
-                borderBottom: "1px solid var(--border)",
-                display: "flex",
-                alignItems: "center",
+                padding: '14px 18px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
                 gap: 10,
-              }}
-            >
-              <Icon name="code" className="icon" />
+              }}>
+              <Icon
+                name="code"
+                className="icon"
+              />
               <div style={{ fontWeight: 600 }}>Selector 변경</div>
               <span
                 className="dim mono"
-                style={{ fontSize: 11, marginLeft: "auto" }}
-              >
+                style={{ fontSize: 11, marginLeft: 'auto' }}>
                 {p.created_at}
               </span>
             </div>
@@ -741,20 +758,18 @@ function ApprovalsScreen({ onBack, onAction }) {
             <div
               style={{
                 padding: 18,
-                display: "flex",
-                flexDirection: "column",
+                display: 'flex',
+                flexDirection: 'column',
                 gap: 14,
-              }}
-            >
+              }}>
               <div>
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
+                    display: 'flex',
+                    alignItems: 'center',
                     gap: 8,
                     marginBottom: 6,
-                  }}
-                >
+                  }}>
                   <span className="chip danger">
                     <span className="dot" />
                     이전 (장애 발생)
@@ -764,40 +779,42 @@ function ApprovalsScreen({ onBack, onAction }) {
                   className="code"
                   style={{
                     margin: 0,
-                    wordBreak: "break-all",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
+                    wordBreak: 'break-all',
+                    whiteSpace: 'pre-wrap',
+                  }}>
                   {p.old_selector}
                 </pre>
               </div>
 
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
+                  display: 'flex',
+                  alignItems: 'center',
                   gap: 8,
-                  color: "var(--text-dim)",
-                }}
-              >
-                <Icon name="chevron_d" className="icon icon-sm" />
-                <span className="dim mono" style={{ fontSize: 11 }}>
+                  color: 'var(--text-dim)',
+                }}>
+                <Icon
+                  name="chevron_d"
+                  className="icon icon-sm"
+                />
+                <span
+                  className="dim mono"
+                  style={{ fontSize: 11 }}>
                   AI 제안 셀렉터
                 </span>
                 <div
-                  style={{ flex: 1, height: 1, background: "var(--border)" }}
+                  style={{ flex: 1, height: 1, background: 'var(--border)' }}
                 />
               </div>
 
               <div>
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
+                    display: 'flex',
+                    alignItems: 'center',
                     gap: 8,
                     marginBottom: 6,
-                  }}
-                >
+                  }}>
                   <span className="chip ok">
                     <span className="dot" />새 후보
                   </span>
@@ -806,27 +823,24 @@ function ApprovalsScreen({ onBack, onAction }) {
                   className="code"
                   style={{
                     margin: 0,
-                    wordBreak: "break-all",
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {p.proposed_selector || "(제안 없음)"}
+                    wordBreak: 'break-all',
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                  {p.proposed_selector || '(제안 없음)'}
                 </pre>
               </div>
 
               {p.extracted_text && (
                 <div
                   style={{
-                    padding: "10px 14px",
-                    background: "var(--bg-2)",
+                    padding: '10px 14px',
+                    background: 'var(--bg-2)',
                     borderRadius: 8,
-                    border: "1px solid var(--border)",
-                  }}
-                >
+                    border: '1px solid var(--border)',
+                  }}>
                   <div
                     className="dim mono"
-                    style={{ fontSize: 10.5, marginBottom: 4 }}
-                  >
+                    style={{ fontSize: 10.5, marginBottom: 4 }}>
                     추출된 텍스트
                   </div>
                   <div style={{ fontSize: 13 }}>{p.extracted_text}</div>
@@ -836,25 +850,22 @@ function ApprovalsScreen({ onBack, onAction }) {
               {p.reasoning && (
                 <div
                   style={{
-                    padding: "10px 14px",
-                    background: "var(--bg-2)",
+                    padding: '10px 14px',
+                    background: 'var(--bg-2)',
                     borderRadius: 8,
-                    border: "1px solid var(--border)",
-                  }}
-                >
+                    border: '1px solid var(--border)',
+                  }}>
                   <div
                     className="dim mono"
-                    style={{ fontSize: 10.5, marginBottom: 4 }}
-                  >
+                    style={{ fontSize: 10.5, marginBottom: 4 }}>
                     AI 추론 근거
                   </div>
                   <div
                     style={{
                       fontSize: 12.5,
                       lineHeight: 1.6,
-                      color: "var(--text-mute)",
-                    }}
-                  >
+                      color: 'var(--text-mute)',
+                    }}>
                     {p.reasoning}
                   </div>
                 </div>
@@ -867,34 +878,34 @@ function ApprovalsScreen({ onBack, onAction }) {
             className="card"
             style={{
               padding: 0,
-              overflow: "hidden",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}>
             <div
               style={{
-                padding: "14px 18px",
-                borderBottom: "1px solid var(--border)",
-                display: "flex",
-                alignItems: "center",
+                padding: '14px 18px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex',
+                alignItems: 'center',
                 gap: 10,
-              }}
-            >
-              <Icon name="target" className="icon" />
+              }}>
+              <Icon
+                name="target"
+                className="icon"
+              />
               <div style={{ fontWeight: 600 }}>확신도 (Confidence)</div>
             </div>
 
             <div
               style={{
-                padding: "32px 18px",
-                display: "flex",
-                alignItems: "center",
+                padding: '32px 18px',
+                display: 'flex',
+                alignItems: 'center',
                 gap: 18,
-                justifyContent: "center",
+                justifyContent: 'center',
                 flex: 1,
-              }}
-            >
+              }}>
               <ScoreRing
                 value={scoreVal}
                 threshold={70}
@@ -903,21 +914,19 @@ function ApprovalsScreen({ onBack, onAction }) {
               />
               <div
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
+                  display: 'flex',
+                  flexDirection: 'column',
                   gap: 8,
                   minWidth: 160,
-                }}
-              >
+                }}>
                 <div>
                   <div
                     className="dim mono"
                     style={{
                       fontSize: 10.5,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                    }}
-                  >
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                    }}>
                     Confidence
                   </div>
                   <div
@@ -925,14 +934,12 @@ function ApprovalsScreen({ onBack, onAction }) {
                     style={{
                       fontSize: 22,
                       fontWeight: 600,
-                      color: "var(--warn)",
-                    }}
-                  >
-                    {scoreVal.toFixed(1)}{" "}
+                      color: 'var(--warn)',
+                    }}>
+                    {scoreVal.toFixed(1)}{' '}
                     <span
                       className="dim"
-                      style={{ fontSize: 13, fontWeight: 400 }}
-                    >
+                      style={{ fontSize: 13, fontWeight: 400 }}>
                       / 100
                     </span>
                   </div>
@@ -942,24 +949,24 @@ function ApprovalsScreen({ onBack, onAction }) {
                     className="dim mono"
                     style={{
                       fontSize: 10.5,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
-                    }}
-                  >
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                    }}>
                     Raw
                   </div>
                   <div
                     className="mono"
-                    style={{ fontSize: 15, color: "var(--text-mute)" }}
-                  >
+                    style={{ fontSize: 15, color: 'var(--text-mute)' }}>
                     {p.confidence.toFixed(4)}
                   </div>
                 </div>
                 <div
                   className="chip warn"
-                  style={{ alignSelf: "flex-start", marginTop: 4 }}
-                >
-                  <Icon name="triangle_dn" className="icon icon-sm" />
+                  style={{ alignSelf: 'flex-start', marginTop: 4 }}>
+                  <Icon
+                    name="triangle_dn"
+                    className="icon icon-sm"
+                  />
                   수동 검토 필요
                 </div>
               </div>
@@ -974,17 +981,17 @@ function ApprovalsScreen({ onBack, onAction }) {
   return (
     <div
       className="fadein"
-      style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}
-    >
-      <SectionTitle eyebrow="HUMAN-IN-THE-LOOP" title="승인 큐">
+      style={{ padding: '28px 32px 80px', maxWidth: 1480, margin: '0 auto' }}>
+      <SectionTitle
+        eyebrow="HUMAN-IN-THE-LOOP"
+        title="승인 큐">
         자가치유 신뢰도가 임계값에 미달한 제안을 검토하고 승인하세요.
       </SectionTitle>
 
       {list === null && (
         <div
           className="card"
-          style={{ padding: "var(--s-11)", textAlign: "center" }}
-        >
+          style={{ padding: 'var(--s-11)', textAlign: 'center' }}>
           <div className="muted">로딩 중…</div>
         </div>
       )}
@@ -992,41 +999,43 @@ function ApprovalsScreen({ onBack, onAction }) {
       {list !== null && list.length === 0 && (
         <div
           className="card"
-          style={{ padding: "var(--s-11)", textAlign: "center" }}
-        >
+          style={{ padding: 'var(--s-11)', textAlign: 'center' }}>
           <Icon
             name="check"
             className="icon icon-lg"
             style={{
-              margin: "0 auto var(--s-3)",
-              display: "block",
-              color: "var(--ok)",
+              margin: '0 auto var(--s-3)',
+              display: 'block',
+              color: 'var(--ok)',
             }}
           />
           <div style={{ fontWeight: 600, marginBottom: 6 }}>
             검토 대기 중인 항목이 없습니다
           </div>
-          <div className="muted" style={{ fontSize: 13 }}>
+          <div
+            className="muted"
+            style={{ fontSize: 13 }}>
             자가치유 신뢰도가 임계값을 충족하면 자동으로 복구됩니다.
           </div>
         </div>
       )}
 
       {list !== null && list.length > 0 && (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div
+          className="card"
+          style={{ padding: 0, overflow: 'hidden' }}>
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1.2fr 1.2fr 90px 120px 130px",
-              padding: "10px 18px",
-              borderBottom: "1px solid var(--border)",
+              display: 'grid',
+              gridTemplateColumns: '1fr 1.2fr 1.2fr 90px 120px 130px',
+              padding: '10px 18px',
+              borderBottom: '1px solid var(--border)',
               fontSize: 11,
               fontWeight: 600,
-              color: "var(--text-dim)",
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-            }}
-          >
+              color: 'var(--text-dim)',
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}>
             <div>스크래퍼</div>
             <div>이전 셀렉터</div>
             <div>제안 셀렉터</div>
@@ -1038,20 +1047,21 @@ function ApprovalsScreen({ onBack, onAction }) {
             <div
               key={p.id}
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1.2fr 1.2fr 90px 120px 130px",
-                padding: "14px 18px",
-                alignItems: "center",
+                display: 'grid',
+                gridTemplateColumns: '1fr 1.2fr 1.2fr 90px 120px 130px',
+                padding: '14px 18px',
+                alignItems: 'center',
                 gap: 4,
                 borderBottom:
-                  i === list.length - 1 ? "none" : "1px solid var(--border)",
-              }}
-            >
+                  i === list.length - 1 ? 'none' : '1px solid var(--border)',
+              }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 13 }}>
                   {p.scraper_name}
                 </div>
-                <div className="dim mono" style={{ fontSize: 11 }}>
+                <div
+                  className="dim mono"
+                  style={{ fontSize: 11 }}>
                   {p.scraper_id}
                 </div>
               </div>
@@ -1059,26 +1069,24 @@ function ApprovalsScreen({ onBack, onAction }) {
                 className="mono muted"
                 style={{
                   fontSize: 12,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                 }}
-                title={p.old_selector}
-              >
+                title={p.old_selector}>
                 {p.old_selector}
               </div>
               <div
                 className="mono"
                 style={{
                   fontSize: 12,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                  color: "var(--ok)",
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  color: 'var(--ok)',
                 }}
-                title={p.proposed_selector}
-              >
-                {p.proposed_selector || "—"}
+                title={p.proposed_selector}>
+                {p.proposed_selector || '—'}
               </div>
               <div
                 className="mono"
@@ -1087,28 +1095,29 @@ function ApprovalsScreen({ onBack, onAction }) {
                   fontWeight: 600,
                   color:
                     p.confidence >= 0.9
-                      ? "var(--ok)"
+                      ? 'var(--ok)'
                       : p.confidence >= 0.6
-                        ? "var(--warn)"
-                        : "var(--danger)",
-                }}
-              >
+                        ? 'var(--warn)'
+                        : 'var(--danger)',
+                }}>
                 {(p.confidence * 100).toFixed(1)}%
               </div>
-              <div className="dim mono" style={{ fontSize: 11 }}>
+              <div
+                className="dim mono"
+                style={{ fontSize: 11 }}>
                 {p.created_at}
               </div>
               <div
-                style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}
-              >
-                <button className="btn ghost sm" onClick={() => setSelected(p)}>
+                style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                <button
+                  className="btn ghost sm"
+                  onClick={() => setSelected(p)}>
                   검토
                 </button>
                 <button
                   className="btn primary sm"
                   onClick={() => handleApprove(p)}
-                  disabled={acting}
-                >
+                  disabled={acting}>
                   승인
                 </button>
               </div>
@@ -1123,12 +1132,12 @@ function ApprovalsScreen({ onBack, onAction }) {
 // ─── Scraper Detail ────────────────────────────────────────────────────────
 function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
   const [c, setC] = React.useState(scraper);
-  const tabs = ["Overview", "Runs", "Healing log", "Schema", "Settings", "API"];
-  const [tab, setTab] = React.useState("Overview");
+  const tabs = ['Overview', 'Runs', 'Healing log', 'Schema', 'Settings', 'API'];
+  const [tab, setTab] = React.useState('Overview');
   const [healOpen, setHealOpen] = React.useState(false);
   const [repickOpen, setRepickOpen] = React.useState(false);
-  const [runState, setRunState] = React.useState("idle"); // idle | running | done | error
-  const [runMsg, setRunMsg] = React.useState("");
+  const [runState, setRunState] = React.useState('idle'); // idle | running | done | error
+  const [runMsg, setRunMsg] = React.useState('');
   const [deleteConfirm, setDeleteConfirm] = React.useState(false);
 
   const scores = c.spark || [];
@@ -1136,25 +1145,26 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
   return (
     <div
       className="fadein"
-      style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}
-    >
+      style={{ padding: '28px 32px 80px', maxWidth: 1480, margin: '0 auto' }}>
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
+          display: 'flex',
+          alignItems: 'center',
           gap: 8,
           marginBottom: 14,
           fontSize: 12,
-          color: "var(--text-mute)",
-        }}
-      >
-        <a onClick={onBack} className="muted" style={{ cursor: "default" }}>
+          color: 'var(--text-mute)',
+        }}>
+        <a
+          onClick={onBack}
+          className="muted"
+          style={{ cursor: 'default' }}>
           Scrapers
         </a>
         <Icon
           name="chevron_r"
           className="icon icon-sm"
-          style={{ color: "var(--text-dim)" }}
+          style={{ color: 'var(--text-dim)' }}
         />
         <span>{c.id}</span>
       </div>
@@ -1162,22 +1172,20 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
       {/* 헤더: 좌(이름/메타) + 우(버튼) */}
       <div
         style={{
-          display: "flex",
-          alignItems: "flex-start",
+          display: 'flex',
+          alignItems: 'flex-start',
           gap: 16,
           marginBottom: 24,
-        }}
-      >
+        }}>
         {/* 좌 */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
+            display: 'flex',
+            alignItems: 'center',
             gap: 18,
             minWidth: 0,
             flex: 1,
-          }}
-        >
+          }}>
           <ScoreRing
             value={c.score}
             threshold={c.threshold}
@@ -1190,33 +1198,33 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
             </h2>
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
+                display: 'flex',
+                alignItems: 'center',
                 gap: 8,
                 fontSize: 12,
-                color: "var(--text-mute)",
-                flexWrap: "wrap",
-              }}
-            >
+                color: 'var(--text-mute)',
+                flexWrap: 'wrap',
+              }}>
               <StatusChip status={c.status} />
               <span
                 className="mono"
                 style={{
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
                   maxWidth: 280,
-                }}
-              >
+                }}>
                 {c.url}
               </span>
               <span className="dim">·</span>
               <span>{c.schedule}</span>
               <span
                 className="chip"
-                style={{ fontSize: 10, padding: "1px 7px" }}
-              >
-                <Icon name="history" className="icon icon-sm" />
+                style={{ fontSize: 10, padding: '1px 7px' }}>
+                <Icon
+                  name="history"
+                  className="icon icon-sm"
+                />
                 {nextRunLabel(c.scheduleKey || c.schedule, c.lastRun)}
               </span>
             </div>
@@ -1226,60 +1234,74 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
         {/* 우: 버튼 묶음 */}
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
+            display: 'flex',
+            flexDirection: 'column',
             gap: 6,
             flexShrink: 0,
-            alignItems: "flex-end",
-          }}
-        >
+            alignItems: 'flex-end',
+          }}>
           <div
             style={{
-              display: "flex",
+              display: 'flex',
               gap: 6,
-              alignItems: "center",
-              flexWrap: "wrap",
-              justifyContent: "flex-end",
-            }}
-          >
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              justifyContent: 'flex-end',
+            }}>
             <button className="btn ghost sm">
-              <Icon name="pause" className="icon icon-sm" />
+              <Icon
+                name="pause"
+                className="icon icon-sm"
+              />
               일시중지
             </button>
             <button
               className="btn ghost sm"
-              disabled={runState === "running"}
+              disabled={runState === 'running'}
               onClick={async () => {
-                setRunState("running");
-                setRunMsg("");
+                setRunState('running');
+                setRunMsg('');
                 try {
-                  const resp = await fetch(`/api/scrapers/${c.id}/run`, { method: 'POST' });
+                  const resp = await fetch(`/api/scrapers/${c.id}/run`, {
+                    method: 'POST',
+                  });
                   const text = await resp.text();
                   let data = {};
-                  try { if (text) data = JSON.parse(text); } catch { /* non-JSON */ }
-                  if (!resp.ok) throw new Error(data.error || `실행 실패 (${resp.status}): ${text.slice(0, 120)}`);
-                  setC(prev => ({ ...prev, ...data.scraper, spark: prev.spark }));
+                  try {
+                    if (text) data = JSON.parse(text);
+                  } catch {
+                    /* non-JSON */
+                  }
+                  if (!resp.ok)
+                    throw new Error(
+                      data.error ||
+                        `실행 실패 (${resp.status}): ${text.slice(0, 120)}`,
+                    );
+                  setC((prev) => ({
+                    ...prev,
+                    ...data.scraper,
+                    spark: prev.spark,
+                  }));
                   if (onScraperUpdate) onScraperUpdate(data.scraper);
                   const r = data.result;
                   setRunMsg(
-                    r.status === "healthy"
+                    r.status === 'healthy'
                       ? `✓ 수집 완료 — "${r.value}"`
-                      : r.heal?.status === "healed"
+                      : r.heal?.status === 'healed'
                         ? `⚡ 자가치유 성공`
-                        : r.heal?.status === "pending"
+                        : r.heal?.status === 'pending'
                           ? `⏳ 신뢰도 미달 — 승인 대기`
-                          : r.heal?.status === "skipped"
+                          : r.heal?.status === 'skipped'
                             ? `✗ 셀렉터 불일치 — '셀렉터 재선택'을 사용하세요`
-                            : `✗ 셀렉터 불일치 — ${r.heal?.reason || "요소를 찾지 못했습니다"}`,
+                            : `✗ 셀렉터 불일치 — ${r.heal?.reason || '요소를 찾지 못했습니다'}`,
                   );
-                  setRunState("done");
+                  setRunState('done');
                 } catch (e) {
                   setRunMsg(`오류: ${e.message}`);
-                  setRunState("error");
+                  setRunState('error');
                 }
-              }}
-            >
-              {runState === "running" ? (
+              }}>
+              {runState === 'running' ? (
                 <>
                   <div
                     className="spin"
@@ -1287,66 +1309,76 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                       width: 11,
                       height: 11,
                       borderRadius: 999,
-                      border: "2px solid var(--border-strong)",
-                      borderTopColor: "var(--accent)",
+                      border: '2px solid var(--border-strong)',
+                      borderTopColor: 'var(--accent)',
                     }}
-                  />{" "}
+                  />{' '}
                   실행 중…
                 </>
               ) : (
                 <>
-                  <Icon name="play" className="icon icon-sm" />
+                  <Icon
+                    name="play"
+                    className="icon icon-sm"
+                  />
                   지금 실행
                 </>
               )}
             </button>
-            <button className="btn sm" onClick={() => setRepickOpen(true)}>
-              <Icon name="target" className="icon icon-sm" />
+            <button
+              className="btn sm"
+              onClick={() => setRepickOpen(true)}>
+              <Icon
+                name="target"
+                className="icon icon-sm"
+              />
               셀렉터 재선택
             </button>
-            {(c.status === "failed" || c.status === "pending") && (
+            {(c.status === 'failed' || c.status === 'pending') && (
               <button
                 className="btn sm"
                 style={{
-                  borderColor: "var(--healing-line)",
-                  background: "var(--healing-soft)",
-                  color: "var(--healing)",
+                  borderColor: 'var(--healing-line)',
+                  background: 'var(--healing-soft)',
+                  color: 'var(--healing)',
                 }}
-                onClick={() => setHealOpen(true)}
-              >
-                <Icon name="bolt" className="icon icon-sm" />
+                onClick={() => setHealOpen(true)}>
+                <Icon
+                  name="bolt"
+                  className="icon icon-sm"
+                />
                 자가치유
               </button>
             )}
             <div
-              style={{ width: 1, height: 16, background: "var(--border)" }}
+              style={{ width: 1, height: 16, background: 'var(--border)' }}
             />
             {deleteConfirm ? (
               <>
                 <button
                   className="btn sm"
                   style={{
-                    borderColor: "var(--danger)",
-                    color: "var(--danger)",
-                    background: "var(--danger-soft)",
+                    borderColor: 'var(--danger)',
+                    color: 'var(--danger)',
+                    background: 'var(--danger-soft)',
                   }}
-                  onClick={() => onDelete && onDelete(c.id)}
-                >
+                  onClick={() => onDelete && onDelete(c.id)}>
                   확인
                 </button>
                 <button
                   className="btn ghost sm"
-                  onClick={() => setDeleteConfirm(false)}
-                >
+                  onClick={() => setDeleteConfirm(false)}>
                   취소
                 </button>
               </>
             ) : (
               <button
                 className="btn ghost sm"
-                onClick={() => setDeleteConfirm(true)}
-              >
-                <Icon name="x" className="icon icon-sm" />
+                onClick={() => setDeleteConfirm(true)}>
+                <Icon
+                  name="x"
+                  className="icon icon-sm"
+                />
                 삭제
               </button>
             )}
@@ -1356,15 +1388,19 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
             <div
               style={{
                 fontSize: 12,
-                color: runState === "done" ? "var(--ok)" : "var(--danger)",
-              }}
-            >
+                color: runState === 'done' ? 'var(--ok)' : 'var(--danger)',
+              }}>
               {runMsg}
             </div>
           )}
         </div>
       </div>
-      {healOpen && <HealPanel scraper={c} onClose={() => setHealOpen(false)} />}
+      {healOpen && (
+        <HealPanel
+          scraper={c}
+          onClose={() => setHealOpen(false)}
+        />
+      )}
       {repickOpen && (
         <SelectorRepickPanel
           scraper={c}
@@ -1380,12 +1416,11 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
       {/* tabs */}
       <div
         style={{
-          display: "flex",
+          display: 'flex',
           gap: 0,
-          borderBottom: "1px solid var(--border)",
+          borderBottom: '1px solid var(--border)',
           marginBottom: 20,
-        }}
-      >
+        }}>
         {tabs.map((t) => (
           <button
             key={t}
@@ -1393,32 +1428,65 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
             className="btn ghost"
             style={{
               borderRadius: 0,
-              padding: "9px 14px",
+              padding: '9px 14px',
               fontSize: 13,
-              color: tab === t ? "var(--text)" : "var(--text-mute)",
+              color: tab === t ? 'var(--text)' : 'var(--text-mute)',
               borderBottom:
                 tab === t
-                  ? "1.5px solid var(--text)"
-                  : "1.5px solid transparent",
+                  ? '1.5px solid var(--text)'
+                  : '1.5px solid transparent',
               marginBottom: -1,
-            }}
-          >
+            }}>
             {t}
           </button>
         ))}
       </div>
 
-      {tab==='Overview' && <DetailOverview scraper={c} scores={scores}/>}
-      {tab==='Runs' && <DetailRuns scraperId={c.id}/>}
-      {tab==='API' && <DetailApi scraper={c}/>}
-      {tab==='Settings' && <DetailSettings scraper={c} onScraperUpdate={(u) => { setC(u); if(onScraperUpdate) onScraperUpdate(u); }}/>}
-      {tab!=='Overview' && tab!=='Runs' && tab!=='API' && tab!=='Settings' && (
-        <div className="card" style={{padding:'60px', textAlign:'center', color:'var(--text-mute)'}}>
-          <Icon name="cube" className="icon icon-lg" style={{margin:'0 auto 12px', display:'block', color:'var(--text-dim)'}}/>
-          <div style={{marginBottom:6, color:'var(--text)'}}>{tab}</div>
-          <div className="dim" style={{fontSize:12}}>이 탭은 데모에서 생략되었습니다.</div>
-        </div>
+      {tab === 'Overview' && (
+        <DetailOverview
+          scraper={c}
+          scores={scores}
+        />
       )}
+      {tab === 'Runs' && <DetailRuns scraperId={c.id} />}
+      {tab === 'API' && <DetailApi scraper={c} />}
+      {tab === 'Settings' && (
+        <DetailSettings
+          scraper={c}
+          onScraperUpdate={(u) => {
+            setC(u);
+            if (onScraperUpdate) onScraperUpdate(u);
+          }}
+        />
+      )}
+      {tab !== 'Overview' &&
+        tab !== 'Runs' &&
+        tab !== 'API' &&
+        tab !== 'Settings' && (
+          <div
+            className="card"
+            style={{
+              padding: '60px',
+              textAlign: 'center',
+              color: 'var(--text-mute)',
+            }}>
+            <Icon
+              name="cube"
+              className="icon icon-lg"
+              style={{
+                margin: '0 auto 12px',
+                display: 'block',
+                color: 'var(--text-dim)',
+              }}
+            />
+            <div style={{ marginBottom: 6, color: 'var(--text)' }}>{tab}</div>
+            <div
+              className="dim"
+              style={{ fontSize: 12 }}>
+              이 탭은 데모에서 생략되었습니다.
+            </div>
+          </div>
+        )}
     </div>
   );
 }
@@ -1441,15 +1509,15 @@ function DetailOverview({ scraper, scores }) {
   const runs7d = hasResults
     ? results.filter((r) => new Date(r.runAt) >= sevenDaysAgo).length
     : null;
-  const avgConfidence = hasResults ? results[0].score.toFixed(1) + "%" : null;
+  const avgConfidence = hasResults ? results[0].score.toFixed(1) + '%' : null;
   const avgMs = hasResults
     ? results.reduce((s, r) => s + (r.durationMs || 0), 0) / results.length
     : null;
   const avgDur =
     avgMs != null
       ? avgMs >= 1000
-        ? (avgMs / 1000).toFixed(2) + "s"
-        : Math.round(avgMs) + "ms"
+        ? (avgMs / 1000).toFixed(2) + 's'
+        : Math.round(avgMs) + 'ms'
       : null;
 
   // ── Score 차트 ───────────────────────────────────────────────────────────
@@ -1464,16 +1532,16 @@ function DetailOverview({ scraper, scores }) {
     i * step,
     h - ((v - min) / (max - min)) * (h - 20) - 10,
   ]);
-  const line = pts.map((p) => `${p[0]},${p[1]}`).join(" ");
+  const line = pts.map((p) => `${p[0]},${p[1]}`).join(' ');
   const area = `0,${h} ${line} ${w},${h}`;
   const thresholdY =
     h - ((scraper.threshold - min) / (max - min)) * (h - 20) - 10;
   const lineColor =
     scraper.score >= scraper.threshold
-      ? "var(--ok)"
+      ? 'var(--ok)'
       : scraper.score >= 60
-        ? "var(--warn)"
-        : "var(--danger)";
+        ? 'var(--warn)'
+        : 'var(--danger)';
 
   // ── 최근 수집 결과 JSON ───────────────────────────────────────────────────
   const jsonPayload = latest
@@ -1488,8 +1556,8 @@ function DetailOverview({ scraper, scores }) {
           duration_ms: latest.durationMs,
           self_healing: {
             applied: latest.note
-              ? latest.note.includes("자가치유") ||
-                latest.note.includes("healed")
+              ? latest.note.includes('자가치유') ||
+                latest.note.includes('healed')
               : false,
             score: latest.score,
             threshold: scraper.threshold,
@@ -1505,7 +1573,7 @@ function DetailOverview({ scraper, scores }) {
           target: scraper.url,
           collected_at: null,
           value: null,
-          status: "no_data",
+          status: 'no_data',
           note: '아직 실행 기록이 없습니다. "지금 실행"을 눌러 첫 수집을 시작하세요.',
         },
         null,
@@ -1513,33 +1581,35 @@ function DetailOverview({ scraper, scores }) {
       );
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr", gap: 16 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: 16 }}>
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
+          display: 'flex',
+          flexDirection: 'column',
           gap: 16,
           minWidth: 0,
-        }}
-      >
+        }}>
         {/* score chart */}
-        <div className="card" style={{ padding: 18 }}>
+        <div
+          className="card"
+          style={{ padding: 18 }}>
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               marginBottom: 14,
-            }}
-          >
+            }}>
             <div>
               <div style={{ fontWeight: 600, marginBottom: 2 }}>Score 추이</div>
-              <div className="dim" style={{ fontSize: 11.5 }}>
+              <div
+                className="dim"
+                style={{ fontSize: 11.5 }}>
                 {isRealSpark
                   ? `최근 ${scores.length}회 실행 기록`
                   : hasResults === null
-                    ? "로딩 중…"
-                    : "실행 기록 없음"}
+                    ? '로딩 중…'
+                    : '실행 기록 없음'}
               </div>
             </div>
           </div>
@@ -1547,23 +1617,23 @@ function DetailOverview({ scraper, scores }) {
             <div
               style={{
                 height: h,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <div className="muted" style={{ fontSize: 13 }}>
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <div
+                className="muted"
+                style={{ fontSize: 13 }}>
                 첫 실행 후 차트가 표시됩니다.
               </div>
             </div>
           ) : (
-            <div style={{ position: "relative" }}>
+            <div style={{ position: 'relative' }}>
               <svg
                 width="100%"
                 height={h}
                 viewBox={`0 0 ${w} ${h}`}
-                preserveAspectRatio="none"
-              >
+                preserveAspectRatio="none">
                 {[0, 25, 50, 75, 100].map((g) => {
                   const y = h - ((g - min) / (max - min)) * (h - 20) - 10;
                   return (
@@ -1587,7 +1657,11 @@ function DetailOverview({ scraper, scores }) {
                   strokeDasharray="4 4"
                   opacity="0.65"
                 />
-                <polygon points={area} fill={lineColor} opacity="0.10" />
+                <polygon
+                  points={area}
+                  fill={lineColor}
+                  opacity="0.10"
+                />
                 <polyline
                   points={line}
                   fill="none"
@@ -1614,22 +1688,23 @@ function DetailOverview({ scraper, scores }) {
               <div
                 className="mono"
                 style={{
-                  position: "absolute",
+                  position: 'absolute',
                   right: 8,
                   top: Math.max(4, thresholdY - 9),
                   fontSize: 10,
-                  color: "var(--warn)",
-                  background: "var(--bg-2)",
-                  padding: "1px 6px",
+                  color: 'var(--warn)',
+                  background: 'var(--bg-2)',
+                  padding: '1px 6px',
                   borderRadius: 4,
-                  border: "1px solid var(--warn-line)",
-                }}
-              >
+                  border: '1px solid var(--warn-line)',
+                }}>
                 임계값 {scraper.threshold}
               </div>
             </div>
           )}
-          <div className="ticks" style={{ marginTop: 6 }}>
+          <div
+            className="ticks"
+            style={{ marginTop: 6 }}>
             <span>이전</span>
             <span />
             <span />
@@ -1639,32 +1714,42 @@ function DetailOverview({ scraper, scores }) {
         </div>
 
         {hasResults && (
-          <ValueTrendCard results={results} scraperId={scraper.id} />
+          <ValueTrendCard
+            results={results}
+            scraperId={scraper.id}
+          />
         )}
 
         {/* 최근 수집 결과 JSON */}
-        <div className="card" style={{ padding: 18 }}>
+        <div
+          className="card"
+          style={{ padding: 18 }}>
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
               marginBottom: 10,
-            }}
-          >
+            }}>
             <div style={{ fontWeight: 600 }}>최근 수집 결과 (JSON)</div>
             {latest && (
-              <span className="dim mono" style={{ fontSize: 11 }}>
+              <span
+                className="dim mono"
+                style={{ fontSize: 11 }}>
                 {latest.runAt}
               </span>
             )}
           </div>
           {results === null ? (
-            <div className="muted" style={{ fontSize: 12, padding: "16px 0" }}>
+            <div
+              className="muted"
+              style={{ fontSize: 12, padding: '16px 0' }}>
               로딩 중…
             </div>
           ) : (
-            <pre className="code" style={{ margin: 0, fontSize: 12 }}>
+            <pre
+              className="code"
+              style={{ margin: 0, fontSize: 12 }}>
               {jsonPayload}
             </pre>
           )}
@@ -1673,74 +1758,72 @@ function DetailOverview({ scraper, scores }) {
 
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
+          display: 'flex',
+          flexDirection: 'column',
           gap: 16,
           minWidth: 0,
-        }}
-      >
+        }}>
         {/* 현재 셀렉터 */}
-        <div className="card" style={{ padding: 18 }}>
+        <div
+          className="card"
+          style={{ padding: 18 }}>
           <div style={{ fontWeight: 600, marginBottom: 12 }}>현재 셀렉터</div>
           <pre
             className="code"
             style={{
               margin: 0,
               fontSize: 11,
-              wordBreak: "break-all",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {scraper.css_selector || "셀렉터가 등록되지 않았습니다."}
+              wordBreak: 'break-all',
+              whiteSpace: 'pre-wrap',
+            }}>
+            {scraper.css_selector || '셀렉터가 등록되지 않았습니다.'}
           </pre>
           <div
             style={{
-              display: "flex",
-              flexDirection: "column",
+              display: 'flex',
+              flexDirection: 'column',
               gap: 10,
               marginTop: 14,
               fontSize: 12,
-            }}
-          >
+            }}>
             {scraper.user_intent && (
               <div>
                 <div
                   className="dim"
                   style={{
                     fontSize: 10.5,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    fontFamily: "var(--mono)",
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--mono)',
                     marginBottom: 3,
-                  }}
-                >
+                  }}>
                   수집 의도
                 </div>
-                <div style={{ color: "var(--text-mute)", lineHeight: 1.5 }}>
+                <div style={{ color: 'var(--text-mute)', lineHeight: 1.5 }}>
                   {scraper.user_intent}
                 </div>
               </div>
             )}
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
                 gap: 10,
-              }}
-            >
+              }}>
               <div>
                 <div
                   className="dim"
                   style={{
                     fontSize: 10.5,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    fontFamily: "var(--mono)",
-                  }}
-                >
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--mono)',
+                  }}>
                   임계값
                 </div>
-                <div className="mono" style={{ marginTop: 3 }}>
+                <div
+                  className="mono"
+                  style={{ marginTop: 3 }}>
                   {scraper.threshold} / 100
                 </div>
               </div>
@@ -1749,15 +1832,14 @@ function DetailOverview({ scraper, scores }) {
                   className="dim"
                   style={{
                     fontSize: 10.5,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
-                    fontFamily: "var(--mono)",
-                  }}
-                >
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--mono)',
+                  }}>
                   도메인
                 </div>
                 <div style={{ marginTop: 3 }}>
-                  {scraper.altCategory || scraper.type || "—"}
+                  {scraper.altCategory || scraper.type || '—'}
                 </div>
               </div>
             </div>
@@ -1765,46 +1847,50 @@ function DetailOverview({ scraper, scores }) {
         </div>
 
         {/* 운영 통계 */}
-        <div className="card" style={{ padding: 18 }}>
+        <div
+          className="card"
+          style={{ padding: 18 }}>
           <div style={{ fontWeight: 600, marginBottom: 12 }}>운영 통계</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
-              ["최근 7일 실행", runs7d != null ? runs7d + "회" : "—", "spark"],
-              ["최근 신뢰도", avgConfidence || "—", "check"],
-              ["자가치유 발동", (scraper.healed || 0) + "회", "bolt"],
-              ["평균 응답", avgDur || "—", "activity"],
+              ['최근 7일 실행', runs7d != null ? runs7d + '회' : '—', 'spark'],
+              ['최근 신뢰도', avgConfidence || '—', 'check'],
+              ['자가치유 발동', (scraper.healed || 0) + '회', 'bolt'],
+              ['평균 응답', avgDur || '—', 'activity'],
             ].map(([k, v, ic]) => (
               <div
                 key={k}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
+                    display: 'flex',
+                    alignItems: 'center',
                     gap: 8,
-                    color: "var(--text-mute)",
+                    color: 'var(--text-mute)',
                     fontSize: 12.5,
-                  }}
-                >
+                  }}>
                   <Icon
                     name={ic}
                     className="icon icon-sm"
-                    style={{ color: "var(--text-dim)" }}
+                    style={{ color: 'var(--text-dim)' }}
                   />
                   {k}
                 </div>
-                <div className="mono" style={{ fontSize: 13, fontWeight: 500 }}>
+                <div
+                  className="mono"
+                  style={{ fontSize: 13, fontWeight: 500 }}>
                   {v}
                 </div>
               </div>
             ))}
             {!hasResults && results !== null && (
-              <div className="dim" style={{ fontSize: 11, marginTop: 4 }}>
+              <div
+                className="dim"
+                style={{ fontSize: 11, marginTop: 4 }}>
                 "지금 실행"을 눌러 첫 수집을 시작하면 통계가 집계됩니다.
               </div>
             )}
@@ -1812,44 +1898,47 @@ function DetailOverview({ scraper, scores }) {
         </div>
 
         {/* 전송 채널 */}
-        <div className="card" style={{ padding: 18 }}>
+        <div
+          className="card"
+          style={{ padding: 18 }}>
           <div style={{ fontWeight: 600, marginBottom: 12 }}>전송 채널</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {(scraper.delivery || []).map((d) => (
               <div
                 key={d}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "10px 12px",
-                  background: "var(--bg-3)",
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 12px',
+                  background: 'var(--bg-3)',
                   borderRadius: 8,
-                  border: "1px solid var(--border)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  border: '1px solid var(--border)',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Icon
                     name={
-                      d === "REST API"
-                        ? "link"
-                        : d === "Webhook"
-                          ? "rocket"
-                          : d === "Slack"
-                            ? "slack"
-                            : "csv"
+                      d === 'REST API'
+                        ? 'link'
+                        : d === 'Webhook'
+                          ? 'rocket'
+                          : d === 'Slack'
+                            ? 'slack'
+                            : 'csv'
                     }
                     className="icon"
                   />
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>{d}</div>
-                    <div className="dim mono" style={{ fontSize: 11 }}>
-                      {d === "REST API"
+                    <div
+                      className="dim mono"
+                      style={{ fontSize: 11 }}>
+                      {d === 'REST API'
                         ? `GET /api/v1/data/${scraper.id}`
-                        : d === "Webhook"
+                        : d === 'Webhook'
                           ? `POST https://hooks.doma.io/${scraper.id}`
-                          : d === "Slack"
-                            ? "#scraper-alerts"
+                          : d === 'Slack'
+                            ? '#scraper-alerts'
                             : `${scraper.id}_export.csv`}
                     </div>
                   </div>
@@ -1870,41 +1959,40 @@ function DetailOverview({ scraper, scores }) {
 function CurlBlock({ url, params, token, copyId, onCopy, copied }) {
   const paramEntries = params ? Object.entries(params) : [];
   const queryStr = paramEntries.length
-    ? "?" + paramEntries.map(([k, v]) => `${k}=${v}`).join("&")
-    : "";
-  const rawCmd = `curl "${url}${queryStr}" \\\n  -H "Authorization: Bearer ${token || "<YOUR_TOKEN>"}"`;
+    ? '?' + paramEntries.map(([k, v]) => `${k}=${v}`).join('&')
+    : '';
+  const rawCmd = `curl "${url}${queryStr}" \\\n  -H "Authorization: Bearer ${token || '<YOUR_TOKEN>'}"`;
 
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: 'relative' }}>
       <pre
         className="code"
-        style={{ margin: 0, fontSize: 12, lineHeight: 1.9, paddingRight: 72 }}
-      >
+        style={{ margin: 0, fontSize: 12, lineHeight: 1.9, paddingRight: 72 }}>
         {/* curl */}
-        <span style={{ color: "var(--accent)", fontWeight: 500 }}>
+        <span style={{ color: 'var(--accent)', fontWeight: 500 }}>
           curl
-        </span>{" "}
+        </span>{' '}
         {/* URL */}
         <span className="str">
           "{url}
           {paramEntries.map(([k, v], i) => (
             <span key={k}>
-              <span className="punct">{i === 0 ? "?" : "&"}</span>
+              <span className="punct">{i === 0 ? '?' : '&'}</span>
               <span className="attr">{k}</span>
               <span className="punct">=</span>
-              <span style={{ color: "var(--ok)" }}>{v}</span>
+              <span style={{ color: 'var(--ok)' }}>{v}</span>
             </span>
           ))}
           "
         </span>
-        {" \\\n  "}
+        {' \\\n  '}
         {/* -H flag */}
         <span className="attr">-H</span> {/* header value */}
         <span className="str">
           "<span className="tag">Authorization</span>
-          <span className="punct">:</span> <span className="dim">Bearer</span>{" "}
-          <span style={{ color: "var(--warn)" }}>
-            {token ? token.slice(0, 8) + "…" + token.slice(-4) : "<YOUR_TOKEN>"}
+          <span className="punct">:</span> <span className="dim">Bearer</span>{' '}
+          <span style={{ color: 'var(--warn)' }}>
+            {token ? token.slice(0, 8) + '…' + token.slice(-4) : '<YOUR_TOKEN>'}
           </span>
           "
         </span>
@@ -1912,9 +2000,8 @@ function CurlBlock({ url, params, token, copyId, onCopy, copied }) {
       <button
         className="btn xs ghost"
         onClick={() => onCopy(rawCmd, copyId)}
-        style={{ position: "absolute", top: 8, right: 8, fontSize: 11 }}
-      >
-        {copied === copyId ? "✓ 복사됨" : "복사"}
+        style={{ position: 'absolute', top: 8, right: 8, fontSize: 11 }}>
+        {copied === copyId ? '✓ 복사됨' : '복사'}
       </button>
     </div>
   );
@@ -1923,62 +2010,95 @@ function CurlBlock({ url, params, token, copyId, onCopy, copied }) {
 function DetailSettings({ scraper, onScraperUpdate }) {
   const SCHEDULE_OPTIONS = [
     { key: 'daily-9', label: '매일 09:00' },
-    { key: 'hourly',  label: '매시간 (등록 시점 기준)' },
-    { key: '15m',     label: '15분마다 (등록 시점 기준)' },
-    { key: 'custom',  label: '커스텀 Cron' },
+    { key: 'hourly', label: '매시간 (등록 시점 기준)' },
+    { key: '15m', label: '15분마다 (등록 시점 기준)' },
+    { key: 'custom', label: '커스텀 Cron' },
   ];
-  const CHANNEL_LABEL = { api: 'REST API', webhook: 'Webhook', slack: 'Slack', csv: 'CSV' };
-  const CHANNEL_KEYS  = Object.keys(CHANNEL_LABEL);
+  const CHANNEL_LABEL = {
+    api: 'REST API',
+    webhook: 'Webhook',
+    slack: 'Slack',
+    csv: 'CSV',
+  };
+  const CHANNEL_KEYS = Object.keys(CHANNEL_LABEL);
 
   const currentScheduleKey = scraper.scheduleKey || 'daily-9';
-  const isCustom = !SCHEDULE_OPTIONS.slice(0, 3).some(o => o.key === currentScheduleKey);
-
-  const [scheduleKey, setScheduleKey] = React.useState(isCustom ? 'custom' : currentScheduleKey);
-  const [customCron,  setCustomCron]  = React.useState(isCustom ? currentScheduleKey : '');
-  const [threshold,   setThreshold]   = React.useState(scraper.threshold ?? 85);
-  const [channels,    setChannels]    = React.useState(
-    (scraper.channels || []).map(c => Object.entries(CHANNEL_LABEL).find(([,v]) => v===c)?.[0] || c)
+  const isCustom = !SCHEDULE_OPTIONS.slice(0, 3).some(
+    (o) => o.key === currentScheduleKey,
   );
-  const [saving,       setSaving]       = React.useState(false);
-  const [msg,          setMsg]          = React.useState(null);
-  const [webhookUrl,   setWebhookUrl]   = React.useState(scraper.webhookUrl || '');
-  const [webhookType,  setWebhookType]  = React.useState(scraper.webhookType || 'generic');
-  const [alertOnChange,setAlertOnChange]= React.useState(scraper.alertOnChange || false);
-  const [alertDelta,   setAlertDelta]   = React.useState(scraper.alertDelta ?? '');
-  const [alertMin,     setAlertMin]     = React.useState(scraper.alertRangeMin ?? '');
-  const [alertMax,     setAlertMax]     = React.useState(scraper.alertRangeMax ?? '');
-  const [testing,      setTesting]      = React.useState(false);
 
-  const isValidCron = (s) => /^(\S+\s+){4}\S+$/.test(s.trim()) || /^(\S+\s+){5}\S+$/.test(s.trim());
+  const [scheduleKey, setScheduleKey] = React.useState(
+    isCustom ? 'custom' : currentScheduleKey,
+  );
+  const [customCron, setCustomCron] = React.useState(
+    isCustom ? currentScheduleKey : '',
+  );
+  const [threshold, setThreshold] = React.useState(scraper.threshold ?? 85);
+  const [channels, setChannels] = React.useState(
+    (scraper.channels || []).map(
+      (c) => Object.entries(CHANNEL_LABEL).find(([, v]) => v === c)?.[0] || c,
+    ),
+  );
+  const [saving, setSaving] = React.useState(false);
+  const [msg, setMsg] = React.useState(null);
+  const [webhookUrl, setWebhookUrl] = React.useState(scraper.webhookUrl || '');
+  const [webhookType, setWebhookType] = React.useState(
+    scraper.webhookType || 'generic',
+  );
+  const [alertOnChange, setAlertOnChange] = React.useState(
+    scraper.alertOnChange || false,
+  );
+  const [alertDelta, setAlertDelta] = React.useState(scraper.alertDelta ?? '');
+  const [alertMin, setAlertMin] = React.useState(scraper.alertRangeMin ?? '');
+  const [alertMax, setAlertMax] = React.useState(scraper.alertRangeMax ?? '');
+  const [testing, setTesting] = React.useState(false);
+
+  const isValidCron = (s) =>
+    /^(\S+\s+){4}\S+$/.test(s.trim()) || /^(\S+\s+){5}\S+$/.test(s.trim());
 
   const handleSave = async () => {
-    const scheduleVal = scheduleKey === 'custom' ? customCron.trim() : scheduleKey;
+    const scheduleVal =
+      scheduleKey === 'custom' ? customCron.trim() : scheduleKey;
     if (scheduleKey === 'custom' && !isValidCron(customCron)) {
-      setMsg({ ok: false, text: '유효한 Cron 표현식을 입력하세요 (예: 0 */30 * * * *)' });
+      setMsg({
+        ok: false,
+        text: '유효한 Cron 표현식을 입력하세요 (예: 0 */30 * * * *)',
+      });
       return;
     }
-    setSaving(true); setMsg(null);
+    setSaving(true);
+    setMsg(null);
     try {
       const resp = await fetch(`/api/scrapers/${scraper.id}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          schedule:      scheduleVal,
+          schedule: scheduleVal,
           threshold,
-          channels:      channels.map(k => CHANNEL_LABEL[k] || k),
-          webhookUrl:    webhookUrl.trim() || null,
-          webhookType:   webhookType,
+          channels: channels.map((k) => CHANNEL_LABEL[k] || k),
+          webhookUrl: webhookUrl.trim() || null,
+          webhookType: webhookType,
           alertOnChange: alertOnChange,
-          alertDelta:    alertDelta !== '' ? Number(alertDelta) : null,
-          alertRangeMin: alertMin   !== '' ? Number(alertMin)   : null,
-          alertRangeMax: alertMax   !== '' ? Number(alertMax)   : null,
+          alertDelta: alertDelta !== '' ? Number(alertDelta) : null,
+          alertRangeMin: alertMin !== '' ? Number(alertMin) : null,
+          alertRangeMax: alertMax !== '' ? Number(alertMax) : null,
         }),
       });
       let data = {};
       const text = await resp.text();
-      try { if (text) data = JSON.parse(text); } catch { /* empty / non-JSON body */ }
-      if (!resp.ok) { setMsg({ ok: false, text: data.error || `저장 실패 (${resp.status})` }); return; }
-      setMsg({ ok: true, text: '저장되었습니다. 스케줄러가 즉시 재등록됩니다.' });
+      try {
+        if (text) data = JSON.parse(text);
+      } catch {
+        /* empty / non-JSON body */
+      }
+      if (!resp.ok) {
+        setMsg({ ok: false, text: data.error || `저장 실패 (${resp.status})` });
+        return;
+      }
+      setMsg({
+        ok: true,
+        text: '저장되었습니다. 스케줄러가 즉시 재등록됩니다.',
+      });
       if (onScraperUpdate) onScraperUpdate(data);
     } catch (e) {
       setMsg({ ok: false, text: '오류: ' + e.message });
@@ -1988,7 +2108,9 @@ function DetailSettings({ scraper, onScraperUpdate }) {
   };
 
   const toggleChannel = (k) =>
-    setChannels(prev => prev.includes(k) ? prev.filter(c => c !== k) : [...prev, k]);
+    setChannels((prev) =>
+      prev.includes(k) ? prev.filter((c) => c !== k) : [...prev, k],
+    );
 
   const handleTestWebhook = async () => {
     if (!webhookUrl.trim()) return;
@@ -1998,12 +2120,23 @@ function DetailSettings({ scraper, onScraperUpdate }) {
       await fetch(`/api/scrapers/${scraper.id}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhookUrl: webhookUrl.trim(), webhookType: webhookType }),
+        body: JSON.stringify({
+          webhookUrl: webhookUrl.trim(),
+          webhookType: webhookType,
+        }),
       });
-      const resp = await fetch(`/api/scrapers/${scraper.id}/webhook-test`, { method: 'POST' });
+      const resp = await fetch(`/api/scrapers/${scraper.id}/webhook-test`, {
+        method: 'POST',
+      });
       const text = await resp.text();
-      let data = {}; try { data = JSON.parse(text); } catch {}
-      if (!resp.ok) { setMsg({ ok: false, text: data.error || '전송 실패' }); return; }
+      let data = {};
+      try {
+        data = JSON.parse(text);
+      } catch {}
+      if (!resp.ok) {
+        setMsg({ ok: false, text: data.error || '전송 실패' });
+        return;
+      }
       setMsg({ ok: true, text: '테스트 전송 완료' });
     } catch (e) {
       setMsg({ ok: false, text: '오류: ' + e.message });
@@ -2015,12 +2148,24 @@ function DetailSettings({ scraper, onScraperUpdate }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* 스케줄 */}
-      <div className="card" style={{ padding: 20 }}>
+      <div
+        className="card"
+        style={{ padding: 20 }}>
         <div style={{ fontWeight: 600, marginBottom: 14 }}>실행 스케줄</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {SCHEDULE_OPTIONS.map(opt => (
-            <label key={opt.key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-              <input type="radio" name="schedule" value={opt.key}
+          {SCHEDULE_OPTIONS.map((opt) => (
+            <label
+              key={opt.key}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+              }}>
+              <input
+                type="radio"
+                name="schedule"
+                value={opt.key}
                 checked={scheduleKey === opt.key}
                 onChange={() => setScheduleKey(opt.key)}
               />
@@ -2029,136 +2174,262 @@ function DetailSettings({ scraper, onScraperUpdate }) {
           ))}
           {scheduleKey === 'custom' && (
             <input
-              value={customCron} onChange={e => setCustomCron(e.target.value)}
+              value={customCron}
+              onChange={(e) => setCustomCron(e.target.value)}
               placeholder="0 */30 * * * *  (초 분 시 일 월 요일)"
               style={{
-                marginTop: 4, padding: '8px 12px', borderRadius: 8, fontSize: 12,
-                border: '1px solid var(--border)', background: 'var(--bg-2)',
-                color: 'var(--text)', fontFamily: 'var(--mono)', width: '100%',
+                marginTop: 4,
+                padding: '8px 12px',
+                borderRadius: 8,
+                fontSize: 12,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-2)',
+                color: 'var(--text)',
+                fontFamily: 'var(--mono)',
+                width: '100%',
               }}
             />
           )}
         </div>
-        <div className="dim" style={{ fontSize: 11.5, marginTop: 10 }}>
-          '매일 09:00'은 정각 기준 실행. '매시간' / '15분마다'는 저장 시점 기준으로 다음 실행이 계산됩니다.
+        <div
+          className="dim"
+          style={{ fontSize: 11.5, marginTop: 10 }}>
+          '매일 09:00'은 정각 기준 실행. '매시간' / '15분마다'는 저장 시점
+          기준으로 다음 실행이 계산됩니다.
         </div>
       </div>
 
       {/* 임계값 */}
-      <div className="card" style={{ padding: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+      <div
+        className="card"
+        style={{ padding: 20 }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 10,
+          }}>
           <div style={{ fontWeight: 600 }}>자동 복구 신뢰도 임계값</div>
-          <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>{threshold}</span>
+          <span
+            className="mono"
+            style={{ fontSize: 15, fontWeight: 600 }}>
+            {threshold}
+          </span>
         </div>
-        <input type="range" min={40} max={100} value={threshold}
-          onChange={e => setThreshold(+e.target.value)}
+        <input
+          type="range"
+          min={40}
+          max={100}
+          value={threshold}
+          onChange={(e) => setThreshold(+e.target.value)}
           style={{ width: '100%', accentColor: 'var(--accent)' }}
         />
-        <div className="dim" style={{ fontSize: 11.5, marginTop: 6 }}>
-          AI 신뢰도가 이 값 이상이면 자동 복구, 미만이면 수동 승인 큐로 이동합니다.
+        <div
+          className="dim"
+          style={{ fontSize: 11.5, marginTop: 6 }}>
+          AI 신뢰도가 이 값 이상이면 자동 복구, 미만이면 수동 승인 큐로
+          이동합니다.
         </div>
       </div>
 
       {/* 출력 채널 */}
-      <div className="card" style={{ padding: 20 }}>
+      <div
+        className="card"
+        style={{ padding: 20 }}>
         <div style={{ fontWeight: 600, marginBottom: 12 }}>출력 채널</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {CHANNEL_KEYS.map(k => (
-            <button key={k}
+          {CHANNEL_KEYS.map((k) => (
+            <button
+              key={k}
               className={`btn sm${channels.includes(k) ? ' primary' : ' ghost'}`}
-              onClick={() => toggleChannel(k)}
-            >{CHANNEL_LABEL[k]}</button>
+              onClick={() => toggleChannel(k)}>
+              {CHANNEL_LABEL[k]}
+            </button>
           ))}
         </div>
       </div>
 
       {/* Webhook */}
-      <div className="card" style={{ padding: 20 }}>
+      <div
+        className="card"
+        style={{ padding: 20 }}>
         <div style={{ fontWeight: 600, marginBottom: 12 }}>Webhook 알람</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input
-            value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)}
+            value={webhookUrl}
+            onChange={(e) => setWebhookUrl(e.target.value)}
             placeholder="https://hooks.slack.com/services/..."
             style={{
-              flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: 12,
-              border: '1px solid var(--border)', background: 'var(--bg-2)',
-              color: 'var(--text)', fontFamily: 'var(--mono)',
+              flex: 1,
+              padding: '8px 12px',
+              borderRadius: 8,
+              fontSize: 12,
+              border: '1px solid var(--border)',
+              background: 'var(--bg-2)',
+              color: 'var(--text)',
+              fontFamily: 'var(--mono)',
             }}
           />
-          <button className="btn ghost sm" onClick={handleTestWebhook} disabled={testing || !webhookUrl.trim()}>
+          <button
+            className="btn ghost sm"
+            onClick={handleTestWebhook}
+            disabled={testing || !webhookUrl.trim()}>
             {testing ? '전송 중…' : '테스트'}
           </button>
         </div>
         <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
-          {[['generic','Generic JSON'],['slack','Slack']].map(([val, label]) => (
-            <button key={val}
+          {[
+            ['generic', 'Generic JSON'],
+            ['slack', 'Slack'],
+          ].map(([val, label]) => (
+            <button
+              key={val}
               className={`btn sm ${webhookType === val ? 'primary' : 'ghost'}`}
               onClick={() => setWebhookType(val)}
-              style={{ fontSize: 12 }}
-            >{label}</button>
+              style={{ fontSize: 12 }}>
+              {label}
+            </button>
           ))}
         </div>
 
         {/* 알람 조건 */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* 텍스트 조건 */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-            <input type="checkbox" checked={alertOnChange} onChange={e => setAlertOnChange(e.target.checked)} />
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              cursor: 'pointer',
+            }}>
+            <input
+              type="checkbox"
+              checked={alertOnChange}
+              onChange={(e) => setAlertOnChange(e.target.checked)}
+            />
             <div>
               <div style={{ fontSize: 13 }}>값 변화 시 발송</div>
-              <div className="dim" style={{ fontSize: 11.5 }}>텍스트 수집값이 이전과 달라질 때</div>
+              <div
+                className="dim"
+                style={{ fontSize: 11.5 }}>
+                텍스트 수집값이 이전과 달라질 때
+              </div>
             </div>
           </label>
 
           {/* 숫자 — 변동폭 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <input type="checkbox"
+            <input
+              type="checkbox"
               checked={alertDelta !== ''}
-              onChange={e => setAlertDelta(e.target.checked ? (scraper.alertDelta ?? '') : '')}
+              onChange={(e) =>
+                setAlertDelta(
+                  e.target.checked ? (scraper.alertDelta ?? '') : '',
+                )
+              }
             />
             <div style={{ fontSize: 13, minWidth: 80 }}>변동폭 초과</div>
             <input
-              type="number" min="0" placeholder="절대값 (예: 50)"
+              type="number"
+              min="0"
+              placeholder="절대값 (예: 50)"
               value={alertDelta}
-              onChange={e => setAlertDelta(e.target.value)}
+              onChange={(e) => setAlertDelta(e.target.value)}
               style={{
-                width: 120, padding: '6px 10px', borderRadius: 7, fontSize: 12,
-                border: '1px solid var(--border)', background: 'var(--bg-2)', color: 'var(--text)',
+                width: 120,
+                padding: '6px 10px',
+                borderRadius: 7,
+                fontSize: 12,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-2)',
+                color: 'var(--text)',
               }}
             />
-            <span className="dim" style={{ fontSize: 12 }}>│현재 − 이전│ 초과 시</span>
+            <span
+              className="dim"
+              style={{ fontSize: 12 }}>
+              │현재 − 이전│ 초과 시
+            </span>
           </div>
 
           {/* 숫자 — 범위 이탈 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <input type="checkbox"
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              flexWrap: 'wrap',
+            }}>
+            <input
+              type="checkbox"
               checked={alertMin !== '' || alertMax !== ''}
-              onChange={e => { if (!e.target.checked) { setAlertMin(''); setAlertMax(''); } }}
+              onChange={(e) => {
+                if (!e.target.checked) {
+                  setAlertMin('');
+                  setAlertMax('');
+                }
+              }}
             />
             <div style={{ fontSize: 13, minWidth: 80 }}>범위 이탈</div>
-            <input type="number" placeholder="최솟값" value={alertMin}
-              onChange={e => setAlertMin(e.target.value)}
-              style={{ width: 100, padding: '6px 10px', borderRadius: 7, fontSize: 12,
-                border: '1px solid var(--border)', background: 'var(--bg-2)', color: 'var(--text)' }}
+            <input
+              type="number"
+              placeholder="최솟값"
+              value={alertMin}
+              onChange={(e) => setAlertMin(e.target.value)}
+              style={{
+                width: 100,
+                padding: '6px 10px',
+                borderRadius: 7,
+                fontSize: 12,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-2)',
+                color: 'var(--text)',
+              }}
             />
-            <span className="dim" style={{ fontSize: 12 }}>~</span>
-            <input type="number" placeholder="최댓값" value={alertMax}
-              onChange={e => setAlertMax(e.target.value)}
-              style={{ width: 100, padding: '6px 10px', borderRadius: 7, fontSize: 12,
-                border: '1px solid var(--border)', background: 'var(--bg-2)', color: 'var(--text)' }}
+            <span
+              className="dim"
+              style={{ fontSize: 12 }}>
+              ~
+            </span>
+            <input
+              type="number"
+              placeholder="최댓값"
+              value={alertMax}
+              onChange={(e) => setAlertMax(e.target.value)}
+              style={{
+                width: 100,
+                padding: '6px 10px',
+                borderRadius: 7,
+                fontSize: 12,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-2)',
+                color: 'var(--text)',
+              }}
             />
-            <span className="dim" style={{ fontSize: 12 }}>범위 벗어날 때</span>
+            <span
+              className="dim"
+              style={{ fontSize: 12 }}>
+              범위 벗어날 때
+            </span>
           </div>
         </div>
       </div>
 
       {/* 저장 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button className="btn primary" onClick={handleSave} disabled={saving}>
+        <button
+          className="btn primary"
+          onClick={handleSave}
+          disabled={saving}>
           {saving ? '저장 중…' : '설정 저장'}
         </button>
         {msg && (
-          <span style={{ fontSize: 12.5, color: msg.ok ? 'var(--ok)' : 'var(--danger)' }}>
+          <span
+            style={{
+              fontSize: 12.5,
+              color: msg.ok ? 'var(--ok)' : 'var(--danger)',
+            }}>
             {msg.text}
           </span>
         )}
@@ -2170,16 +2441,16 @@ function DetailSettings({ scraper, onScraperUpdate }) {
 function DetailApi({ scraper }) {
   const [settings, setSettings] = React.useState(null);
   const [tokenVisible, setTokenVisible] = React.useState(false);
-  const [copied, setCopied] = React.useState("");
+  const [copied, setCopied] = React.useState('');
   const [params, setParams] = React.useState({
-    from: "",
-    to: "",
-    status: "",
-    limit: "",
+    from: '',
+    to: '',
+    status: '',
+    limit: '',
   });
 
   React.useEffect(() => {
-    fetch("/api/settings")
+    fetch('/api/settings')
       .then((r) => r.json())
       .then(setSettings)
       .catch(() => {});
@@ -2190,13 +2461,13 @@ function DetailApi({ scraper }) {
   const endpoint = `${baseUrl}/api/v1/scrapers/${scraper.id}/data`;
 
   const activeParams = Object.fromEntries(
-    Object.entries(params).filter(([, v]) => v !== ""),
+    Object.entries(params).filter(([, v]) => v !== ''),
   );
 
   const copy = (text, key) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(key);
-      setTimeout(() => setCopied(""), 1800);
+      setTimeout(() => setCopied(''), 1800);
     });
   };
 
@@ -2204,103 +2475,105 @@ function DetailApi({ scraper }) {
     <button
       className="btn xs ghost"
       onClick={() => copy(text, id)}
-      style={{ fontSize: 11 }}
-    >
-      {copied === id ? "✓ 복사됨" : "복사"}
+      style={{ fontSize: 11 }}>
+      {copied === id ? '✓ 복사됨' : '복사'}
     </button>
   );
 
   const inputStyle = {
-    fontFamily: "var(--mono)",
+    fontFamily: 'var(--mono)',
     fontSize: 12.5,
-    background: "var(--bg-3)",
-    border: "1px solid var(--border-mid)",
-    borderRadius: "var(--r-1)",
-    padding: "6px 10px",
-    color: "var(--text)",
-    width: "100%",
-    outline: "none",
+    background: 'var(--bg-3)',
+    border: '1px solid var(--border-mid)',
+    borderRadius: 'var(--r-1)',
+    padding: '6px 10px',
+    color: 'var(--text)',
+    width: '100%',
+    outline: 'none',
   };
 
   return (
     <div
       style={{
-        display: "flex",
-        flexDirection: "column",
+        display: 'flex',
+        flexDirection: 'column',
         gap: 16,
         maxWidth: 780,
-      }}
-    >
+      }}>
       {/* 엔드포인트 */}
-      <div className="card" style={{ padding: "18px 20px" }}>
+      <div
+        className="card"
+        style={{ padding: '18px 20px' }}>
         <div
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color: "var(--text-dim)",
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
+            color: 'var(--text-dim)',
+            letterSpacing: '.08em',
+            textTransform: 'uppercase',
             marginBottom: 10,
-          }}
-        >
+          }}>
           Endpoint
         </div>
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
+            display: 'flex',
+            alignItems: 'center',
             gap: 8,
-            background: "var(--bg-3)",
-            borderRadius: "var(--r-2)",
-            padding: "9px 12px",
-          }}
-        >
+            background: 'var(--bg-3)',
+            borderRadius: 'var(--r-2)',
+            padding: '9px 12px',
+          }}>
           <span
             className="chip"
             style={{
               fontSize: 10,
-              padding: "1px 7px",
+              padding: '1px 7px',
               flexShrink: 0,
-              background: "var(--accent-soft)",
-              color: "var(--accent)",
-              borderColor: "var(--accent-line)",
-            }}
-          >
+              background: 'var(--accent-soft)',
+              color: 'var(--accent)',
+              borderColor: 'var(--accent-line)',
+            }}>
             GET
           </span>
           <code
             style={{
-              fontFamily: "var(--mono)",
+              fontFamily: 'var(--mono)',
               fontSize: 12.5,
               flex: 1,
-              wordBreak: "break-all",
-              color: "var(--text)",
-            }}
-          >
+              wordBreak: 'break-all',
+              color: 'var(--text)',
+            }}>
             {endpoint}
           </code>
-          <CopyBtn text={endpoint} id="url" />
+          <CopyBtn
+            text={endpoint}
+            id="url"
+          />
         </div>
       </div>
 
       {/* 인증 토큰 */}
-      <div className="card" style={{ padding: "18px 20px" }}>
+      <div
+        className="card"
+        style={{ padding: '18px 20px' }}>
         <div
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color: "var(--text-dim)",
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
+            color: 'var(--text-dim)',
+            letterSpacing: '.08em',
+            textTransform: 'uppercase',
             marginBottom: 10,
-          }}
-        >
+          }}>
           API Token
         </div>
         {!token ? (
-          <div className="muted" style={{ fontSize: 13 }}>
-            서버에{" "}
-            <code style={{ fontFamily: "var(--mono)", color: "var(--accent)" }}>
+          <div
+            className="muted"
+            style={{ fontSize: 13 }}>
+            서버에{' '}
+            <code style={{ fontFamily: 'var(--mono)', color: 'var(--accent)' }}>
               DOMA_API_TOKEN
             </code>
             이 설정되지 않았습니다.
@@ -2308,81 +2581,79 @@ function DetailApi({ scraper }) {
         ) : (
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
+              display: 'flex',
+              alignItems: 'center',
               gap: 8,
-              background: "var(--bg-3)",
-              borderRadius: "var(--r-2)",
-              padding: "9px 12px",
-            }}
-          >
+              background: 'var(--bg-3)',
+              borderRadius: 'var(--r-2)',
+              padding: '9px 12px',
+            }}>
             <code
               style={{
-                fontFamily: "var(--mono)",
+                fontFamily: 'var(--mono)',
                 fontSize: 12.5,
                 flex: 1,
-                color: "var(--warn)",
-                letterSpacing: tokenVisible ? ".04em" : ".08em",
-              }}
-            >
+                color: 'var(--warn)',
+                letterSpacing: tokenVisible ? '.04em' : '.08em',
+              }}>
               {tokenVisible
                 ? token
                 : token.slice(0, 8) +
-                  "  ••••••••••••••••••••••••  " +
+                  '  ••••••••••••••••••••••••  ' +
                   token.slice(-4)}
             </code>
             <button
               className="btn xs ghost"
               onClick={() => setTokenVisible((v) => !v)}
-              style={{ fontSize: 11, flexShrink: 0 }}
-            >
-              {tokenVisible ? "숨기기" : "표시"}
+              style={{ fontSize: 11, flexShrink: 0 }}>
+              {tokenVisible ? '숨기기' : '표시'}
             </button>
-            <CopyBtn text={token} id="token" />
+            <CopyBtn
+              text={token}
+              id="token"
+            />
           </div>
         )}
       </div>
 
       {/* 파라미터 빌더 + curl 프리뷰 */}
-      <div className="card" style={{ padding: "18px 20px" }}>
+      <div
+        className="card"
+        style={{ padding: '18px 20px' }}>
         <div
           style={{
             fontSize: 11,
             fontWeight: 600,
-            color: "var(--text-dim)",
-            letterSpacing: ".08em",
-            textTransform: "uppercase",
+            color: 'var(--text-dim)',
+            letterSpacing: '.08em',
+            textTransform: 'uppercase',
             marginBottom: 14,
-          }}
-        >
+          }}>
           파라미터 설정
         </div>
 
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
             gap: 10,
             marginBottom: 16,
-          }}
-        >
+          }}>
           {/* from */}
-          <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span
               style={{
                 fontSize: 11.5,
-                color: "var(--text-mute)",
+                color: 'var(--text-mute)',
                 fontWeight: 500,
-              }}
-            >
-              시작일{" "}
+              }}>
+              시작일{' '}
               <code
                 style={{
-                  fontFamily: "var(--mono)",
+                  fontFamily: 'var(--mono)',
                   fontSize: 10.5,
-                  color: "var(--accent)",
-                }}
-              >
+                  color: 'var(--accent)',
+                }}>
                 from
               </code>
             </span>
@@ -2396,22 +2667,20 @@ function DetailApi({ scraper }) {
             />
           </label>
           {/* to */}
-          <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span
               style={{
                 fontSize: 11.5,
-                color: "var(--text-mute)",
+                color: 'var(--text-mute)',
                 fontWeight: 500,
-              }}
-            >
-              종료일{" "}
+              }}>
+              종료일{' '}
               <code
                 style={{
-                  fontFamily: "var(--mono)",
+                  fontFamily: 'var(--mono)',
                   fontSize: 10.5,
-                  color: "var(--accent)",
-                }}
-              >
+                  color: 'var(--accent)',
+                }}>
                 to
               </code>
             </span>
@@ -2423,22 +2692,20 @@ function DetailApi({ scraper }) {
             />
           </label>
           {/* status */}
-          <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span
               style={{
                 fontSize: 11.5,
-                color: "var(--text-mute)",
+                color: 'var(--text-mute)',
                 fontWeight: 500,
-              }}
-            >
-              상태{" "}
+              }}>
+              상태{' '}
               <code
                 style={{
-                  fontFamily: "var(--mono)",
+                  fontFamily: 'var(--mono)',
                   fontSize: 10.5,
-                  color: "var(--accent)",
-                }}
-              >
+                  color: 'var(--accent)',
+                }}>
                 status
               </code>
             </span>
@@ -2447,8 +2714,7 @@ function DetailApi({ scraper }) {
               value={params.status}
               onChange={(e) =>
                 setParams((p) => ({ ...p, status: e.target.value }))
-              }
-            >
+              }>
               <option value="">전체</option>
               <option value="healthy">healthy</option>
               <option value="failed">failed</option>
@@ -2456,25 +2722,25 @@ function DetailApi({ scraper }) {
             </select>
           </label>
           {/* limit */}
-          <label style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             <span
               style={{
                 fontSize: 11.5,
-                color: "var(--text-mute)",
+                color: 'var(--text-mute)',
                 fontWeight: 500,
-              }}
-            >
-              건수{" "}
+              }}>
+              건수{' '}
               <code
                 style={{
-                  fontFamily: "var(--mono)",
+                  fontFamily: 'var(--mono)',
                   fontSize: 10.5,
-                  color: "var(--accent)",
-                }}
-              >
+                  color: 'var(--accent)',
+                }}>
                 limit
               </code>
-              <span className="dim" style={{ fontSize: 10.5, marginLeft: 4 }}>
+              <span
+                className="dim"
+                style={{ fontSize: 10.5, marginLeft: 4 }}>
                 기본 100 / 최대 1000
               </span>
             </span>
@@ -2493,14 +2759,13 @@ function DetailApi({ scraper }) {
         </div>
 
         {/* 리셋 버튼 */}
-        {Object.values(params).some((v) => v !== "") && (
+        {Object.values(params).some((v) => v !== '') && (
           <button
             className="btn xs ghost"
             style={{ marginBottom: 14, fontSize: 11 }}
             onClick={() =>
-              setParams({ from: "", to: "", status: "", limit: "" })
-            }
-          >
+              setParams({ from: '', to: '', status: '', limit: '' })
+            }>
             초기화
           </button>
         )}
@@ -2508,11 +2773,10 @@ function DetailApi({ scraper }) {
         <div
           style={{
             fontSize: 11,
-            color: "var(--text-dim)",
+            color: 'var(--text-dim)',
             marginBottom: 6,
-            letterSpacing: ".04em",
-          }}
-        >
+            letterSpacing: '.04em',
+          }}>
           GENERATED COMMAND
         </div>
         <CurlBlock
@@ -2547,20 +2811,19 @@ function DetailRuns({ scraperId }) {
       <div
         className="card"
         style={{
-          padding: "40px",
-          textAlign: "center",
-          color: "var(--text-dim)",
-        }}
-      >
+          padding: '40px',
+          textAlign: 'center',
+          color: 'var(--text-dim)',
+        }}>
         <div
           className="spin"
           style={{
             width: 18,
             height: 18,
             borderRadius: 999,
-            border: "2px solid var(--border-strong)",
-            borderTopColor: "var(--accent)",
-            margin: "0 auto 10px",
+            border: '2px solid var(--border-strong)',
+            borderTopColor: 'var(--accent)',
+            margin: '0 auto 10px',
           }}
         />
         <div style={{ fontSize: 12 }}>실행 이력 로드 중…</div>
@@ -2570,49 +2833,52 @@ function DetailRuns({ scraperId }) {
 
   // runs are DESC (newest first); index i+1 is the chronologically previous run
   const rows = runs.map((r, i) => ({
-    ts: r.runAt || "—",
+    ts: r.runAt || '—',
     status: r.status,
-    value: r.value || "—",
+    value: r.value || '—',
     valueChanged:
       i < runs.length - 1 && !!r.value && r.value !== runs[i + 1].value,
     score: r.score,
-    dur: r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : "—",
+    dur: r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : '—',
     note: r.note,
   }));
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <a
           href={`/api/scrapers/${scraperId}/results/csv`}
           download
           className="btn ghost sm"
           style={{
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
             gap: 6,
-          }}
-        >
-          <Icon name="download" className="icon icon-sm" />
+          }}>
+          <Icon
+            name="download"
+            className="icon icon-sm"
+          />
           CSV 내보내기
         </a>
       </div>
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div
+        className="card"
+        style={{ padding: 0, overflow: 'hidden' }}>
         <div
           style={{
-            display: "grid",
+            display: 'grid',
             gridTemplateColumns:
-              "160px 120px minmax(100px,1.4fr) 80px 100px 1fr",
-            padding: "10px 18px",
-            borderBottom: "1px solid var(--border)",
+              '160px 120px minmax(100px,1.4fr) 80px 100px 1fr',
+            padding: '10px 18px',
+            borderBottom: '1px solid var(--border)',
             fontSize: 11,
-            color: "var(--text-dim)",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            fontFamily: "var(--mono)",
-          }}
-        >
+            color: 'var(--text-dim)',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            fontFamily: 'var(--mono)',
+          }}>
           <div>수집 시각</div>
           <div>상태</div>
           <div>추출값</div>
@@ -2624,40 +2890,39 @@ function DetailRuns({ scraperId }) {
           <div
             key={i}
             style={{
-              display: "grid",
+              display: 'grid',
               gridTemplateColumns:
-                "160px 120px minmax(100px,1.4fr) 80px 100px 1fr",
-              padding: "12px 18px",
-              alignItems: "center",
+                '160px 120px minmax(100px,1.4fr) 80px 100px 1fr',
+              padding: '12px 18px',
+              alignItems: 'center',
               borderBottom:
-                i === rows.length - 1 ? "none" : "1px solid var(--border)",
-            }}
-          >
-            <div className="mono" style={{ fontSize: 11.5 }}>
+                i === rows.length - 1 ? 'none' : '1px solid var(--border)',
+            }}>
+            <div
+              className="mono"
+              style={{ fontSize: 11.5 }}>
               {r.ts}
             </div>
             <div>
               <StatusChip
-                status={r.status === "healed" ? "healing" : r.status}
+                status={r.status === 'healed' ? 'healing' : r.status}
               />
             </div>
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
+                display: 'flex',
+                alignItems: 'center',
                 gap: 6,
                 minWidth: 0,
-              }}
-            >
+              }}>
               <div
                 className="mono"
                 style={{
                   fontSize: 12.5,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
                 {r.value}
               </div>
               {r.valueChanged && (
@@ -2665,26 +2930,31 @@ function DetailRuns({ scraperId }) {
                   style={{
                     flexShrink: 0,
                     fontSize: 9.5,
-                    padding: "1px 6px",
+                    padding: '1px 6px',
                     borderRadius: 4,
-                    background: "var(--warn-soft)",
-                    color: "var(--warn)",
-                    border: "1px solid var(--warn-line)",
-                    fontFamily: "var(--mono)",
+                    background: 'var(--warn-soft)',
+                    color: 'var(--warn)',
+                    border: '1px solid var(--warn-line)',
+                    fontFamily: 'var(--mono)',
                     fontWeight: 600,
-                  }}
-                >
+                  }}>
                   변경
                 </span>
               )}
             </div>
-            <div className="mono" style={{ fontSize: 12.5 }}>
-              {r.score == null ? "—" : Number(r.score).toFixed(1)}
+            <div
+              className="mono"
+              style={{ fontSize: 12.5 }}>
+              {r.score == null ? '—' : Number(r.score).toFixed(1)}
             </div>
-            <div className="mono dim" style={{ fontSize: 12 }}>
+            <div
+              className="mono dim"
+              style={{ fontSize: 12 }}>
               {r.dur}
             </div>
-            <div className="muted" style={{ fontSize: 12.5 }}>
+            <div
+              className="muted"
+              style={{ fontSize: 12.5 }}>
               {r.note}
             </div>
           </div>
@@ -2692,12 +2962,11 @@ function DetailRuns({ scraperId }) {
         {rows.length === 0 && (
           <div
             style={{
-              padding: "40px",
-              textAlign: "center",
-              color: "var(--text-dim)",
+              padding: '40px',
+              textAlign: 'center',
+              color: 'var(--text-dim)',
               fontSize: 12,
-            }}
-          >
+            }}>
             아직 실행 이력이 없습니다. "지금 실행"을 눌러 첫 수집을 시작하세요.
           </div>
         )}
@@ -2711,7 +2980,7 @@ function StockChart({ runs, parseNum, chartId }) {
   const svgRef = React.useRef(null);
 
   const vals = runs.map((r) => parseNum(r.value));
-  const times = runs.map((r) => r.runAt || "");
+  const times = runs.map((r) => r.runAt || '');
   const n = vals.length;
   if (n < 2) return null;
 
@@ -2733,11 +3002,11 @@ function StockChart({ runs, parseNum, chartId }) {
   const pts = vals.map((v, i) => ({ x: toX(i), y: toY(v) }));
   const linePts = pts
     .map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-    .join(" ");
+    .join(' ');
   const areaPts = `0,${H} ${linePts} ${W},${H}`;
 
   const isUp = vals[n - 1] >= vals[0];
-  const color = isUp ? "#00BD83" : "#E04A4A";
+  const color = isUp ? '#00BD83' : '#E04A4A';
   const gradId = `sg_${chartId}`;
 
   // 4 horizontal grid lines
@@ -2750,7 +3019,7 @@ function StockChart({ runs, parseNum, chartId }) {
   const xIdxs = [...new Set([0, Math.floor((n - 1) / 2), n - 1])];
 
   const fmtVal = (v) => {
-    if (Math.abs(v) >= 10000) return Math.round(v).toLocaleString("ko-KR");
+    if (Math.abs(v) >= 10000) return Math.round(v).toLocaleString('ko-KR');
     if (Math.abs(v) >= 100) return v.toFixed(0);
     return v.toFixed(2);
   };
@@ -2773,55 +3042,65 @@ function StockChart({ runs, parseNum, chartId }) {
       : null;
 
   return (
-    <div style={{ position: "relative", marginBottom: 8, overflow: "hidden" }}>
+    <div style={{ position: 'relative', marginBottom: 8, overflow: 'hidden' }}>
       {/* Y-axis labels (HTML, avoids SVG text distortion) */}
       <div
         style={{
-          position: "absolute",
+          position: 'absolute',
           left: 0,
           top: 0,
           bottom: 20,
           width: 56,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
           paddingTop: PT,
-          pointerEvents: "none",
-        }}
-      >
+          pointerEvents: 'none',
+        }}>
         {[...yTicks].reverse().map((t, i) => (
           <div
             key={i}
             style={{
               fontSize: 9.5,
-              fontFamily: "var(--mono)",
-              color: "var(--text-dim)",
-              textAlign: "right",
+              fontFamily: 'var(--mono)',
+              color: 'var(--text-dim)',
+              textAlign: 'right',
               paddingRight: 8,
-              transform: "translateY(50%)",
-            }}
-          >
+              transform: 'translateY(50%)',
+            }}>
             {fmtVal(t.val)}
           </div>
         ))}
       </div>
 
       {/* Chart */}
-      <div style={{ marginLeft: 56, position: "relative" }}>
+      <div style={{ marginLeft: 56, position: 'relative' }}>
         <svg
           ref={svgRef}
           width="100%"
           height={H}
           viewBox={`0 0 ${W} ${H}`}
           preserveAspectRatio="none"
-          style={{ display: "block", cursor: "crosshair" }}
+          style={{ display: 'block', cursor: 'crosshair' }}
           onMouseMove={handleMouseMove}
-          onMouseLeave={() => setHoverIdx(null)}
-        >
+          onMouseLeave={() => setHoverIdx(null)}>
           <defs>
-            <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity="0.28" />
-              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            <linearGradient
+              id={gradId}
+              x1="0"
+              x2="0"
+              y1="0"
+              y2="1">
+              <stop
+                offset="0%"
+                stopColor={color}
+                stopOpacity="0.28"
+              />
+              <stop
+                offset="100%"
+                stopColor={color}
+                stopOpacity="0"
+              />
             </linearGradient>
           </defs>
 
@@ -2849,7 +3128,10 @@ function StockChart({ runs, parseNum, chartId }) {
           />
 
           {/* Area fill */}
-          <polygon points={areaPts} fill={`url(#${gradId})`} />
+          <polygon
+            points={areaPts}
+            fill={`url(#${gradId})`}
+          />
 
           {/* Price line */}
           <polyline
@@ -2910,41 +3192,38 @@ function StockChart({ runs, parseNum, chartId }) {
         {hov && (
           <div
             style={{
-              position: "absolute",
+              position: 'absolute',
               top: `${(hov.y / H) * 100}%`,
-              transform: "translateY(-50%)",
+              transform: 'translateY(-50%)',
               ...(hov.x / W > 0.62
                 ? { right: `${((W - hov.x) / W) * 100 + 1.2}%` }
                 : { left: `${(hov.x / W) * 100 + 1.2}%` }),
-              background: "var(--bg-2)",
-              border: "1px solid var(--border)",
+              background: 'var(--bg-2)',
+              border: '1px solid var(--border)',
               borderRadius: 8,
-              padding: "6px 11px",
-              boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
-              pointerEvents: "none",
+              padding: '6px 11px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+              pointerEvents: 'none',
               zIndex: 10,
-              whiteSpace: "nowrap",
-            }}
-          >
+              whiteSpace: 'nowrap',
+            }}>
             <div
               style={{
-                fontFamily: "var(--mono)",
+                fontFamily: 'var(--mono)',
                 fontWeight: 700,
                 fontSize: 13.5,
                 color,
-              }}
-            >
+              }}>
               {fmtVal(hov.val)}
             </div>
             <div
               style={{
-                fontFamily: "var(--mono)",
+                fontFamily: 'var(--mono)',
                 fontSize: 10,
-                color: "var(--text-dim)",
+                color: 'var(--text-dim)',
                 marginTop: 2,
-              }}
-            >
-              {hov.time?.slice(5, 16) || ""}
+              }}>
+              {hov.time?.slice(5, 16) || ''}
             </div>
           </div>
         )}
@@ -2952,27 +3231,25 @@ function StockChart({ runs, parseNum, chartId }) {
         {/* X-axis time labels */}
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
+            display: 'flex',
+            justifyContent: 'space-between',
             marginTop: 5,
-          }}
-        >
+          }}>
           {xIdxs.map((i, j) => (
             <div
               key={i}
               style={{
                 fontSize: 9.5,
-                fontFamily: "var(--mono)",
-                color: "var(--text-dim)",
+                fontFamily: 'var(--mono)',
+                color: 'var(--text-dim)',
                 textAlign:
                   j === 0
-                    ? "left"
+                    ? 'left'
                     : j === xIdxs.length - 1
-                      ? "right"
-                      : "center",
-              }}
-            >
-              {times[i]?.slice(5, 16) || ""}
+                      ? 'right'
+                      : 'center',
+              }}>
+              {times[i]?.slice(5, 16) || ''}
             </div>
           ))}
         </div>
@@ -2991,13 +3268,13 @@ function ValueTrendCard({ results, scraperId }) {
   }));
   const changeCount = annotated.filter((r) => r.changed).length;
 
-  const parseNum = (v) => parseFloat(String(v || "").replace(/[^0-9.-]/g, ""));
+  const parseNum = (v) => parseFloat(String(v || '').replace(/[^0-9.-]/g, ''));
   const numericRuns = [...results]
     .reverse()
     .filter(
       (r) =>
         r.value &&
-        r.status !== "failed" &&
+        r.status !== 'failed' &&
         !isNaN(parseNum(r.value)) &&
         parseNum(r.value) !== 0,
     );
@@ -3013,48 +3290,47 @@ function ValueTrendCard({ results, scraperId }) {
   const isUp = pctChange !== null && pctChange >= 0;
 
   return (
-    <div className="card" style={{ padding: 18 }}>
+    <div
+      className="card"
+      style={{ padding: 18 }}>
       {/* Header */}
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
           marginBottom: 14,
-        }}
-      >
+        }}>
         <div>
           <div
             style={{
-              display: "flex",
-              alignItems: "center",
+              display: 'flex',
+              alignItems: 'center',
               gap: 8,
               marginBottom: 2,
-            }}
-          >
+            }}>
             <div style={{ fontWeight: 600 }}>값 추이</div>
             {pctChange !== null && (
               <span
                 style={{
                   fontSize: 12,
-                  fontFamily: "var(--mono)",
+                  fontFamily: 'var(--mono)',
                   fontWeight: 700,
-                  color: isUp ? "#00BD83" : "#E04A4A",
-                  padding: "1px 7px",
+                  color: isUp ? '#00BD83' : '#E04A4A',
+                  padding: '1px 7px',
                   borderRadius: 5,
                   background: isUp
-                    ? "rgba(0,189,131,0.11)"
-                    : "rgba(224,74,74,0.11)",
-                }}
-              >
-                {isUp ? "▲" : "▼"} {Math.abs(pctChange).toFixed(2)}%
+                    ? 'rgba(0,189,131,0.11)'
+                    : 'rgba(224,74,74,0.11)',
+                }}>
+                {isUp ? '▲' : '▼'} {Math.abs(pctChange).toFixed(2)}%
               </span>
             )}
           </div>
-          <div style={{ fontSize: 11.5, color: "var(--text-dim)" }}>
+          <div style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>
             {changeCount > 0
               ? `${changeCount}회 값 변경 감지됨`
-              : "수집 간 값 변화 이력"}
+              : '수집 간 값 변화 이력'}
           </div>
         </div>
         <a
@@ -3062,13 +3338,15 @@ function ValueTrendCard({ results, scraperId }) {
           download
           className="btn ghost sm"
           style={{
-            textDecoration: "none",
-            display: "inline-flex",
-            alignItems: "center",
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
             gap: 6,
-          }}
-        >
-          <Icon name="download" className="icon icon-sm" />
+          }}>
+          <Icon
+            name="download"
+            className="icon icon-sm"
+          />
           CSV
         </a>
       </div>
@@ -3085,76 +3363,70 @@ function ValueTrendCard({ results, scraperId }) {
       {/* Value history list */}
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
+          display: 'flex',
+          flexDirection: 'column',
           marginTop: isNumeric ? 12 : 0,
-        }}
-      >
+        }}>
         {annotated.slice(0, 15).map((r, i) => (
           <div
             key={r.id || i}
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr auto auto",
+              display: 'grid',
+              gridTemplateColumns: '1fr auto auto',
               gap: 10,
-              padding: "7px 0",
-              alignItems: "center",
+              padding: '7px 0',
+              alignItems: 'center',
               borderBottom:
                 i < Math.min(annotated.length, 15) - 1
-                  ? "1px solid var(--border)"
-                  : "none",
-            }}
-          >
+                  ? '1px solid var(--border)'
+                  : 'none',
+            }}>
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
+                display: 'flex',
+                alignItems: 'center',
                 gap: 7,
                 minWidth: 0,
-              }}
-            >
+              }}>
               <div
                 style={{
-                  fontFamily: "var(--mono)",
+                  fontFamily: 'var(--mono)',
                   fontSize: 13,
                   fontWeight: r.changed ? 600 : 400,
-                  color: r.changed ? "var(--text)" : "var(--text-mute)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {r.value || "—"}
+                  color: r.changed ? 'var(--text)' : 'var(--text-mute)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                {r.value || '—'}
               </div>
               {r.changed && (
                 <span
                   style={{
                     flexShrink: 0,
                     fontSize: 9.5,
-                    padding: "1px 6px",
+                    padding: '1px 6px',
                     borderRadius: 4,
-                    background: "var(--warn-soft)",
-                    color: "var(--warn)",
-                    border: "1px solid var(--warn-line)",
-                    fontFamily: "var(--mono)",
+                    background: 'var(--warn-soft)',
+                    color: 'var(--warn)',
+                    border: '1px solid var(--warn-line)',
+                    fontFamily: 'var(--mono)',
                     fontWeight: 600,
-                  }}
-                >
+                  }}>
                   변경
                 </span>
               )}
             </div>
             <div
               style={{
-                fontFamily: "var(--mono)",
+                fontFamily: 'var(--mono)',
                 fontSize: 11,
-                color: "var(--text-dim)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {r.runAt || "—"}
+                color: 'var(--text-dim)',
+                whiteSpace: 'nowrap',
+              }}>
+              {r.runAt || '—'}
             </div>
-            <StatusChip status={r.status === "healed" ? "healing" : r.status} />
+            <StatusChip status={r.status === 'healed' ? 'healing' : r.status} />
           </div>
         ))}
       </div>
@@ -3165,22 +3437,22 @@ function ValueTrendCard({ results, scraperId }) {
 // ─── New Scraper Wizard ────────────────────────────────────────────────────
 function NewScraperScreen({ onClose, onRegister }) {
   const [step, setStep] = React.useState(0);
-  const [url, setUrl] = React.useState("coupang.com/np/categories/178794");
+  const [url, setUrl] = React.useState('coupang.com/np/categories/178794');
   const [intent, setIntent] = React.useState(
-    "쿠팡 노트북 카테고리 베스트 페이지의 실시간 1위 상품명",
+    '쿠팡 노트북 카테고리 베스트 페이지의 실시간 1위 상품명',
   );
-  const [domain, setDomain] = React.useState("commerce");
+  const [domain, setDomain] = React.useState('commerce');
   const [threshold, setThreshold] = React.useState(85);
-  const [schedule, setSchedule] = React.useState("daily-9");
-  const [customCron, setCustomCron] = React.useState("");
-  const [channels, setChannels] = React.useState(["api"]);
+  const [schedule, setSchedule] = React.useState('daily-9');
+  const [customCron, setCustomCron] = React.useState('');
+  const [channels, setChannels] = React.useState(['api']);
   const [selected, setSelected] = React.useState(null);
 
   const steps = [
-    { id: 0, label: "대상 페이지", sub: "URL 입력 및 렌더링" },
-    { id: 1, label: "추출 의도", sub: "무엇을 가져올지 자연어로" },
-    { id: 2, label: "요소 선택", sub: "클릭으로 수집 대상 지정" },
-    { id: 3, label: "운영 정책", sub: "임계값 · 스케줄 · 출력" },
+    { id: 0, label: '대상 페이지', sub: 'URL 입력 및 렌더링' },
+    { id: 1, label: '추출 의도', sub: '무엇을 가져올지 자연어로' },
+    { id: 2, label: '요소 선택', sub: '클릭으로 수집 대상 지정' },
+    { id: 3, label: '운영 정책', sub: '임계값 · 스케줄 · 출력' },
   ];
 
   const isValidCron = (expr) =>
@@ -3190,7 +3462,7 @@ function NewScraperScreen({ onClose, onRegister }) {
     if (step === 0) return url.trim().length > 3;
     if (step === 1) return intent.trim().length > 2;
     if (step === 2) return !!selected?.selector;
-    if (step === 3 && schedule === "custom") return isValidCron(customCron);
+    if (step === 3 && schedule === 'custom') return isValidCron(customCron);
     return true;
   };
   const next = () =>
@@ -3198,48 +3470,48 @@ function NewScraperScreen({ onClose, onRegister }) {
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
   const SCHEDULE_LABEL = {
-    "daily-9": "매일 09:00",
-    hourly: "매시간",
-    "15m": "15분마다",
+    'daily-9': '매일 09:00',
+    hourly: '매시간',
+    '15m': '15분마다',
   };
   const DOMAIN_ALTS = {
-    commerce: "소비 수요",
-    labor: "노동 시장",
-    realestate: "부동산",
-    regulatory: "규제·공시",
-    media: "미디어",
-    finance: "금융",
+    commerce: '소비 수요',
+    labor: '노동 시장',
+    realestate: '부동산',
+    regulatory: '규제·공시',
+    media: '미디어',
+    finance: '금융',
   };
   const CHANNEL_LABEL = {
-    api: "REST API",
-    webhook: "Webhook",
-    slack: "Slack",
-    csv: "CSV",
+    api: 'REST API',
+    webhook: 'Webhook',
+    slack: 'Slack',
+    csv: 'CSV',
   };
 
   const handleCreate = () => {
-    const scheduleVal = schedule === "custom" ? customCron.trim() : schedule;
+    const scheduleVal = schedule === 'custom' ? customCron.trim() : schedule;
     const channelVals = channels.map((c) => CHANNEL_LABEL[c] || c);
     const newScraper = {
-      id: "cr_" + Math.random().toString(36).slice(2, 6),
+      id: 'cr_' + Math.random().toString(36).slice(2, 6),
       name: intent.slice(0, 40) || url,
       url,
-      org: "",
+      org: '',
       domain,
       type: domain,
       altCategory: DOMAIN_ALTS[domain] || domain,
       threshold,
-      css_selector: selected?.selector || "",
+      css_selector: selected?.selector || '',
       user_intent: intent,
       schedule: scheduleVal,
       scheduleKey: scheduleVal,
       channels: channelVals,
       delivery: channelVals,
-      owner: "me",
-      status: "pending",
+      owner: 'me',
+      status: 'pending',
       score: 0,
-      lastValue: "—",
-      lastRun: "—",
+      lastValue: '—',
+      lastRun: '—',
       healed: 0,
       runs7d: 0,
       spark: [],
@@ -3252,89 +3524,92 @@ function NewScraperScreen({ onClose, onRegister }) {
     <div
       className="fadein"
       style={{
-        padding: "var(--s-7) var(--s-7) var(--s-11)",
+        padding: 'var(--s-7) var(--s-7) var(--s-11)',
         maxWidth: 1180,
-        margin: "0 auto",
-      }}
-    >
+        margin: '0 auto',
+      }}>
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--s-2)",
-          marginBottom: "var(--s-3)",
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--s-2)',
+          marginBottom: 'var(--s-3)',
           fontSize: 12,
-          color: "var(--text-mute)",
-        }}
-      >
-        <a onClick={onClose} className="muted" style={{ cursor: "default" }}>
+          color: 'var(--text-mute)',
+        }}>
+        <a
+          onClick={onClose}
+          className="muted"
+          style={{ cursor: 'default' }}>
           스크래퍼
         </a>
         <Icon
           name="chevron_r"
           className="icon icon-sm"
-          style={{ color: "var(--text-dim)" }}
+          style={{ color: 'var(--text-dim)' }}
         />
         <span>새 스크래퍼</span>
       </div>
 
-      <SectionTitle eyebrow="NEW CRAWLER" title={steps[step].label}>
+      <SectionTitle
+        eyebrow="NEW CRAWLER"
+        title={steps[step].label}>
         {steps[step].sub}
       </SectionTitle>
 
       {/* stepper */}
       <div
         style={{
-          display: "flex",
-          alignItems: "stretch",
+          display: 'flex',
+          alignItems: 'stretch',
           gap: 0,
-          marginBottom: "var(--s-5)",
-        }}
-      >
+          marginBottom: 'var(--s-5)',
+        }}>
         {steps.map((s, i) => (
           <React.Fragment key={s.id}>
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s-2)",
-                flex: "0 0 auto",
-              }}
-            >
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--s-2)',
+                flex: '0 0 auto',
+              }}>
               <div
                 style={{
                   width: 26,
                   height: 26,
                   borderRadius: 999,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontFamily: "var(--mono)",
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: 'var(--mono)',
                   fontSize: 12,
                   fontWeight: 600,
                   background:
                     i < step
-                      ? "var(--ok-soft)"
+                      ? 'var(--ok-soft)'
                       : i === step
-                        ? "var(--accent)"
-                        : "var(--bg-2)",
+                        ? 'var(--accent)'
+                        : 'var(--bg-2)',
                   color:
                     i < step
-                      ? "var(--ok)"
+                      ? 'var(--ok)'
                       : i === step
-                        ? "#fff"
-                        : "var(--text-mute)",
+                        ? '#fff'
+                        : 'var(--text-mute)',
                   border:
-                    "1px solid " +
+                    '1px solid ' +
                     (i < step
-                      ? "var(--ok-line)"
+                      ? 'var(--ok-line)'
                       : i === step
-                        ? "var(--accent)"
-                        : "var(--border)"),
-                }}
-              >
+                        ? 'var(--accent)'
+                        : 'var(--border)'),
+                }}>
                 {i < step ? (
-                  <Icon name="check" className="icon icon-sm" />
+                  <Icon
+                    name="check"
+                    className="icon icon-sm"
+                  />
                 ) : (
                   i + 1
                 )}
@@ -3344,12 +3619,13 @@ function NewScraperScreen({ onClose, onRegister }) {
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: i <= step ? "var(--text)" : "var(--text-mute)",
-                  }}
-                >
+                    color: i <= step ? 'var(--text)' : 'var(--text-mute)',
+                  }}>
                   {s.label}
                 </div>
-                <div className="dim" style={{ fontSize: 11 }}>
+                <div
+                  className="dim"
+                  style={{ fontSize: 11 }}>
                   {s.sub}
                 </div>
               </div>
@@ -3358,10 +3634,10 @@ function NewScraperScreen({ onClose, onRegister }) {
               <div
                 style={{
                   flex: 1,
-                  alignSelf: "center",
+                  alignSelf: 'center',
                   height: 1,
-                  background: "var(--border)",
-                  margin: "0 var(--s-4)",
+                  background: 'var(--border)',
+                  margin: '0 var(--s-4)',
                 }}
               />
             )}
@@ -3369,8 +3645,15 @@ function NewScraperScreen({ onClose, onRegister }) {
         ))}
       </div>
 
-      <div className="card" style={{ padding: "var(--s-6)", minHeight: 440 }}>
-        {step === 0 && <WizardStep1 url={url} setUrl={setUrl} />}
+      <div
+        className="card"
+        style={{ padding: 'var(--s-6)', minHeight: 440 }}>
+        {step === 0 && (
+          <WizardStep1
+            url={url}
+            setUrl={setUrl}
+          />
+        )}
         {step === 1 && (
           <WizardStep2
             intent={intent}
@@ -3404,18 +3687,24 @@ function NewScraperScreen({ onClose, onRegister }) {
 
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginTop: "var(--s-4)",
-        }}
-      >
-        <button className="btn ghost" onClick={onClose}>
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginTop: 'var(--s-4)',
+        }}>
+        <button
+          className="btn ghost"
+          onClick={onClose}>
           취소
         </button>
-        <div style={{ display: "flex", gap: "var(--s-2)" }}>
+        <div style={{ display: 'flex', gap: 'var(--s-2)' }}>
           {step > 0 && (
-            <button className="btn" onClick={prev}>
-              <Icon name="arrow_l" className="icon icon-sm" />
+            <button
+              className="btn"
+              onClick={prev}>
+              <Icon
+                name="arrow_l"
+                className="icon icon-sm"
+              />
               이전
             </button>
           )}
@@ -3424,15 +3713,22 @@ function NewScraperScreen({ onClose, onRegister }) {
               className="btn primary"
               onClick={next}
               disabled={!canNext()}
-              style={{ opacity: canNext() ? 1 : 0.5 }}
-            >
+              style={{ opacity: canNext() ? 1 : 0.5 }}>
               다음
-              <Icon name="arrow_r" className="icon icon-sm" />
+              <Icon
+                name="arrow_r"
+                className="icon icon-sm"
+              />
             </button>
           )}
           {step === steps.length - 1 && (
-            <button className="btn primary" onClick={handleCreate}>
-              <Icon name="check" className="icon icon-sm" />
+            <button
+              className="btn primary"
+              onClick={handleCreate}>
+              <Icon
+                name="check"
+                className="icon icon-sm"
+              />
               스크래퍼 생성
             </button>
           )}
@@ -3443,22 +3739,22 @@ function NewScraperScreen({ onClose, onRegister }) {
 }
 
 function WizardStep1({ url, setUrl }) {
-  const [previewSrc, setPreviewSrc] = React.useState("");
-  const [imgState, setImgState] = React.useState("idle"); // idle | loading | ok | err
+  const [previewSrc, setPreviewSrc] = React.useState('');
+  const [imgState, setImgState] = React.useState('idle'); // idle | loading | ok | err
   const timer = React.useRef(null);
 
   React.useEffect(() => {
     clearTimeout(timer.current);
     if (url.trim().length < 4) {
-      setPreviewSrc("");
-      setImgState("idle");
+      setPreviewSrc('');
+      setImgState('idle');
       return;
     }
-    setImgState("loading");
+    setImgState('loading');
     timer.current = setTimeout(() => {
       const full = /^https?:\/\//i.test(url.trim())
         ? url.trim()
-        : "https://" + url.trim();
+        : 'https://' + url.trim();
       setPreviewSrc(
         `https://api.microlink.io/?url=${encodeURIComponent(full)}&screenshot=true&meta=false&embed=screenshot.url`,
       );
@@ -3469,96 +3765,93 @@ function WizardStep1({ url, setUrl }) {
   return (
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1.1fr",
-        gap: "var(--s-6)",
-      }}
-    >
+        display: 'grid',
+        gridTemplateColumns: '1fr 1.1fr',
+        gap: 'var(--s-6)',
+      }}>
       <div>
         <FieldLabel>대상 URL</FieldLabel>
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--s-2)",
-            padding: "10px var(--s-3)",
-            background: "var(--bg-2)",
-            border: "1px solid var(--border)",
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--s-2)',
+            padding: '10px var(--s-3)',
+            background: 'var(--bg-2)',
+            border: '1px solid var(--border)',
             borderRadius: 10,
-          }}
-        >
+          }}>
           <Icon
             name="link"
             className="icon"
-            style={{ color: "var(--text-mute)" }}
+            style={{ color: 'var(--text-mute)' }}
           />
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             style={{
               flex: 1,
-              background: "transparent",
+              background: 'transparent',
               border: 0,
-              color: "var(--text)",
-              outline: "none",
-              fontFamily: "var(--mono)",
+              color: 'var(--text)',
+              outline: 'none',
+              fontFamily: 'var(--mono)',
               fontSize: 13,
             }}
           />
-          <span className="chip ok" style={{ fontSize: 10.5 }}>
+          <span
+            className="chip ok"
+            style={{ fontSize: 10.5 }}>
             <span className="dot" />
             200 OK
           </span>
         </div>
         <div
           className="muted"
-          style={{ fontSize: 12.5, marginTop: "var(--s-3)", lineHeight: 1.6 }}
-        >
-          공개 페이지는 즉시 분석됩니다. 로그인이 필요하면{" "}
-          <a style={{ color: "var(--accent)" }}>인증 프로파일</a>을 먼저
+          style={{ fontSize: 12.5, marginTop: 'var(--s-3)', lineHeight: 1.6 }}>
+          공개 페이지는 즉시 분석됩니다. 로그인이 필요하면{' '}
+          <a style={{ color: 'var(--accent)' }}>인증 프로파일</a>을 먼저
           등록하세요.
         </div>
 
         <div
           style={{
-            marginTop: "var(--s-5)",
-            padding: "var(--s-3) var(--s-4)",
-            background: "var(--accent-soft)",
+            marginTop: 'var(--s-5)',
+            padding: 'var(--s-3) var(--s-4)',
+            background: 'var(--accent-soft)',
             borderRadius: 10,
-            border: "1px solid var(--accent-line)",
-            display: "flex",
-            gap: "var(--s-2)",
-            alignItems: "flex-start",
-          }}
-        >
+            border: '1px solid var(--accent-line)',
+            display: 'flex',
+            gap: 'var(--s-2)',
+            alignItems: 'flex-start',
+          }}>
           <Icon
             name="info"
             className="icon icon-sm"
-            style={{ color: "var(--accent)", marginTop: 2, flexShrink: 0 }}
+            style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }}
           />
           <div style={{ fontSize: 12.5, lineHeight: 1.55 }}>
-            DOMA는{" "}
-            <strong style={{ color: "var(--text)" }}>
+            DOMA는{' '}
+            <strong style={{ color: 'var(--text)' }}>
               Playwright headless 렌더
             </strong>
             로 페이지를 가져온 뒤
-            <strong style={{ color: "var(--text)" }}>
-              {" "}
+            <strong style={{ color: 'var(--text)' }}>
+              {' '}
               모든 DOM 노드를 후보 풀
             </strong>
             로 사용합니다. JS로 그려지는 콘텐츠도 안전합니다.
           </div>
         </div>
 
-        <div style={{ marginTop: "var(--s-5)" }}>
+        <div style={{ marginTop: 'var(--s-5)' }}>
           <FieldLabel small>기술 가용성 자동 체크</FieldLabel>
           <div
             style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--s-2)",
-            }}
-          >
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--s-2)',
+            }}>
             <CapRow
               ic="check"
               tone="ok"
@@ -3586,27 +3879,29 @@ function WizardStep1({ url, setUrl }) {
           </div>
         </div>
 
-        <div style={{ marginTop: "var(--s-4)" }}>
+        <div style={{ marginTop: 'var(--s-4)' }}>
           <FieldLabel small>최근 사용한 URL</FieldLabel>
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {[
-              "coupang.com/np/categories/178794",
-              "dart.fss.or.kr/dsab001",
-              "jobkorea.co.kr/recruit/joblist",
-              "land.naver.com/complexes/8928",
+              'coupang.com/np/categories/178794',
+              'dart.fss.or.kr/dsab001',
+              'jobkorea.co.kr/recruit/joblist',
+              'land.naver.com/complexes/8928',
             ].map((u) => (
               <button
                 key={u}
                 className="btn ghost"
                 style={{
-                  justifyContent: "flex-start",
-                  fontFamily: "var(--mono)",
+                  justifyContent: 'flex-start',
+                  fontFamily: 'var(--mono)',
                   fontSize: 12,
-                  padding: "6px var(--s-3)",
+                  padding: '6px var(--s-3)',
                 }}
-                onClick={() => setUrl(u)}
-              >
-                <Icon name="history" className="icon icon-sm" />
+                onClick={() => setUrl(u)}>
+                <Icon
+                  name="history"
+                  className="icon icon-sm"
+                />
                 {u}
               </button>
             ))}
@@ -3617,34 +3912,32 @@ function WizardStep1({ url, setUrl }) {
       {/* ── 실제 페이지 미리보기 패널 ── */}
       <div
         style={{
-          position: "relative",
-          background: "var(--bg-3)",
-          border: "1px solid var(--border)",
+          position: 'relative',
+          background: 'var(--bg-3)',
+          border: '1px solid var(--border)',
           borderRadius: 12,
-          overflow: "hidden",
+          overflow: 'hidden',
           minHeight: 380,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
         {/* 브라우저 크롬 헤더 */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--s-2)",
-            padding: "8px var(--s-3)",
-            background: "var(--bg-2)",
-            borderBottom: "1px solid var(--border)",
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--s-2)',
+            padding: '8px var(--s-3)',
+            background: 'var(--bg-2)',
+            borderBottom: '1px solid var(--border)',
             flexShrink: 0,
-          }}
-        >
+          }}>
           <span
             style={{
               width: 9,
               height: 9,
               borderRadius: 999,
-              background: "#FF5F57",
+              background: '#FF5F57',
               flexShrink: 0,
             }}
           />
@@ -3653,7 +3946,7 @@ function WizardStep1({ url, setUrl }) {
               width: 9,
               height: 9,
               borderRadius: 999,
-              background: "#FEBC2E",
+              background: '#FEBC2E',
               flexShrink: 0,
             }}
           />
@@ -3662,43 +3955,43 @@ function WizardStep1({ url, setUrl }) {
               width: 9,
               height: 9,
               borderRadius: 999,
-              background: "#28C840",
+              background: '#28C840',
               flexShrink: 0,
             }}
           />
           <div
             style={{
               flex: 1,
-              marginLeft: "var(--s-2)",
-              background: "var(--bg-3)",
-              border: "1px solid var(--border)",
+              marginLeft: 'var(--s-2)',
+              background: 'var(--bg-3)',
+              border: '1px solid var(--border)',
               borderRadius: 6,
-              padding: "3px 8px",
-              display: "flex",
-              alignItems: "center",
+              padding: '3px 8px',
+              display: 'flex',
+              alignItems: 'center',
               gap: 6,
               minWidth: 0,
-            }}
-          >
+            }}>
             <Icon
               name="link"
               className="icon icon-sm"
-              style={{ color: "var(--text-dim)", flexShrink: 0 }}
+              style={{ color: 'var(--text-dim)', flexShrink: 0 }}
             />
             <span
               className="mono"
               style={{
                 fontSize: 11,
-                color: "var(--text-mute)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {url || "—"}
+                color: 'var(--text-mute)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+              {url || '—'}
             </span>
           </div>
-          <span className="chip" style={{ fontSize: 10, flexShrink: 0 }}>
+          <span
+            className="chip"
+            style={{ fontSize: 10, flexShrink: 0 }}>
             headless
           </span>
         </div>
@@ -3707,26 +4000,24 @@ function WizardStep1({ url, setUrl }) {
         <div
           style={{
             flex: 1,
-            position: "relative",
-            overflowY: "auto",
+            position: 'relative',
+            overflowY: 'auto',
             minHeight: 280,
-          }}
-        >
+          }}>
           {/* idle */}
-          {imgState === "idle" && (
+          {imgState === 'idle' && (
             <div
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100%",
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
                 gap: 10,
-                color: "var(--text-dim)",
+                color: 'var(--text-dim)',
                 padding: 24,
-                textAlign: "center",
-              }}
-            >
+                textAlign: 'center',
+              }}>
               <Icon
                 name="link"
                 className="icon icon-lg"
@@ -3741,26 +4032,25 @@ function WizardStep1({ url, setUrl }) {
           )}
 
           {/* loading */}
-          {imgState === "loading" && (
+          {imgState === 'loading' && (
             <div
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100%",
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
                 gap: 12,
-                color: "var(--text-dim)",
-              }}
-            >
+                color: 'var(--text-dim)',
+              }}>
               <div
                 className="spin"
                 style={{
                   width: 22,
                   height: 22,
                   borderRadius: 999,
-                  border: "2.5px solid var(--border-strong)",
-                  borderTopColor: "var(--accent)",
+                  border: '2.5px solid var(--border-strong)',
+                  borderTopColor: 'var(--accent)',
                 }}
               />
               <div style={{ fontSize: 12 }}>페이지 렌더링 중…</div>
@@ -3774,30 +4064,29 @@ function WizardStep1({ url, setUrl }) {
               src={previewSrc}
               alt="page preview"
               style={{
-                width: "100%",
-                height: "auto",
-                display: imgState === "ok" ? "block" : "none",
+                width: '100%',
+                height: 'auto',
+                display: imgState === 'ok' ? 'block' : 'none',
               }}
-              onLoad={() => setImgState("ok")}
-              onError={() => setImgState("err")}
+              onLoad={() => setImgState('ok')}
+              onError={() => setImgState('err')}
             />
           )}
 
           {/* error */}
-          {imgState === "err" && (
+          {imgState === 'err' && (
             <div
               style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100%",
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
                 gap: 10,
-                color: "var(--text-dim)",
+                color: 'var(--text-dim)',
                 padding: 24,
-                textAlign: "center",
-              }}
-            >
+                textAlign: 'center',
+              }}>
               <Icon
                 name="x"
                 className="icon icon-lg"
@@ -3806,7 +4095,9 @@ function WizardStep1({ url, setUrl }) {
               <div style={{ fontSize: 12, lineHeight: 1.6 }}>
                 미리보기를 불러올 수 없습니다
                 <br />
-                <span className="mono" style={{ fontSize: 10.5 }}>
+                <span
+                  className="mono"
+                  style={{ fontSize: 10.5 }}>
                   URL을 다시 확인해 주세요
                 </span>
               </div>
@@ -3817,43 +4108,50 @@ function WizardStep1({ url, setUrl }) {
         {/* 하단 상태 바 */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--s-2)",
-            padding: "var(--s-2) var(--s-3)",
-            background: "var(--bg-2)",
-            borderTop: "1px solid var(--border)",
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--s-2)',
+            padding: 'var(--s-2) var(--s-3)',
+            background: 'var(--bg-2)',
+            borderTop: '1px solid var(--border)',
             flexShrink: 0,
-          }}
-        >
-          {imgState === "ok" ? (
+          }}>
+          {imgState === 'ok' ? (
             <>
               <Icon
                 name="check"
                 className="icon icon-sm"
-                style={{ color: "var(--ok)" }}
+                style={{ color: 'var(--ok)' }}
               />
-              <div className="dim mono" style={{ fontSize: 11 }}>
+              <div
+                className="dim mono"
+                style={{ fontSize: 11 }}>
                 렌더 완료 · 4,872개 DOM 노드 수집
               </div>
             </>
-          ) : imgState === "loading" ? (
-            <div className="dim mono" style={{ fontSize: 11 }}>
+          ) : imgState === 'loading' ? (
+            <div
+              className="dim mono"
+              style={{ fontSize: 11 }}>
               렌더 중…
             </div>
-          ) : imgState === "err" ? (
+          ) : imgState === 'err' ? (
             <>
               <Icon
                 name="x"
                 className="icon icon-sm"
-                style={{ color: "var(--danger)" }}
+                style={{ color: 'var(--danger)' }}
               />
-              <div className="dim mono" style={{ fontSize: 11 }}>
+              <div
+                className="dim mono"
+                style={{ fontSize: 11 }}>
                 렌더 실패
               </div>
             </>
           ) : (
-            <div className="dim mono" style={{ fontSize: 11 }}>
+            <div
+              className="dim mono"
+              style={{ fontSize: 11 }}>
               URL 입력 대기
             </div>
           )}
@@ -3866,22 +4164,22 @@ function WizardStep1({ url, setUrl }) {
 function PreviewMini({ label, val, tone }) {
   return (
     <div>
-      <div className="dim" style={{ fontSize: 11 }}>
+      <div
+        className="dim"
+        style={{ fontSize: 11 }}>
         {label}
       </div>
       <div
         className="mono"
-        style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}
-      >
+        style={{ fontSize: 15, fontWeight: 600, marginTop: 2 }}>
         {val}
       </div>
       <div
         style={{
           fontSize: 10.5,
-          color: tone === "ok" ? "var(--ok)" : "var(--danger)",
-        }}
-      >
-        {tone === "ok" ? "▲" : "▼"} 0.{Math.floor(Math.random() * 40) + 10}%
+          color: tone === 'ok' ? 'var(--ok)' : 'var(--danger)',
+        }}>
+        {tone === 'ok' ? '▲' : '▼'} 0.{Math.floor(Math.random() * 40) + 10}%
       </div>
     </div>
   );
@@ -3889,29 +4187,28 @@ function PreviewMini({ label, val, tone }) {
 
 function CapRow({ ic, tone, title, sub }) {
   const color =
-    tone === "ok"
-      ? "var(--ok)"
-      : tone === "warn"
-        ? "var(--warn)"
-        : "var(--danger)";
+    tone === 'ok'
+      ? 'var(--ok)'
+      : tone === 'warn'
+        ? 'var(--warn)'
+        : 'var(--danger)';
   const bg =
-    tone === "ok"
-      ? "var(--ok-soft)"
-      : tone === "warn"
-        ? "var(--warn-soft)"
-        : "var(--danger-soft)";
+    tone === 'ok'
+      ? 'var(--ok-soft)'
+      : tone === 'warn'
+        ? 'var(--warn-soft)'
+        : 'var(--danger-soft)';
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "var(--s-3)",
-        padding: "8px var(--s-3)",
+        display: 'flex',
+        alignItems: 'center',
+        gap: 'var(--s-3)',
+        padding: '8px var(--s-3)',
         borderRadius: 8,
-        background: "var(--bg-2)",
-        border: "1px solid var(--border)",
-      }}
-    >
+        background: 'var(--bg-2)',
+        border: '1px solid var(--border)',
+      }}>
       <div
         style={{
           width: 22,
@@ -3920,19 +4217,20 @@ function CapRow({ ic, tone, title, sub }) {
           flexShrink: 0,
           background: bg,
           color: color,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Icon name={ic} className="icon icon-sm" />
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+        <Icon
+          name={ic}
+          className="icon icon-sm"
+        />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12.5, fontWeight: 600 }}>{title}</div>
         <div
           className="dim"
-          style={{ fontSize: 11, marginTop: 1, lineHeight: 1.4 }}
-        >
+          style={{ fontSize: 11, marginTop: 1, lineHeight: 1.4 }}>
           {sub}
         </div>
       </div>
@@ -3941,28 +4239,28 @@ function CapRow({ ic, tone, title, sub }) {
 }
 
 const INTENT_PRESETS = [
-  { d: "finance", text: "USD 매매기준율 (원/달러 환율)" },
-  { d: "finance", text: "KOSPI 지수 종가" },
-  { d: "commerce", text: "쿠팡 노트북 카테고리 베스트 1위 상품명" },
-  { d: "commerce", text: "특정 상품의 현재 판매가 (원 단위 숫자)" },
-  { d: "media", text: "멜론 차트 실시간 1위 곡 제목" },
-  { d: "public", text: "서울 종로구 오늘 최고 기온 (섭씨)" },
+  { d: 'finance', text: 'USD 매매기준율 (원/달러 환율)' },
+  { d: 'finance', text: 'KOSPI 지수 종가' },
+  { d: 'commerce', text: '쿠팡 노트북 카테고리 베스트 1위 상품명' },
+  { d: 'commerce', text: '특정 상품의 현재 판매가 (원 단위 숫자)' },
+  { d: 'media', text: '멜론 차트 실시간 1위 곡 제목' },
+  { d: 'public', text: '서울 종로구 오늘 최고 기온 (섭씨)' },
 ];
 
 const DOMAINS = [
-  { id: "commerce", label: "이커머스", hint: "가격 · 랭킹 · 재고" },
-  { id: "labor", label: "노동 시장", hint: "채용공고 · 임금" },
-  { id: "regulatory", label: "규제·공시", hint: "DART · 공정위 · 입찰" },
-  { id: "realestate", label: "부동산", hint: "호가 · 거래량" },
-  { id: "media", label: "미디어", hint: "차트 · 조회수 · 트렌드" },
-  { id: "finance", label: "금융", hint: "환율 · 지수 · 금리" },
+  { id: 'commerce', label: '이커머스', hint: '가격 · 랭킹 · 재고' },
+  { id: 'labor', label: '노동 시장', hint: '채용공고 · 임금' },
+  { id: 'regulatory', label: '규제·공시', hint: 'DART · 공정위 · 입찰' },
+  { id: 'realestate', label: '부동산', hint: '호가 · 거래량' },
+  { id: 'media', label: '미디어', hint: '차트 · 조회수 · 트렌드' },
+  { id: 'finance', label: '금융', hint: '환율 · 지수 · 금리' },
 ];
 
 function WizardStep2({ intent, setIntent, domain, setDomain }) {
-  const [tplFilter, setTplFilter] = React.useState("all");
-  const cats = ["all", ...Array.from(new Set(TEMPLATES.map((t) => t.cat)))];
+  const [tplFilter, setTplFilter] = React.useState('all');
+  const cats = ['all', ...Array.from(new Set(TEMPLATES.map((t) => t.cat)))];
   const tpls =
-    tplFilter === "all"
+    tplFilter === 'all'
       ? TEMPLATES
       : TEMPLATES.filter((t) => t.cat === tplFilter);
 
@@ -3970,59 +4268,54 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
     setIntent(t.intent);
     // map cat → domain
     const map = {
-      "소비 수요": "commerce",
-      "노동 시장": "labor",
-      "규제·공시": "regulatory",
-      부동산: "realestate",
-      미디어: "media",
+      '소비 수요': 'commerce',
+      '노동 시장': 'labor',
+      '규제·공시': 'regulatory',
+      부동산: 'realestate',
+      미디어: 'media',
     };
-    setDomain(map[t.cat] || "commerce");
+    setDomain(map[t.cat] || 'commerce');
   };
 
   return (
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "1.1fr 1fr",
-        gap: "var(--s-6)",
-      }}
-    >
+        display: 'grid',
+        gridTemplateColumns: '1.1fr 1fr',
+        gap: 'var(--s-6)',
+      }}>
       <div>
         <FieldLabel>대안 데이터 템플릿</FieldLabel>
         <div
           className="muted"
           style={{
             fontSize: 12.5,
-            marginBottom: "var(--s-3)",
+            marginBottom: 'var(--s-3)',
             lineHeight: 1.55,
-          }}
-        >
+          }}>
           금융·매크로 리서치에서 자주 쓰는 데이터를 골라 시작하세요. 사이트별
           하드코딩 없이 일반화된 파이프라인으로 동작합니다.
         </div>
 
         <div
           className="seg"
-          style={{ marginBottom: "var(--s-3)", flexWrap: "wrap" }}
-        >
+          style={{ marginBottom: 'var(--s-3)', flexWrap: 'wrap' }}>
           {cats.map((c) => (
             <button
               key={c}
-              className={tplFilter === c ? "active" : ""}
-              onClick={() => setTplFilter(c)}
-            >
-              {c === "all" ? "전체" : c}
+              className={tplFilter === c ? 'active' : ''}
+              onClick={() => setTplFilter(c)}>
+              {c === 'all' ? '전체' : c}
             </button>
           ))}
         </div>
 
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "var(--s-2)",
-          }}
-        >
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 'var(--s-2)',
+          }}>
           {tpls.map((t) => {
             const on = intent === t.intent;
             return (
@@ -4031,39 +4324,35 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
                 onClick={() => pickTpl(t)}
                 className="btn"
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "stretch",
-                  textAlign: "left",
-                  padding: "var(--s-3)",
-                  gap: "var(--s-2)",
-                  borderColor: on ? "var(--accent)" : "var(--border)",
-                  background: on ? "var(--accent-soft)" : "var(--bg-2)",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'stretch',
+                  textAlign: 'left',
+                  padding: 'var(--s-3)',
+                  gap: 'var(--s-2)',
+                  borderColor: on ? 'var(--accent)' : 'var(--border)',
+                  background: on ? 'var(--accent-soft)' : 'var(--bg-2)',
                   borderRadius: 10,
                   minHeight: 104,
-                }}
-              >
+                }}>
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "var(--s-2)",
-                  }}
-                >
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--s-2)',
+                  }}>
                   <span
                     className="chip"
                     style={{
                       fontSize: 10,
-                      padding: "1px 7px",
-                      background: "var(--bg-3)",
-                    }}
-                  >
+                      padding: '1px 7px',
+                      background: 'var(--bg-3)',
+                    }}>
                     {t.cat}
                   </span>
                   <span
                     className="dim mono"
-                    style={{ fontSize: 10.5, marginLeft: "auto" }}
-                  >
+                    style={{ fontSize: 10.5, marginLeft: 'auto' }}>
                     {t.interval} 단위
                   </span>
                 </div>
@@ -4071,19 +4360,19 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
                   style={{
                     fontSize: 13,
                     fontWeight: 600,
-                    color: "var(--text)",
+                    color: 'var(--text)',
                     lineHeight: 1.35,
-                  }}
-                >
+                  }}>
                   {t.title}
                 </div>
                 <div
                   className="dim"
-                  style={{ fontSize: 11.5, lineHeight: 1.45, flex: 1 }}
-                >
+                  style={{ fontSize: 11.5, lineHeight: 1.45, flex: 1 }}>
                   {t.desc}
                 </div>
-                <div className="dim mono" style={{ fontSize: 10.5 }}>
+                <div
+                  className="dim mono"
+                  style={{ fontSize: 10.5 }}>
                   {t.users}팀 사용 중
                 </div>
               </button>
@@ -4093,23 +4382,24 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
 
         <div
           style={{
-            marginTop: "var(--s-4)",
-            padding: "var(--s-3) var(--s-4)",
-            background: "var(--bg-3)",
+            marginTop: 'var(--s-4)',
+            padding: 'var(--s-3) var(--s-4)',
+            background: 'var(--bg-3)',
             borderRadius: 10,
-            border: "1px solid var(--border)",
-            display: "flex",
-            gap: "var(--s-2)",
-            alignItems: "center",
-          }}
-        >
+            border: '1px solid var(--border)',
+            display: 'flex',
+            gap: 'var(--s-2)',
+            alignItems: 'center',
+          }}>
           <Icon
             name="info"
             className="icon icon-sm"
-            style={{ color: "var(--text-mute)", flexShrink: 0 }}
+            style={{ color: 'var(--text-mute)', flexShrink: 0 }}
           />
-          <div className="muted" style={{ fontSize: 11.5, lineHeight: 1.5 }}>
-            템플릿은 <strong style={{ color: "var(--text)" }}>출발점</strong>일
+          <div
+            className="muted"
+            style={{ fontSize: 11.5, lineHeight: 1.5 }}>
+            템플릿은 <strong style={{ color: 'var(--text)' }}>출발점</strong>일
             뿐입니다. 새 사이트나 예외 케이스에서도 같은 파이프라인으로 동작 —
             사이트별 프롬프트 튜닝은 없습니다.
           </div>
@@ -4122,66 +4412,64 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
           className="muted"
           style={{
             fontSize: 12.5,
-            marginBottom: "var(--s-3)",
+            marginBottom: 'var(--s-3)',
             lineHeight: 1.55,
-          }}
-        >
-          시각적 위치나 모양이 아니라{" "}
-          <strong style={{ color: "var(--text)" }}>'역할'</strong>을 적어주세요.
+          }}>
+          시각적 위치나 모양이 아니라{' '}
+          <strong style={{ color: 'var(--text)' }}>'역할'</strong>을 적어주세요.
           이 문장이 그대로 LLM 추론 기준(
           <span className="mono dim">user_intent</span>)이 됩니다.
         </div>
 
-        <div style={{ position: "relative" }}>
+        <div style={{ position: 'relative' }}>
           <textarea
             value={intent}
             onChange={(e) => setIntent(e.target.value)}
             placeholder="예) 카테고리 베스트 페이지의 실시간 1위 상품명"
             style={{
-              width: "100%",
+              width: '100%',
               minHeight: 110,
-              resize: "vertical",
-              padding: "var(--s-3) var(--s-4)",
-              background: "var(--bg-2)",
-              border: "1px solid var(--border)",
+              resize: 'vertical',
+              padding: 'var(--s-3) var(--s-4)',
+              background: 'var(--bg-2)',
+              border: '1px solid var(--border)',
               borderRadius: 10,
-              color: "var(--text)",
+              color: 'var(--text)',
               fontSize: 13.5,
               lineHeight: 1.55,
-              outline: "none",
-              fontFamily: "var(--sans)",
+              outline: 'none',
+              fontFamily: 'var(--sans)',
             }}
           />
           <div
             className="mono dim"
             style={{
-              position: "absolute",
+              position: 'absolute',
               bottom: 8,
               right: 10,
               fontSize: 10.5,
-            }}
-          >
+            }}>
             {intent.length}자
           </div>
         </div>
 
-        <FieldLabel small style={{ marginTop: "var(--s-4)" }}>
+        <FieldLabel
+          small
+          style={{ marginTop: 'var(--s-4)' }}>
           도메인
         </FieldLabel>
         <div
           className="muted"
-          style={{ fontSize: 11.5, marginTop: -2, marginBottom: "var(--s-2)" }}
-        >
+          style={{ fontSize: 11.5, marginTop: -2, marginBottom: 'var(--s-2)' }}>
           도메인 정보는 LLM에 힌트로 전달됩니다. 같은 파이프라인을 사용하므로
           사이트별 코드 변경은 없습니다.
         </div>
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: "var(--s-2)",
-          }}
-        >
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 'var(--s-2)',
+          }}>
           {DOMAINS.map((d) => {
             const on = domain === d.id;
             return (
@@ -4190,14 +4478,13 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
                 onClick={() => setDomain(d.id)}
                 className="btn"
                 style={{
-                  justifyContent: "flex-start",
-                  padding: "8px var(--s-3)",
-                  alignItems: "center",
-                  borderColor: on ? "var(--accent)" : "var(--border)",
-                  background: on ? "var(--accent-soft)" : "var(--bg-2)",
-                  color: on ? "var(--text)" : "var(--text-mute)",
-                }}
-              >
+                  justifyContent: 'flex-start',
+                  padding: '8px var(--s-3)',
+                  alignItems: 'center',
+                  borderColor: on ? 'var(--accent)' : 'var(--border)',
+                  background: on ? 'var(--accent-soft)' : 'var(--bg-2)',
+                  color: on ? 'var(--text)' : 'var(--text-mute)',
+                }}>
                 <div
                   style={{
                     width: 16,
@@ -4205,36 +4492,36 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
                     borderRadius: 999,
                     flexShrink: 0,
                     border:
-                      "1.5px solid " +
-                      (on ? "var(--accent)" : "var(--border-strong)"),
-                    background: on ? "var(--accent)" : "transparent",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
+                      '1.5px solid ' +
+                      (on ? 'var(--accent)' : 'var(--border-strong)'),
+                    background: on ? 'var(--accent)' : 'transparent',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
                   {on && (
                     <span
                       style={{
                         width: 6,
                         height: 6,
                         borderRadius: 999,
-                        background: "#fff",
+                        background: '#fff',
                       }}
                     />
                   )}
                 </div>
-                <div style={{ textAlign: "left" }}>
+                <div style={{ textAlign: 'left' }}>
                   <div
                     style={{
                       fontSize: 12.5,
                       fontWeight: 600,
-                      color: "var(--text)",
-                    }}
-                  >
+                      color: 'var(--text)',
+                    }}>
                     {d.label}
                   </div>
-                  <div className="dim" style={{ fontSize: 10.5 }}>
+                  <div
+                    className="dim"
+                    style={{ fontSize: 10.5 }}>
                     {d.hint}
                   </div>
                 </div>
@@ -4245,22 +4532,20 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
 
         <div
           style={{
-            marginTop: "var(--s-4)",
-            padding: "var(--s-3) var(--s-4)",
-            background: "var(--bg-2)",
+            marginTop: 'var(--s-4)',
+            padding: 'var(--s-3) var(--s-4)',
+            background: 'var(--bg-2)',
             borderRadius: 10,
-            border: "1px solid var(--border)",
-          }}
-        >
+            border: '1px solid var(--border)',
+          }}>
           <div
             className="dim mono"
             style={{
               fontSize: 10.5,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
-              marginBottom: "var(--s-2)",
-            }}
-          >
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              marginBottom: 'var(--s-2)',
+            }}>
             LLM에 전달될 프롬프트
           </div>
           <pre
@@ -4268,12 +4553,11 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
             style={{
               margin: 0,
               fontSize: 11,
-              background: "transparent",
+              background: 'transparent',
               border: 0,
               padding: 0,
-            }}
-          >{`domain: ${domain}
-user_intent: """${intent || "(여기에 입력하신 문장)"}"""
+            }}>{`domain: ${domain}
+user_intent: """${intent || '(여기에 입력하신 문장)'}"""
 
 규칙
 - 텍스트 내용이 아니라 '역할'을 찾을 것
@@ -4288,10 +4572,10 @@ user_intent: """${intent || "(여기에 입력하신 문장)"}"""
 function WizardStep3({ url, selected, setSelected }) {
   const canvasRef = React.useRef(null);
   const wsRef = React.useRef(null);
-  const stateRef = React.useRef("connecting");
+  const stateRef = React.useRef('connecting');
   const lastMoveAt = React.useRef(0);
 
-  const [connState, _setConn] = React.useState("connecting");
+  const [connState, _setConn] = React.useState('connecting');
   const [nodeCount, setNodeCount] = React.useState(null);
   const [removeMode, setRemoveMode] = React.useState(false);
   const [blockedMsg, setBlockedMsg] = React.useState(null);
@@ -4307,47 +4591,47 @@ function WizardStep3({ url, selected, setSelected }) {
   React.useEffect(() => {
     let ws;
     try {
-      ws = new WebSocket("ws://localhost:3001");
+      ws = new WebSocket('ws://localhost:3001');
     } catch (e) {
-      setConn("error");
+      setConn('error');
       return;
     }
     wsRef.current = ws;
 
-    ws.onerror = () => setConn("error");
+    ws.onerror = () => setConn('error');
 
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
 
-      if (msg.type === "frame") {
+      if (msg.type === 'frame') {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const img = new Image();
         img.onload = () =>
-          canvas.getContext("2d").drawImage(img, 0, 0, REMOTE_W, REMOTE_H);
-        img.src = "data:image/jpeg;base64," + msg.data;
+          canvas.getContext('2d').drawImage(img, 0, 0, REMOTE_W, REMOTE_H);
+        img.src = 'data:image/jpeg;base64,' + msg.data;
         return;
       }
-      if (msg.type === "status") {
+      if (msg.type === 'status') {
         setConn(msg.status);
         if (msg.nodeCount) setNodeCount(msg.nodeCount);
-        if (msg.status === "connected") {
-          const full = /^https?:\/\//i.test(url) ? url : "https://" + url;
-          ws.send(JSON.stringify({ type: "navigate", url: full }));
+        if (msg.status === 'connected') {
+          const full = /^https?:\/\//i.test(url) ? url : 'https://' + url;
+          ws.send(JSON.stringify({ type: 'navigate', url: full }));
         }
         return;
       }
-      if (msg.type === "selector") {
+      if (msg.type === 'selector') {
         setSelected(msg);
         return;
       }
-      if (msg.type === "blocked") {
+      if (msg.type === 'blocked') {
         setBlockedMsg(msg.reason);
         setTimeout(() => setBlockedMsg(null), 3000);
         return;
       }
-      if (msg.type === "error") {
-        setConn("error");
+      if (msg.type === 'error') {
+        setConn('error');
       }
     };
 
@@ -4360,11 +4644,11 @@ function WizardStep3({ url, selected, setSelected }) {
     if (!canvas) return;
     const handler = (e) => {
       e.preventDefault();
-      if (stateRef.current !== "ready") return;
-      wsRef.current?.send(JSON.stringify({ type: "scroll", dy: e.deltaY }));
+      if (stateRef.current !== 'ready') return;
+      wsRef.current?.send(JSON.stringify({ type: 'scroll', dy: e.deltaY }));
     };
-    canvas.addEventListener("wheel", handler, { passive: false });
-    return () => canvas.removeEventListener("wheel", handler);
+    canvas.addEventListener('wheel', handler, { passive: false });
+    return () => canvas.removeEventListener('wheel', handler);
   }, []);
 
   const coords = (e) => {
@@ -4376,63 +4660,63 @@ function WizardStep3({ url, selected, setSelected }) {
   };
 
   const onMouseMove = (e) => {
-    if (stateRef.current !== "ready") return;
+    if (stateRef.current !== 'ready') return;
     const now = Date.now();
     if (now - lastMoveAt.current < 32) return;
     lastMoveAt.current = now;
-    wsRef.current?.send(JSON.stringify({ type: "mousemove", ...coords(e) }));
+    wsRef.current?.send(JSON.stringify({ type: 'mousemove', ...coords(e) }));
   };
 
   const onClick = (e) => {
-    if (stateRef.current !== "ready") return;
+    if (stateRef.current !== 'ready') return;
     const c = coords(e);
     if (removeMode) {
-      wsRef.current?.send(JSON.stringify({ type: "remove_element", ...c }));
+      wsRef.current?.send(JSON.stringify({ type: 'remove_element', ...c }));
     } else {
-      wsRef.current?.send(JSON.stringify({ type: "click", ...c }));
+      wsRef.current?.send(JSON.stringify({ type: 'click', ...c }));
     }
   };
 
   const sendEsc = () => {
-    if (stateRef.current !== "ready") return;
-    wsRef.current?.send(JSON.stringify({ type: "keypress", key: "Escape" }));
+    if (stateRef.current !== 'ready') return;
+    wsRef.current?.send(JSON.stringify({ type: 'keypress', key: 'Escape' }));
   };
 
   const removeOverlays = () => {
-    if (stateRef.current !== "ready") return;
-    wsRef.current?.send(JSON.stringify({ type: "remove_overlays" }));
+    if (stateRef.current !== 'ready') return;
+    wsRef.current?.send(JSON.stringify({ type: 'remove_overlays' }));
   };
 
   const stateLabel =
     {
-      connecting: "서버 연결 중…",
-      connected: "페이지 로딩 중…",
-      navigating: "페이지 로딩 중…",
+      connecting: '서버 연결 중…',
+      connected: '페이지 로딩 중…',
+      navigating: '페이지 로딩 중…',
       ready: nodeCount
         ? `${nodeCount.toLocaleString()}개 노드 수집됨`
-        : "준비됨",
-      error: "연결 실패",
+        : '준비됨',
+      error: '연결 실패',
     }[connState] || connState;
 
-  const isReady = connState === "ready";
+  const isReady = connState === 'ready';
 
   return (
     <div
       style={{
-        display: "grid",
-        gridTemplateColumns: "1fr 1.6fr",
-        gap: "var(--s-6)",
-      }}
-    >
+        display: 'grid',
+        gridTemplateColumns: '1fr 1.6fr',
+        gap: 'var(--s-6)',
+      }}>
       {/* ── 왼쪽: 안내 + 선택 결과 ── */}
       <div
-        style={{ display: "flex", flexDirection: "column", gap: "var(--s-4)" }}
-      >
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-4)' }}>
         <div>
           <FieldLabel>수집 요소 선택</FieldLabel>
-          <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.65 }}>
-            오른쪽 브라우저에서 수집할 요소를{" "}
-            <strong style={{ color: "var(--text)" }}>클릭</strong>하세요.
+          <div
+            className="muted"
+            style={{ fontSize: 12.5, lineHeight: 1.65 }}>
+            오른쪽 브라우저에서 수집할 요소를{' '}
+            <strong style={{ color: 'var(--text)' }}>클릭</strong>하세요.
             마우스를 올리면 파란 테두리로 미리 확인할 수 있습니다.
           </div>
         </div>
@@ -4440,21 +4724,20 @@ function WizardStep3({ url, selected, setSelected }) {
         {/* 연결 상태 */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--s-2)",
-            padding: "var(--s-3)",
-            background: "var(--bg-3)",
-            border: "1px solid var(--border)",
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--s-2)',
+            padding: 'var(--s-3)',
+            background: 'var(--bg-3)',
+            border: '1px solid var(--border)',
             borderRadius: 10,
-          }}
-        >
+          }}>
           {isReady ? (
             <span className="chip ok">
               <span className="dot" />
               Live
             </span>
-          ) : connState === "error" ? (
+          ) : connState === 'error' ? (
             <span className="chip danger">
               <span className="dot" />
               오류
@@ -4467,12 +4750,14 @@ function WizardStep3({ url, selected, setSelected }) {
                 height: 14,
                 borderRadius: 999,
                 flexShrink: 0,
-                border: "2px solid var(--border-strong)",
-                borderTopColor: "var(--accent)",
+                border: '2px solid var(--border-strong)',
+                borderTopColor: 'var(--accent)',
               }}
             />
           )}
-          <span className="muted" style={{ fontSize: 12.5 }}>
+          <span
+            className="muted"
+            style={{ fontSize: 12.5 }}>
             {stateLabel}
           </span>
         </div>
@@ -4480,18 +4765,21 @@ function WizardStep3({ url, selected, setSelected }) {
         {blockedMsg && (
           <div
             style={{
-              padding: "var(--s-3) var(--s-4)",
-              background: "rgba(224,74,74,0.08)",
-              border: "1px solid rgba(224,74,74,0.3)",
+              padding: 'var(--s-3) var(--s-4)',
+              background: 'rgba(224,74,74,0.08)',
+              border: '1px solid rgba(224,74,74,0.3)',
               borderRadius: 8,
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--s-2)",
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--s-2)',
               fontSize: 12.5,
-              color: "var(--danger)",
-            }}
-          >
-            <Icon name="x" className="icon icon-sm" style={{ flexShrink: 0 }} />
+              color: 'var(--danger)',
+            }}>
+            <Icon
+              name="x"
+              className="icon icon-sm"
+              style={{ flexShrink: 0 }}
+            />
             {blockedMsg}
           </div>
         )}
@@ -4500,34 +4788,34 @@ function WizardStep3({ url, selected, setSelected }) {
         {selected ? (
           <div
             style={{
-              padding: "var(--s-4)",
-              background: "var(--bg-2)",
-              border: "1px solid var(--accent-line)",
+              padding: 'var(--s-4)',
+              background: 'var(--bg-2)',
+              border: '1px solid var(--accent-line)',
               borderRadius: 10,
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--s-3)",
-            }}
-          >
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--s-3)',
+            }}>
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s-2)",
-              }}
-            >
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--s-2)',
+              }}>
               <Icon
                 name="check"
                 className="icon icon-sm"
-                style={{ color: "var(--ok)" }}
+                style={{ color: 'var(--ok)' }}
               />
               <span style={{ fontSize: 13, fontWeight: 600 }}>요소 선택됨</span>
               <button
                 className="btn ghost sm"
-                style={{ marginLeft: "auto" }}
-                onClick={() => setSelected(null)}
-              >
-                <Icon name="x" className="icon icon-sm" />
+                style={{ marginLeft: 'auto' }}
+                onClick={() => setSelected(null)}>
+                <Icon
+                  name="x"
+                  className="icon icon-sm"
+                />
                 다시 선택
               </button>
             </div>
@@ -4536,11 +4824,10 @@ function WizardStep3({ url, selected, setSelected }) {
                 className="dim mono"
                 style={{
                   fontSize: 10,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
                   marginBottom: 4,
-                }}
-              >
+                }}>
                 CSS Selector
               </div>
               <pre
@@ -4548,10 +4835,9 @@ function WizardStep3({ url, selected, setSelected }) {
                 style={{
                   margin: 0,
                   fontSize: 11.5,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-all",
-                }}
-              >
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                }}>
                 {selected.selector}
               </pre>
             </div>
@@ -4561,11 +4847,10 @@ function WizardStep3({ url, selected, setSelected }) {
                   className="dim mono"
                   style={{
                     fontSize: 10,
-                    letterSpacing: "0.06em",
-                    textTransform: "uppercase",
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
                     marginBottom: 4,
-                  }}
-                >
+                  }}>
                   현재 값
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>
@@ -4575,19 +4860,22 @@ function WizardStep3({ url, selected, setSelected }) {
             )}
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s-2)",
-              }}
-            >
-              <span className="chip" style={{ fontSize: 11 }}>
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--s-2)',
+              }}>
+              <span
+                className="chip"
+                style={{ fontSize: 11 }}>
                 &lt;{selected.tag}&gt;
               </span>
               <span
                 className="chip ok"
-                style={{ fontSize: 10.5, marginLeft: "auto" }}
-              >
-                <Icon name="check" className="icon icon-sm" />
+                style={{ fontSize: 10.5, marginLeft: 'auto' }}>
+                <Icon
+                  name="check"
+                  className="icon icon-sm"
+                />
                 셀렉터 확정
               </span>
             </div>
@@ -4595,18 +4883,17 @@ function WizardStep3({ url, selected, setSelected }) {
         ) : (
           <div
             style={{
-              padding: "var(--s-5)",
-              background: "var(--bg-3)",
-              border: "1px dashed var(--border-strong)",
+              padding: 'var(--s-5)',
+              background: 'var(--bg-3)',
+              border: '1px dashed var(--border-strong)',
               borderRadius: 10,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "var(--s-2)",
-              color: "var(--text-dim)",
-              textAlign: "center",
-            }}
-          >
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 'var(--s-2)',
+              color: 'var(--text-dim)',
+              textAlign: 'center',
+            }}>
             <Icon
               name="target"
               className="icon icon-lg"
@@ -4618,19 +4905,18 @@ function WizardStep3({ url, selected, setSelected }) {
 
         <div
           style={{
-            padding: "var(--s-3) var(--s-4)",
-            background: "var(--accent-soft)",
+            padding: 'var(--s-3) var(--s-4)',
+            background: 'var(--accent-soft)',
             borderRadius: 10,
-            border: "1px solid var(--accent-line)",
-            display: "flex",
-            gap: "var(--s-2)",
-            alignItems: "flex-start",
-          }}
-        >
+            border: '1px solid var(--accent-line)',
+            display: 'flex',
+            gap: 'var(--s-2)',
+            alignItems: 'flex-start',
+          }}>
           <Icon
             name="info"
             className="icon icon-sm"
-            style={{ color: "var(--accent)", marginTop: 2, flexShrink: 0 }}
+            style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }}
           />
           <div style={{ fontSize: 12, lineHeight: 1.6 }}>
             스크롤로 페이지 아래쪽도 탐색 가능합니다. 팝업·배너는 실제 DOM
@@ -4642,32 +4928,30 @@ function WizardStep3({ url, selected, setSelected }) {
       {/* ── 오른쪽: 실시간 브라우저 스트림 ── */}
       <div
         style={{
-          border: "1px solid var(--border)",
+          border: '1px solid var(--border)',
           borderRadius: 12,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          background: "var(--bg-3)",
-        }}
-      >
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'var(--bg-3)',
+        }}>
         {/* 브라우저 크롬 */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--s-2)",
-            padding: "8px var(--s-3)",
-            background: "var(--bg-2)",
-            borderBottom: "1px solid var(--border)",
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--s-2)',
+            padding: '8px var(--s-3)',
+            background: 'var(--bg-2)',
+            borderBottom: '1px solid var(--border)',
             flexShrink: 0,
-          }}
-        >
+          }}>
           <span
             style={{
               width: 9,
               height: 9,
               borderRadius: 999,
-              background: "#FF5F57",
+              background: '#FF5F57',
               flexShrink: 0,
             }}
           />
@@ -4676,7 +4960,7 @@ function WizardStep3({ url, selected, setSelected }) {
               width: 9,
               height: 9,
               borderRadius: 999,
-              background: "#FEBC2E",
+              background: '#FEBC2E',
               flexShrink: 0,
             }}
           />
@@ -4685,56 +4969,57 @@ function WizardStep3({ url, selected, setSelected }) {
               width: 9,
               height: 9,
               borderRadius: 999,
-              background: "#28C840",
+              background: '#28C840',
               flexShrink: 0,
             }}
           />
           <div
             style={{
               flex: 1,
-              marginLeft: "var(--s-2)",
-              background: "var(--bg-3)",
-              border: "1px solid var(--border)",
+              marginLeft: 'var(--s-2)',
+              background: 'var(--bg-3)',
+              border: '1px solid var(--border)',
               borderRadius: 6,
-              padding: "3px 8px",
-              display: "flex",
-              alignItems: "center",
+              padding: '3px 8px',
+              display: 'flex',
+              alignItems: 'center',
               gap: 6,
               minWidth: 0,
-            }}
-          >
+            }}>
             <Icon
               name="link"
               className="icon icon-sm"
-              style={{ color: "var(--text-dim)", flexShrink: 0 }}
+              style={{ color: 'var(--text-dim)', flexShrink: 0 }}
             />
             <span
               className="mono"
               style={{
                 fontSize: 11,
-                color: "var(--text-mute)",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {url || "—"}
+                color: 'var(--text-mute)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+              {url || '—'}
             </span>
           </div>
           {isReady ? (
-            <span className="chip ok" style={{ fontSize: 10, flexShrink: 0 }}>
+            <span
+              className="chip ok"
+              style={{ fontSize: 10, flexShrink: 0 }}>
               <span className="dot" />
               Live
             </span>
-          ) : connState === "error" ? (
+          ) : connState === 'error' ? (
             <span
               className="chip danger"
-              style={{ fontSize: 10, flexShrink: 0 }}
-            >
+              style={{ fontSize: 10, flexShrink: 0 }}>
               오류
             </span>
           ) : (
-            <span className="chip" style={{ fontSize: 10, flexShrink: 0 }}>
+            <span
+              className="chip"
+              style={{ fontSize: 10, flexShrink: 0 }}>
               로딩 중
             </span>
           )}
@@ -4743,20 +5028,18 @@ function WizardStep3({ url, selected, setSelected }) {
         {/* 팝업 제거 툴바 */}
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "var(--s-2)",
-            padding: "6px var(--s-3)",
-            background: "var(--bg-3)",
-            borderBottom: "1px solid var(--border)",
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--s-2)',
+            padding: '6px var(--s-3)',
+            background: 'var(--bg-3)',
+            borderBottom: '1px solid var(--border)',
             flexShrink: 0,
             fontSize: 11.5,
-          }}
-        >
+          }}>
           <span
             className="dim"
-            style={{ fontSize: 11, marginRight: "var(--s-1)" }}
-          >
+            style={{ fontSize: 11, marginRight: 'var(--s-1)' }}>
             팝업 제거:
           </span>
           <button
@@ -4764,18 +5047,16 @@ function WizardStep3({ url, selected, setSelected }) {
             title="ESC 키 전송 (팝업 닫기)"
             disabled={!isReady}
             onClick={sendEsc}
-            style={{ padding: "3px 8px", fontSize: 11.5 }}
-          >
+            style={{ padding: '3px 8px', fontSize: 11.5 }}>
             <kbd
               style={{
-                fontFamily: "inherit",
+                fontFamily: 'inherit',
                 fontSize: 10.5,
-                padding: "1px 5px",
-                background: "var(--bg-2)",
-                border: "1px solid var(--border)",
+                padding: '1px 5px',
+                background: 'var(--bg-2)',
+                border: '1px solid var(--border)',
                 borderRadius: 4,
-              }}
-            >
+              }}>
               ESC
             </kbd>
           </button>
@@ -4784,51 +5065,47 @@ function WizardStep3({ url, selected, setSelected }) {
             title="페이지 내 팝업·오버레이 자동 제거"
             disabled={!isReady}
             onClick={removeOverlays}
-            style={{ padding: "3px 8px", fontSize: 11.5 }}
-          >
+            style={{ padding: '3px 8px', fontSize: 11.5 }}>
             자동 제거
           </button>
           <button
-            className={`btn sm${removeMode ? " primary" : " ghost"}`}
+            className={`btn sm${removeMode ? ' primary' : ' ghost'}`}
             title="클릭한 요소를 DOM에서 제거하는 모드"
             disabled={!isReady}
             onClick={() => setRemoveMode((m) => !m)}
-            style={{ padding: "3px 8px", fontSize: 11.5 }}
-          >
-            {removeMode ? "요소 지우기 ON" : "요소 지우기"}
+            style={{ padding: '3px 8px', fontSize: 11.5 }}>
+            {removeMode ? '요소 지우기 ON' : '요소 지우기'}
           </button>
           {removeMode && (
             <span
               style={{
                 fontSize: 11,
-                color: "var(--warn)",
-                marginLeft: "var(--s-1)",
+                color: 'var(--warn)',
+                marginLeft: 'var(--s-1)',
                 fontWeight: 500,
-              }}
-            >
+              }}>
               클릭하면 요소가 삭제됩니다
             </span>
           )}
         </div>
 
         {/* 캔버스 + 로딩 오버레이 */}
-        <div style={{ position: "relative", flex: 1 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
           {!isReady && (
             <div
               style={{
-                position: "absolute",
+                position: 'absolute',
                 inset: 0,
                 zIndex: 1,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
                 gap: 12,
-                background: "var(--bg-3)",
-                color: "var(--text-dim)",
-              }}
-            >
-              {connState === "error" ? (
+                background: 'var(--bg-3)',
+                color: 'var(--text-dim)',
+              }}>
+              {connState === 'error' ? (
                 <>
                   <Icon
                     name="x"
@@ -4838,13 +5115,14 @@ function WizardStep3({ url, selected, setSelected }) {
                   <div
                     style={{
                       fontSize: 12,
-                      textAlign: "center",
+                      textAlign: 'center',
                       lineHeight: 1.65,
-                    }}
-                  >
+                    }}>
                     서버에 연결할 수 없습니다
                     <br />
-                    <span className="mono dim" style={{ fontSize: 10.5 }}>
+                    <span
+                      className="mono dim"
+                      style={{ fontSize: 10.5 }}>
                       터미널에서 <strong>npm start</strong> 를 먼저 실행해
                       주세요
                     </span>
@@ -4858,8 +5136,8 @@ function WizardStep3({ url, selected, setSelected }) {
                       width: 26,
                       height: 26,
                       borderRadius: 999,
-                      border: "3px solid var(--border-strong)",
-                      borderTopColor: "var(--accent)",
+                      border: '3px solid var(--border-strong)',
+                      borderTopColor: 'var(--accent)',
                     }}
                   />
                   <div style={{ fontSize: 12 }}>{stateLabel}</div>
@@ -4872,14 +5150,14 @@ function WizardStep3({ url, selected, setSelected }) {
             width={REMOTE_W}
             height={REMOTE_H}
             style={{
-              width: "100%",
-              display: "block",
+              width: '100%',
+              display: 'block',
               aspectRatio: `${REMOTE_W} / ${REMOTE_H}`,
               cursor: isReady
                 ? removeMode
-                  ? "not-allowed"
-                  : "crosshair"
-                : "default",
+                  ? 'not-allowed'
+                  : 'crosshair'
+                : 'default',
             }}
             onMouseMove={onMouseMove}
             onClick={onClick}
@@ -4904,62 +5182,62 @@ function FunnelStage({
   return (
     <div
       style={{
-        position: "relative",
-        padding: "var(--s-3) var(--s-4)",
-        background: "var(--bg-2)",
+        position: 'relative',
+        padding: 'var(--s-3) var(--s-4)',
+        background: 'var(--bg-2)',
         border:
-          "1px solid " + (accent ? "var(--accent-line)" : "var(--border)"),
+          '1px solid ' + (accent ? 'var(--accent-line)' : 'var(--border)'),
         borderRadius: 12,
-        overflow: "hidden",
-      }}
-    >
+        overflow: 'hidden',
+      }}>
       {/* progress band */}
       <div
         style={{
-          position: "absolute",
+          position: 'absolute',
           left: 0,
           top: 0,
           bottom: 0,
           width: `${width}%`,
-          background: accent ? "var(--accent-soft)" : "var(--bg-1)",
-          pointerEvents: "none",
+          background: accent ? 'var(--accent-soft)' : 'var(--bg-1)',
+          pointerEvents: 'none',
         }}
       />
       <div
         style={{
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          gap: "var(--s-3)",
-        }}
-      >
+          position: 'relative',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--s-3)',
+        }}>
         <div
           style={{
             width: 30,
             height: 30,
             borderRadius: 8,
             flexShrink: 0,
-            background: accent ? "var(--accent)" : "var(--bg-3)",
-            border: "1px solid " + (accent ? "var(--accent)" : "var(--border)"),
-            color: accent ? "#fff" : "var(--text-mute)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontFamily: "var(--mono)",
+            background: accent ? 'var(--accent)' : 'var(--bg-3)',
+            border: '1px solid ' + (accent ? 'var(--accent)' : 'var(--border)'),
+            color: accent ? '#fff' : 'var(--text-mute)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'var(--mono)',
             fontSize: 12,
             fontWeight: 600,
-          }}
-        >
+          }}>
           {n}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
-            style={{ display: "flex", alignItems: "center", gap: "var(--s-2)" }}
-          >
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--s-2)',
+            }}>
             <Icon
               name={icon}
               className="icon icon-sm"
-              style={{ color: accent ? "var(--accent)" : "var(--text-mute)" }}
+              style={{ color: accent ? 'var(--accent)' : 'var(--text-mute)' }}
             />
             <div style={{ fontSize: 13.5, fontWeight: 600 }}>{title}</div>
             <div style={{ flex: 1 }} />
@@ -4968,20 +5246,20 @@ function FunnelStage({
               style={{
                 fontSize: 13,
                 fontWeight: 600,
-                color: accent ? "var(--accent)" : "var(--text)",
-              }}
-            >
+                color: accent ? 'var(--accent)' : 'var(--text)',
+              }}>
               {count}
             </div>
           </div>
           <div
             className="muted"
-            style={{ fontSize: 11.5, marginTop: 2, lineHeight: 1.5 }}
-          >
+            style={{ fontSize: 11.5, marginTop: 2, lineHeight: 1.5 }}>
             {sub}
           </div>
           {badge && (
-            <div className="dim mono" style={{ fontSize: 10.5, marginTop: 6 }}>
+            <div
+              className="dim mono"
+              style={{ fontSize: 10.5, marginTop: 6 }}>
               {badge}
             </div>
           )}
@@ -4990,7 +5268,7 @@ function FunnelStage({
           <Icon
             name="check"
             className="icon icon-sm"
-            style={{ color: "var(--ok)", flexShrink: 0 }}
+            style={{ color: 'var(--ok)', flexShrink: 0 }}
           />
         )}
       </div>
@@ -5002,21 +5280,19 @@ function MetricMini({ label, val, accent }) {
   return (
     <div
       style={{
-        padding: "var(--s-3)",
-        background: "var(--bg-2)",
-        border: "1px solid var(--border)",
+        padding: 'var(--s-3)',
+        background: 'var(--bg-2)',
+        border: '1px solid var(--border)',
         borderRadius: 10,
-      }}
-    >
+      }}>
       <div
         className="dim"
         style={{
           fontSize: 10.5,
-          letterSpacing: "0.04em",
-          textTransform: "uppercase",
-          fontFamily: "var(--mono)",
-        }}
-      >
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          fontFamily: 'var(--mono)',
+        }}>
         {label}
       </div>
       <div
@@ -5025,9 +5301,8 @@ function MetricMini({ label, val, accent }) {
           fontSize: 18,
           fontWeight: 600,
           marginTop: 4,
-          color: accent ? "var(--accent)" : "var(--text)",
-        }}
-      >
+          color: accent ? 'var(--accent)' : 'var(--text)',
+        }}>
         {val}
       </div>
     </div>
@@ -5039,15 +5314,14 @@ function FieldLabel({ children, small, style }) {
     <div
       style={{
         fontSize: small ? 10.5 : 11,
-        color: "var(--text-dim)",
-        letterSpacing: "0.06em",
-        textTransform: "uppercase",
-        fontFamily: "var(--mono)",
-        marginBottom: "var(--s-2)",
+        color: 'var(--text-dim)',
+        letterSpacing: '0.06em',
+        textTransform: 'uppercase',
+        fontFamily: 'var(--mono)',
+        marginBottom: 'var(--s-2)',
         fontWeight: 600,
         ...style,
-      }}
-    >
+      }}>
       {children}
     </div>
   );
@@ -5072,50 +5346,49 @@ function WizardStep4({
 
   const action =
     threshold >= 95
-      ? "금융 등급 — 매우 보수적"
+      ? '금융 등급 — 매우 보수적'
       : threshold >= 85
-        ? "엄격 — 일반적인 운영 데이터"
+        ? '엄격 — 일반적인 운영 데이터'
         : threshold >= 70
-          ? "균형 — 빠른 변동에 대응"
-          : "관대 — 실험용 / 일반 컨텐츠";
+          ? '균형 — 빠른 변동에 대응'
+          : '관대 — 실험용 / 일반 컨텐츠';
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1.1fr 1fr", gap: 32 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 32 }}>
       <div>
         <div
           style={{
             fontSize: 11,
-            color: "var(--text-dim)",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            fontFamily: "var(--mono)",
+            color: 'var(--text-dim)',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            fontFamily: 'var(--mono)',
             marginBottom: 10,
-          }}
-        >
+          }}>
           자가치유 임계값
         </div>
         <div
           className="muted"
-          style={{ fontSize: 13, marginBottom: 20, lineHeight: 1.55 }}
-        >
-          AI가 찾은 후보 셀렉터의 확신도가 이 값{" "}
-          <strong style={{ color: "var(--text)" }}>이상</strong>이면 자동
+          style={{ fontSize: 13, marginBottom: 20, lineHeight: 1.55 }}>
+          AI가 찾은 후보 셀렉터의 확신도가 이 값{' '}
+          <strong style={{ color: 'var(--text)' }}>이상</strong>이면 자동
           복구하고, 그 미만이면 승인 큐로 보냅니다.
         </div>
 
         <div
           style={{
-            fontFamily: "var(--mono)",
+            fontFamily: 'var(--mono)',
             fontSize: 48,
             fontWeight: 600,
             lineHeight: 1,
-            display: "flex",
-            alignItems: "baseline",
+            display: 'flex',
+            alignItems: 'baseline',
             gap: 8,
-          }}
-        >
+          }}>
           {threshold}
-          <span className="dim" style={{ fontSize: 18, fontWeight: 400 }}>
+          <span
+            className="dim"
+            style={{ fontSize: 18, fontWeight: 400 }}>
             / 100
           </span>
         </div>
@@ -5125,12 +5398,11 @@ function WizardStep4({
             fontSize: 13,
             color:
               threshold >= 95
-                ? "var(--ok)"
+                ? 'var(--ok)'
                 : threshold >= 70
-                  ? "var(--warn)"
-                  : "var(--danger)",
-          }}
-        >
+                  ? 'var(--warn)'
+                  : 'var(--danger)',
+          }}>
           {action}
         </div>
 
@@ -5140,7 +5412,7 @@ function WizardStep4({
           max={100}
           value={threshold}
           onChange={(e) => setThreshold(+e.target.value)}
-          style={{ width: "100%", marginTop: 24 }}
+          style={{ width: '100%', marginTop: 24 }}
         />
         <div className="ticks">
           <span>40</span>
@@ -5156,14 +5428,13 @@ function WizardStep4({
             className="dim mono"
             style={{
               fontSize: 10.5,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
               marginBottom: 10,
-            }}
-          >
+            }}>
             정책 미리보기
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <PolicyRow
               color="var(--ok)"
               lo={threshold}
@@ -5193,49 +5464,46 @@ function WizardStep4({
         <div
           style={{
             fontSize: 11,
-            color: "var(--text-dim)",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            fontFamily: "var(--mono)",
+            color: 'var(--text-dim)',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            fontFamily: 'var(--mono)',
             marginBottom: 10,
-          }}
-        >
+          }}>
           수집 주기
         </div>
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
             gap: 8,
-            marginBottom: schedule === "custom" ? 12 : 24,
-          }}
-        >
+            marginBottom: schedule === 'custom' ? 12 : 24,
+          }}>
           {[
-            ["daily-9", "매일 09:00"],
-            ["hourly", "매시간"],
-            ["15m", "15분마다"],
-            ["custom", "Cron 직접 입력"],
+            ['daily-9', '매일 09:00'],
+            ['hourly', '매시간'],
+            ['15m', '15분마다'],
+            ['custom', 'Cron 직접 입력'],
           ].map(([id, l]) => (
             <button
               key={id}
               onClick={() => setSchedule(id)}
               className="btn"
               style={{
-                justifyContent: "flex-start",
-                padding: "10px 12px",
+                justifyContent: 'flex-start',
+                padding: '10px 12px',
                 borderColor:
-                  schedule === id ? "var(--accent)" : "var(--border-strong)",
+                  schedule === id ? 'var(--accent)' : 'var(--border-strong)',
                 background:
-                  schedule === id ? "var(--accent-soft)" : "var(--bg-3)",
-                color: schedule === id ? "var(--text)" : "var(--text-mute)",
-              }}
-            >
+                  schedule === id ? 'var(--accent-soft)' : 'var(--bg-3)',
+                color: schedule === id ? 'var(--text)' : 'var(--text-mute)',
+              }}>
               {l}
             </button>
           ))}
         </div>
 
-        {schedule === "custom" && (
+        {schedule === 'custom' && (
           <div style={{ marginBottom: 24 }}>
             <input
               type="text"
@@ -5244,39 +5512,37 @@ function WizardStep4({
               value={customCron}
               onChange={(e) => setCustomCron(e.target.value)}
               style={{
-                width: "100%",
-                boxSizing: "border-box",
+                width: '100%',
+                boxSizing: 'border-box',
                 borderColor:
                   customCron && !isValidCron(customCron)
-                    ? "var(--danger)"
+                    ? 'var(--danger)'
                     : undefined,
               }}
             />
             <div
               style={{
                 marginTop: 8,
-                display: "flex",
-                flexDirection: "column",
+                display: 'flex',
+                flexDirection: 'column',
                 gap: 4,
-              }}
-            >
+              }}>
               {customCron && !isValidCron(customCron) && (
-                <div style={{ fontSize: 11, color: "var(--danger)" }}>
+                <div style={{ fontSize: 11, color: 'var(--danger)' }}>
                   올바른 cron 표현식을 입력하세요 (5개 필드: 분 시 일 월 요일)
                 </div>
               )}
               <div
                 style={{
                   fontSize: 11,
-                  color: "var(--text-dim)",
+                  color: 'var(--text-dim)',
                   lineHeight: 1.7,
-                }}
-              >
+                }}>
                 예시&nbsp;&nbsp;
                 {[
-                  ["0 9 * * 1-5", "평일 09:00"],
-                  ["0 */6 * * *", "6시간마다"],
-                  ["30 8 * * 1", "매주 월요일 08:30"],
+                  ['0 9 * * 1-5', '평일 09:00'],
+                  ['0 */6 * * *', '6시간마다'],
+                  ['30 8 * * 1', '매주 월요일 08:30'],
                 ].map(([expr, label]) => (
                   <span
                     key={expr}
@@ -5284,13 +5550,12 @@ function WizardStep4({
                     className="mono"
                     style={{
                       marginRight: 10,
-                      cursor: "default",
-                      color: "var(--accent)",
-                      textDecoration: "underline",
-                      textDecorationStyle: "dotted",
+                      cursor: 'default',
+                      color: 'var(--accent)',
+                      textDecoration: 'underline',
+                      textDecorationStyle: 'dotted',
                     }}
-                    title={label}
-                  >
+                    title={label}>
                     {expr}
                   </span>
                 ))}
@@ -5302,74 +5567,73 @@ function WizardStep4({
         <div
           style={{
             fontSize: 11,
-            color: "var(--text-dim)",
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            fontFamily: "var(--mono)",
+            color: 'var(--text-dim)',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            fontFamily: 'var(--mono)',
             marginBottom: 10,
-          }}
-        >
+          }}>
           전송 채널
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
-            ["api", "REST API", "link", "GET /api/v1/data/{id}"],
-            ["webhook", "Webhook", "rocket", "초 단위 실시간 푸시"],
-            ["slack", "Slack", "slack", "#scraper-alerts"],
-            ["csv", "CSV / Excel", "csv", "대시보드에서 다운로드"],
+            ['api', 'REST API', 'link', 'GET /api/v1/data/{id}'],
+            ['webhook', 'Webhook', 'rocket', '초 단위 실시간 푸시'],
+            ['slack', 'Slack', 'slack', '#scraper-alerts'],
+            ['csv', 'CSV / Excel', 'csv', '대시보드에서 다운로드'],
           ].map(([id, l, ic, sub]) => (
             <label
               key={id}
               style={{
-                display: "flex",
-                alignItems: "center",
+                display: 'flex',
+                alignItems: 'center',
                 gap: 12,
-                padding: "12px 14px",
-                background: "var(--bg-3)",
+                padding: '12px 14px',
+                background: 'var(--bg-3)',
                 border:
-                  "1px solid " +
+                  '1px solid ' +
                   (channels.includes(id)
-                    ? "var(--accent-line)"
-                    : "var(--border)"),
+                    ? 'var(--accent-line)'
+                    : 'var(--border)'),
                 borderRadius: 10,
-                cursor: "default",
+                cursor: 'default',
               }}
-              onClick={() => toggleCh(id)}
-            >
+              onClick={() => toggleCh(id)}>
               <div
                 style={{
                   width: 18,
                   height: 18,
                   borderRadius: 5,
                   border:
-                    "1.5px solid " +
+                    '1.5px solid ' +
                     (channels.includes(id)
-                      ? "var(--accent)"
-                      : "var(--border-strong)"),
+                      ? 'var(--accent)'
+                      : 'var(--border-strong)'),
                   background: channels.includes(id)
-                    ? "var(--accent)"
-                    : "transparent",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+                    ? 'var(--accent)'
+                    : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
                 {channels.includes(id) && (
                   <Icon
                     name="check"
                     className="icon icon-sm"
-                    style={{ color: "#fff" }}
+                    style={{ color: '#fff' }}
                   />
                 )}
               </div>
               <Icon
                 name={ic}
                 className="icon"
-                style={{ color: "var(--text-mute)" }}
+                style={{ color: 'var(--text-mute)' }}
               />
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>{l}</div>
-                <div className="dim mono" style={{ fontSize: 11 }}>
+                <div
+                  className="dim mono"
+                  style={{ fontSize: 11 }}>
                   {sub}
                 </div>
               </div>
@@ -5385,15 +5649,14 @@ function PolicyRow({ color, lo, hi, label, icon }) {
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
+        display: 'flex',
+        alignItems: 'center',
         gap: 12,
-        padding: "10px 14px",
-        background: "var(--bg-3)",
-        border: "1px solid var(--border)",
+        padding: '10px 14px',
+        background: 'var(--bg-3)',
+        border: '1px solid var(--border)',
         borderRadius: 10,
-      }}
-    >
+      }}>
       <div
         style={{
           width: 8,
@@ -5403,9 +5666,15 @@ function PolicyRow({ color, lo, hi, label, icon }) {
           flexShrink: 0,
         }}
       />
-      <Icon name={icon} className="icon icon-sm" style={{ color }} />
+      <Icon
+        name={icon}
+        className="icon icon-sm"
+        style={{ color }}
+      />
       <div style={{ flex: 1, fontSize: 13 }}>{label}</div>
-      <div className="mono" style={{ fontSize: 12, color: "var(--text-mute)" }}>
+      <div
+        className="mono"
+        style={{ fontSize: 12, color: 'var(--text-mute)' }}>
         {lo === hi ? `${lo}` : `${lo} ≤ score < ${hi}`}
       </div>
     </div>
@@ -5417,63 +5686,69 @@ function DeliveryScreen() {
   return (
     <div
       className="fadein"
-      style={{ padding: "28px 32px 80px", maxWidth: 1480, margin: "0 auto" }}
-    >
-      <SectionTitle eyebrow="DATA OUT" title="산출물 · 전송">
+      style={{ padding: '28px 32px 80px', maxWidth: 1480, margin: '0 auto' }}>
+      <SectionTitle
+        eyebrow="DATA OUT"
+        title="산출물 · 전송">
         수집한 데이터를 외부 시스템으로 내보내는 채널을 관리합니다.
       </SectionTitle>
 
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr 1fr',
           gap: 14,
           marginBottom: 20,
-        }}
-      >
+        }}>
         {[
           {
-            icon: "link",
-            label: "REST API",
-            n: "42",
-            sub: "엔드포인트",
-            tone: "ok",
+            icon: 'link',
+            label: 'REST API',
+            n: '42',
+            sub: '엔드포인트',
+            tone: 'ok',
           },
           {
-            icon: "rocket",
-            label: "Webhook",
-            n: "18",
-            sub: "활성",
-            tone: "ok",
+            icon: 'rocket',
+            label: 'Webhook',
+            n: '18',
+            sub: '활성',
+            tone: 'ok',
           },
           {
-            icon: "csv",
-            label: "CSV / Excel",
-            n: "7.4k",
-            sub: "다운로드 (30d)",
-            tone: "",
+            icon: 'csv',
+            label: 'CSV / Excel',
+            n: '7.4k',
+            sub: '다운로드 (30d)',
+            tone: '',
           },
         ].map((c) => (
-          <div key={c.label} className="card" style={{ padding: 18 }}>
+          <div
+            key={c.label}
+            className="card"
+            style={{ padding: 18 }}>
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
+                display: 'flex',
+                alignItems: 'center',
                 gap: 10,
-                color: "var(--text-mute)",
+                color: 'var(--text-mute)',
                 fontSize: 12.5,
-              }}
-            >
-              <Icon name={c.icon} className="icon" />
+              }}>
+              <Icon
+                name={c.icon}
+                className="icon"
+              />
               {c.label}
             </div>
             <div
               className="mono"
-              style={{ fontSize: 30, fontWeight: 600, marginTop: 8 }}
-            >
+              style={{ fontSize: 30, fontWeight: 600, marginTop: 8 }}>
               {c.n}
             </div>
-            <div className="dim" style={{ fontSize: 12, marginTop: 2 }}>
+            <div
+              className="dim"
+              style={{ fontSize: 12, marginTop: 2 }}>
               {c.sub}
             </div>
           </div>
@@ -5481,27 +5756,28 @@ function DeliveryScreen() {
       </div>
 
       <div
-        style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: 16 }}
-      >
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
+        <div
+          className="card"
+          style={{ padding: 0, overflow: 'hidden' }}>
           <div
             style={{
-              padding: "14px 18px",
-              borderBottom: "1px solid var(--border)",
-              display: "flex",
-              alignItems: "center",
-            }}
-          >
+              padding: '14px 18px',
+              borderBottom: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+            }}>
             <div style={{ fontWeight: 600 }}>API Endpoint 미리보기</div>
-            <span className="chip ok" style={{ marginLeft: "auto" }}>
+            <span
+              className="chip ok"
+              style={{ marginLeft: 'auto' }}>
               v1
             </span>
           </div>
           <div style={{ padding: 18 }}>
             <pre
               className="code"
-              style={{ margin: 0 }}
-            >{`# 인증 토큰: env.DOMA_TOKEN
+              style={{ margin: 0 }}>{`# 인증 토큰: env.DOMA_TOKEN
 curl https://api.doma.io/v1/data/cr_8x2k \\
   -H "Authorization: Bearer $DOMA_TOKEN"
 
@@ -5514,72 +5790,75 @@ curl https://api.doma.io/v1/data/cr_8x2k \\
           </div>
         </div>
 
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div
+          className="card"
+          style={{ padding: 0, overflow: 'hidden' }}>
           <div
             style={{
-              padding: "14px 18px",
-              borderBottom: "1px solid var(--border)",
-            }}
-          >
+              padding: '14px 18px',
+              borderBottom: '1px solid var(--border)',
+            }}>
             <div style={{ fontWeight: 600 }}>Webhook 등록</div>
           </div>
           <div
             style={{
               padding: 18,
-              display: "flex",
-              flexDirection: "column",
+              display: 'flex',
+              flexDirection: 'column',
               gap: 10,
-            }}
-          >
+            }}>
             {[
-              ["#scraper-alerts", "Slack", "slack", "ok"],
-              ["hooks.client.io/p/9k2", "HTTPS POST", "link", "ok"],
-              ["biz@finch.kr", "Email", "mail", "warn"],
+              ['#scraper-alerts', 'Slack', 'slack', 'ok'],
+              ['hooks.client.io/p/9k2', 'HTTPS POST', 'link', 'ok'],
+              ['biz@finch.kr', 'Email', 'mail', 'warn'],
             ].map(([n, kind, ic, t]) => (
               <div
                 key={n}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
+                  display: 'flex',
+                  alignItems: 'center',
                   gap: 12,
-                  padding: "10px 12px",
-                  background: "var(--bg-3)",
+                  padding: '10px 12px',
+                  background: 'var(--bg-3)',
                   borderRadius: 10,
-                  border: "1px solid var(--border)",
-                }}
-              >
+                  border: '1px solid var(--border)',
+                }}>
                 <Icon
                   name={ic}
                   className="icon"
-                  style={{ color: "var(--text-mute)" }}
+                  style={{ color: 'var(--text-mute)' }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     className="mono"
                     style={{
                       fontSize: 12.5,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>
                     {n}
                   </div>
-                  <div className="dim" style={{ fontSize: 11 }}>
+                  <div
+                    className="dim"
+                    style={{ fontSize: 11 }}>
                     {kind}
                   </div>
                 </div>
                 <span className={`chip ${t}`}>
                   <span className="dot" />
-                  {t === "ok" ? "활성" : "미인증"}
+                  {t === 'ok' ? '활성' : '미인증'}
                 </span>
               </div>
             ))}
             <button
               className="btn ghost"
-              style={{ justifyContent: "center", marginTop: 6 }}
-            >
-              <Icon name="plus" className="icon icon-sm" />새 Webhook 추가
+              style={{ justifyContent: 'center', marginTop: 6 }}>
+              <Icon
+                name="plus"
+                className="icon icon-sm"
+              />
+              새 Webhook 추가
             </button>
           </div>
         </div>
@@ -5590,68 +5869,68 @@ curl https://api.doma.io/v1/data/cr_8x2k \\
 
 // ─── Templates gallery ─────────────────────────────────────────────────────
 function TemplatesScreen({ onUse }) {
-  const [tab, setTab] = React.useState("all");
-  const cats = ["all", ...Array.from(new Set(TEMPLATES.map((t) => t.cat)))];
+  const [tab, setTab] = React.useState('all');
+  const cats = ['all', ...Array.from(new Set(TEMPLATES.map((t) => t.cat)))];
   const rows =
-    tab === "all" ? TEMPLATES : TEMPLATES.filter((t) => t.cat === tab);
+    tab === 'all' ? TEMPLATES : TEMPLATES.filter((t) => t.cat === tab);
 
   return (
     <div
       className="fadein"
       style={{
-        padding: "var(--s-7) var(--s-7) var(--s-11)",
+        padding: 'var(--s-7) var(--s-7) var(--s-11)',
         maxWidth: 1480,
-        margin: "0 auto",
-      }}
-    >
-      <SectionTitle eyebrow="ALT-DATA TEMPLATES" title="대안 데이터 템플릿">
-        리서치팀이 자주 쓰는 데이터를 한 번에 시작하세요. 사이트별 코드가 아니라{" "}
-        <strong style={{ color: "var(--text)" }}>일반화된 파이프라인</strong>
+        margin: '0 auto',
+      }}>
+      <SectionTitle
+        eyebrow="ALT-DATA TEMPLATES"
+        title="대안 데이터 템플릿">
+        리서치팀이 자주 쓰는 데이터를 한 번에 시작하세요. 사이트별 코드가 아니라{' '}
+        <strong style={{ color: 'var(--text)' }}>일반화된 파이프라인</strong>
         으로 동작합니다.
       </SectionTitle>
 
       <div
         className="seg"
-        style={{ marginBottom: "var(--s-4)", flexWrap: "wrap" }}
-      >
+        style={{ marginBottom: 'var(--s-4)', flexWrap: 'wrap' }}>
         {cats.map((c) => (
           <button
             key={c}
-            className={tab === c ? "active" : ""}
-            onClick={() => setTab(c)}
-          >
-            {c === "all" ? "전체" : c}
+            className={tab === c ? 'active' : ''}
+            onClick={() => setTab(c)}>
+            {c === 'all' ? '전체' : c}
           </button>
         ))}
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
         {rows.map((t) => (
           <div
             key={t.id}
             className="card"
             style={{
-              padding: "var(--s-5)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--s-3)",
+              padding: 'var(--s-5)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--s-3)',
               minHeight: 200,
-            }}
-          >
+            }}>
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s-2)",
-              }}
-            >
-              <span className="chip" style={{ fontSize: 10.5 }}>
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--s-2)',
+              }}>
+              <span
+                className="chip"
+                style={{ fontSize: 10.5 }}>
                 {t.cat}
               </span>
               <span
                 className="dim mono"
-                style={{ fontSize: 10.5, marginLeft: "auto" }}
-              >
+                style={{ fontSize: 10.5, marginLeft: 'auto' }}>
                 {t.interval} 단위
               </span>
             </div>
@@ -5660,40 +5939,42 @@ function TemplatesScreen({ onUse }) {
             </div>
             <div
               className="muted"
-              style={{ fontSize: 12.5, lineHeight: 1.55, flex: 1 }}
-            >
+              style={{ fontSize: 12.5, lineHeight: 1.55, flex: 1 }}>
               {t.desc}
             </div>
             <div
               style={{
-                padding: "var(--s-2) var(--s-3)",
-                background: "var(--bg-3)",
+                padding: 'var(--s-2) var(--s-3)',
+                background: 'var(--bg-3)',
                 borderRadius: 8,
-                fontFamily: "var(--mono)",
+                fontFamily: 'var(--mono)',
                 fontSize: 11,
-                color: "var(--text-mute)",
+                color: 'var(--text-mute)',
                 lineHeight: 1.5,
-              }}
-            >
+              }}>
               <span className="dim">intent: </span>
               {t.intent}
             </div>
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "var(--s-2)",
-              }}
-            >
-              <span className="dim mono" style={{ fontSize: 11 }}>
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--s-2)',
+              }}>
+              <span
+                className="dim mono"
+                style={{ fontSize: 11 }}>
                 {t.users}팀 사용 중
               </span>
               <button
                 className="btn primary sm"
-                style={{ marginLeft: "auto" }}
-                onClick={onUse}
-              >
-                <Icon name="plus" className="icon icon-sm" />이 템플릿으로 시작
+                style={{ marginLeft: 'auto' }}
+                onClick={onUse}>
+                <Icon
+                  name="plus"
+                  className="icon icon-sm"
+                />
+                이 템플릿으로 시작
               </button>
             </div>
           </div>
@@ -5707,15 +5988,15 @@ function TemplatesScreen({ onUse }) {
 function SelectorRepickPanel({ scraper, onClose, onSaved }) {
   const canvasRef = React.useRef(null);
   const wsRef = React.useRef(null);
-  const stateRef = React.useRef("connecting");
+  const stateRef = React.useRef('connecting');
   const lastMoveAt = React.useRef(0);
   const testResolveRef = React.useRef(null);
 
-  const [connState, _setConn] = React.useState("connecting");
+  const [connState, _setConn] = React.useState('connecting');
   const [nodeCount, setNodeCount] = React.useState(null);
   const [selected, setSelected] = React.useState(null);
   const [saving, setSaving] = React.useState(false);
-  const [saveErr, setSaveErr] = React.useState("");
+  const [saveErr, setSaveErr] = React.useState('');
   const [removeMode, setRemoveMode] = React.useState(false);
   const [blockedMsg, setBlockedMsg] = React.useState(null);
 
@@ -5725,59 +6006,59 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
   };
   const REMOTE_W = 1280,
     REMOTE_H = 800;
-  const isReady = connState === "ready";
+  const isReady = connState === 'ready';
 
   React.useEffect(() => {
     let ws;
     try {
-      ws = new WebSocket("ws://localhost:3001");
+      ws = new WebSocket('ws://localhost:3001');
     } catch {
-      setConn("error");
+      setConn('error');
       return;
     }
     wsRef.current = ws;
-    ws.onerror = () => setConn("error");
+    ws.onerror = () => setConn('error');
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
-      if (msg.type === "frame") {
+      if (msg.type === 'frame') {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const img = new Image();
         img.onload = () =>
-          canvas.getContext("2d").drawImage(img, 0, 0, REMOTE_W, REMOTE_H);
-        img.src = "data:image/jpeg;base64," + msg.data;
+          canvas.getContext('2d').drawImage(img, 0, 0, REMOTE_W, REMOTE_H);
+        img.src = 'data:image/jpeg;base64,' + msg.data;
         return;
       }
-      if (msg.type === "status") {
+      if (msg.type === 'status') {
         setConn(msg.status);
         if (msg.nodeCount) setNodeCount(msg.nodeCount);
-        if (msg.status === "connected") {
+        if (msg.status === 'connected') {
           const full = /^https?:\/\//i.test(scraper.url)
             ? scraper.url
-            : "https://" + scraper.url;
-          ws.send(JSON.stringify({ type: "navigate", url: full }));
+            : 'https://' + scraper.url;
+          ws.send(JSON.stringify({ type: 'navigate', url: full }));
         }
         return;
       }
-      if (msg.type === "selector") {
+      if (msg.type === 'selector') {
         setSelected(msg);
-        setSaveErr("");
+        setSaveErr('');
         return;
       }
-      if (msg.type === "blocked") {
+      if (msg.type === 'blocked') {
         setBlockedMsg(msg.reason);
         setTimeout(() => setBlockedMsg(null), 3000);
         return;
       }
-      if (msg.type === "test_result") {
+      if (msg.type === 'test_result') {
         if (testResolveRef.current) {
           testResolveRef.current(msg);
           testResolveRef.current = null;
         }
         return;
       }
-      if (msg.type === "error") {
-        setConn("error");
+      if (msg.type === 'error') {
+        setConn('error');
       }
     };
     return () => ws.close();
@@ -5788,11 +6069,11 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
     if (!canvas) return;
     const handler = (e) => {
       e.preventDefault();
-      if (stateRef.current !== "ready") return;
-      wsRef.current?.send(JSON.stringify({ type: "scroll", dy: e.deltaY }));
+      if (stateRef.current !== 'ready') return;
+      wsRef.current?.send(JSON.stringify({ type: 'scroll', dy: e.deltaY }));
     };
-    canvas.addEventListener("wheel", handler, { passive: false });
-    return () => canvas.removeEventListener("wheel", handler);
+    canvas.addEventListener('wheel', handler, { passive: false });
+    return () => canvas.removeEventListener('wheel', handler);
   }, []);
 
   const coords = (e) => {
@@ -5806,20 +6087,20 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
   const handleSave = async () => {
     if (!selected) return;
     setSaving(true);
-    setSaveErr("");
+    setSaveErr('');
     try {
       // 1) 저장 전 라이브 세션에서 셀렉터 검증
       const testResult = await new Promise((resolve) => {
         testResolveRef.current = resolve;
         wsRef.current?.send(
           JSON.stringify({
-            type: "test_selector",
+            type: 'test_selector',
             selector: selected.selector,
           }),
         );
         setTimeout(() => {
           if (testResolveRef.current) {
-            testResolveRef.current({ found: false, error: "응답 시간 초과" });
+            testResolveRef.current({ found: false, error: '응답 시간 초과' });
             testResolveRef.current = null;
           }
         }, 6000);
@@ -5827,7 +6108,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
 
       if (!testResult.found) {
         setSaveErr(
-          `셀렉터가 현재 페이지에서 매칭되지 않습니다${testResult.error ? ": " + testResult.error : " — 다른 요소를 선택해 주세요"}`,
+          `셀렉터가 현재 페이지에서 매칭되지 않습니다${testResult.error ? ': ' + testResult.error : ' — 다른 요소를 선택해 주세요'}`,
         );
         setSaving(false);
         return;
@@ -5835,8 +6116,8 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
 
       // 2) DB 저장
       const resp = await fetch(`/api/scrapers/${scraper.id}/selector`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           css_selector: selected.selector,
           user_intent: scraper.user_intent,
@@ -5844,12 +6125,12 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
       });
       const updated = await resp.json();
       if (!resp.ok) {
-        setSaveErr(updated.error || "저장 실패");
+        setSaveErr(updated.error || '저장 실패');
         return;
       }
       onSaved(updated);
     } catch (e) {
-      setSaveErr("저장 중 오류: " + e.message);
+      setSaveErr('저장 중 오류: ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -5857,13 +6138,13 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
 
   const stateLabel =
     {
-      connecting: "서버 연결 중…",
-      connected: "페이지 로딩 중…",
-      navigating: "페이지 로딩 중…",
+      connecting: '서버 연결 중…',
+      connected: '페이지 로딩 중…',
+      navigating: '페이지 로딩 중…',
       ready: nodeCount
         ? `${nodeCount.toLocaleString()}개 노드 수집됨`
-        : "준비됨",
-      error: "연결 실패",
+        : '준비됨',
+      error: '연결 실패',
     }[connState] || connState;
 
   return (
@@ -5871,105 +6152,106 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
       <div
         onClick={onClose}
         style={{
-          position: "fixed",
+          position: 'fixed',
           inset: 0,
           zIndex: 19,
-          background: "rgba(0,0,0,0.35)",
-          backdropFilter: "blur(2px)",
+          background: 'rgba(0,0,0,0.35)',
+          backdropFilter: 'blur(2px)',
         }}
       />
       <div
         style={{
-          position: "fixed",
+          position: 'fixed',
           right: 0,
           top: 0,
           bottom: 0,
           width: 900,
           zIndex: 20,
-          background: "var(--bg-2)",
-          borderLeft: "1px solid var(--border)",
-          boxShadow: "var(--shadow-lg)",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
+          background: 'var(--bg-2)',
+          borderLeft: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-lg)',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
         {/* 헤더 */}
         <div
           style={{
-            padding: "14px 20px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            alignItems: "center",
+            padding: '14px 20px',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
             gap: 10,
             flexShrink: 0,
-          }}
-        >
+          }}>
           <div
             style={{
               width: 30,
               height: 30,
               borderRadius: 8,
-              background: "var(--accent-soft)",
-              color: "var(--accent)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Icon name="target" className="icon icon-sm" />
+              background: 'var(--accent-soft)',
+              color: 'var(--accent)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Icon
+              name="target"
+              className="icon icon-sm"
+            />
           </div>
           <div>
             <div style={{ fontWeight: 600, fontSize: 14 }}>셀렉터 재선택</div>
-            <div className="dim mono" style={{ fontSize: 11 }}>
+            <div
+              className="dim mono"
+              style={{ fontSize: 11 }}>
               {scraper.url}
             </div>
           </div>
           <button
             className="btn ghost sm"
-            style={{ marginLeft: "auto", padding: 6 }}
-            onClick={onClose}
-          >
-            <Icon name="x" className="icon icon-sm" />
+            style={{ marginLeft: 'auto', padding: 6 }}
+            onClick={onClose}>
+            <Icon
+              name="x"
+              className="icon icon-sm"
+            />
           </button>
         </div>
 
         {/* 본문: 좌(결과) + 우(브라우저) */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "260px 1fr",
+            display: 'grid',
+            gridTemplateColumns: '260px 1fr',
             flex: 1,
-            overflow: "hidden",
-          }}
-        >
+            overflow: 'hidden',
+          }}>
           {/* 좌: 상태 + 선택 결과 + 저장 */}
           <div
             style={{
               padding: 18,
-              borderRight: "1px solid var(--border)",
-              display: "flex",
-              flexDirection: "column",
+              borderRight: '1px solid var(--border)',
+              display: 'flex',
+              flexDirection: 'column',
               gap: 14,
-              overflowY: "auto",
-            }}
-          >
+              overflowY: 'auto',
+            }}>
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
+                display: 'flex',
+                alignItems: 'center',
                 gap: 8,
-                padding: "8px 12px",
-                background: "var(--bg-3)",
-                border: "1px solid var(--border)",
+                padding: '8px 12px',
+                background: 'var(--bg-3)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
-              }}
-            >
+              }}>
               {isReady ? (
                 <span className="chip ok">
                   <span className="dot" />
                   Live
                 </span>
-              ) : connState === "error" ? (
+              ) : connState === 'error' ? (
                 <span className="chip danger">
                   <span className="dot" />
                   오류
@@ -5982,12 +6264,14 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                     height: 13,
                     borderRadius: 999,
                     flexShrink: 0,
-                    border: "2px solid var(--border-strong)",
-                    borderTopColor: "var(--accent)",
+                    border: '2px solid var(--border-strong)',
+                    borderTopColor: 'var(--accent)',
                   }}
                 />
               )}
-              <span className="muted" style={{ fontSize: 12 }}>
+              <span
+                className="muted"
+                style={{ fontSize: 12 }}>
                 {stateLabel}
               </span>
             </div>
@@ -5995,17 +6279,16 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
             {blockedMsg && (
               <div
                 style={{
-                  padding: "8px 12px",
-                  background: "rgba(224,74,74,0.08)",
-                  border: "1px solid rgba(224,74,74,0.3)",
+                  padding: '8px 12px',
+                  background: 'rgba(224,74,74,0.08)',
+                  border: '1px solid rgba(224,74,74,0.3)',
                   borderRadius: 8,
-                  display: "flex",
-                  alignItems: "center",
+                  display: 'flex',
+                  alignItems: 'center',
                   gap: 8,
                   fontSize: 12,
-                  color: "var(--danger)",
-                }}
-              >
+                  color: 'var(--danger)',
+                }}>
                 <Icon
                   name="x"
                   className="icon icon-sm"
@@ -6018,48 +6301,44 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
             <div
               style={{
                 fontSize: 12,
-                color: "var(--text-mute)",
+                color: 'var(--text-mute)',
                 lineHeight: 1.6,
-              }}
-            >
-              오른쪽 브라우저에서 수집할 요소를{" "}
-              <strong style={{ color: "var(--text)" }}>클릭</strong>하세요.
-              <span style={{ color: "var(--danger)" }}> 빨간 테두리</span>는
+              }}>
+              오른쪽 브라우저에서 수집할 요소를{' '}
+              <strong style={{ color: 'var(--text)' }}>클릭</strong>하세요.
+              <span style={{ color: 'var(--danger)' }}> 빨간 테두리</span>는
               선택 불가 요소입니다.
             </div>
 
             {/* 팝업 제거 */}
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <button
                 className="btn ghost sm"
                 disabled={!isReady}
-                style={{ fontSize: 11, padding: "4px 8px" }}
+                style={{ fontSize: 11, padding: '4px 8px' }}
                 onClick={() =>
                   wsRef.current?.send(
-                    JSON.stringify({ type: "keypress", key: "Escape" }),
+                    JSON.stringify({ type: 'keypress', key: 'Escape' }),
                   )
-                }
-              >
+                }>
                 ESC
               </button>
               <button
                 className="btn ghost sm"
                 disabled={!isReady}
-                style={{ fontSize: 11, padding: "4px 8px" }}
+                style={{ fontSize: 11, padding: '4px 8px' }}
                 onClick={() =>
                   wsRef.current?.send(
-                    JSON.stringify({ type: "remove_overlays" }),
+                    JSON.stringify({ type: 'remove_overlays' }),
                   )
-                }
-              >
+                }>
                 팝업 제거
               </button>
               <button
-                className={`btn sm${removeMode ? " primary" : " ghost"}`}
+                className={`btn sm${removeMode ? ' primary' : ' ghost'}`}
                 disabled={!isReady}
-                style={{ fontSize: 11, padding: "4px 8px" }}
-                onClick={() => setRemoveMode((m) => !m)}
-              >
+                style={{ fontSize: 11, padding: '4px 8px' }}
+                onClick={() => setRemoveMode((m) => !m)}>
                 요소 지우기
               </button>
             </div>
@@ -6070,11 +6349,10 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                 className="dim mono"
                 style={{
                   fontSize: 10,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
                   marginBottom: 4,
-                }}
-              >
+                }}>
                 현재 셀렉터
               </div>
               <pre
@@ -6082,12 +6360,11 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                 style={{
                   margin: 0,
                   fontSize: 10.5,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-all",
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
                   opacity: 0.6,
-                }}
-              >
-                {scraper.css_selector || "(없음)"}
+                }}>
+                {scraper.css_selector || '(없음)'}
               </pre>
             </div>
 
@@ -6096,28 +6373,26 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
               <div
                 style={{
                   padding: 12,
-                  background: "var(--bg-2)",
-                  border: "1px solid var(--accent-line)",
+                  background: 'var(--bg-2)',
+                  border: '1px solid var(--accent-line)',
                   borderRadius: 8,
-                  display: "flex",
-                  flexDirection: "column",
+                  display: 'flex',
+                  flexDirection: 'column',
                   gap: 10,
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Icon
                     name="check"
                     className="icon icon-sm"
-                    style={{ color: "var(--ok)" }}
+                    style={{ color: 'var(--ok)' }}
                   />
                   <span style={{ fontSize: 13, fontWeight: 600 }}>
                     요소 선택됨
                   </span>
                   <button
                     className="btn ghost sm"
-                    style={{ marginLeft: "auto", fontSize: 11 }}
-                    onClick={() => setSelected(null)}
-                  >
+                    style={{ marginLeft: 'auto', fontSize: 11 }}
+                    onClick={() => setSelected(null)}>
                     다시 선택
                   </button>
                 </div>
@@ -6126,11 +6401,10 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                     className="dim mono"
                     style={{
                       fontSize: 10,
-                      letterSpacing: "0.06em",
-                      textTransform: "uppercase",
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
                       marginBottom: 4,
-                    }}
-                  >
+                    }}>
                     새 셀렉터
                   </div>
                   <pre
@@ -6138,10 +6412,9 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                     style={{
                       margin: 0,
                       fontSize: 10.5,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-all",
-                    }}
-                  >
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all',
+                    }}>
                     {selected.selector}
                   </pre>
                 </div>
@@ -6151,11 +6424,10 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                       className="dim mono"
                       style={{
                         fontSize: 10,
-                        letterSpacing: "0.06em",
-                        textTransform: "uppercase",
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
                         marginBottom: 4,
-                      }}
-                    >
+                      }}>
                       현재 값
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>
@@ -6168,17 +6440,16 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
               <div
                 style={{
                   padding: 20,
-                  background: "var(--bg-3)",
-                  border: "1px dashed var(--border-strong)",
+                  background: 'var(--bg-3)',
+                  border: '1px dashed var(--border-strong)',
                   borderRadius: 8,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
                   gap: 8,
-                  color: "var(--text-dim)",
-                  textAlign: "center",
-                }}
-              >
+                  color: 'var(--text-dim)',
+                  textAlign: 'center',
+                }}>
                 <Icon
                   name="target"
                   className="icon icon-lg"
@@ -6192,14 +6463,13 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
             {saveErr && (
               <div
                 style={{
-                  padding: "8px 10px",
+                  padding: '8px 10px',
                   borderRadius: 6,
-                  background: "var(--danger-soft)",
-                  color: "var(--danger)",
+                  background: 'var(--danger-soft)',
+                  color: 'var(--danger)',
                   fontSize: 11,
                   lineHeight: 1.5,
-                }}
-              >
+                }}>
                 {saveErr}
               </div>
             )}
@@ -6208,11 +6478,10 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
               disabled={!selected || saving}
               onClick={handleSave}
               style={{
-                justifyContent: "center",
+                justifyContent: 'center',
                 padding: 10,
                 opacity: selected ? 1 : 0.45,
-              }}
-            >
+              }}>
               {saving ? (
                 <>
                   <div
@@ -6221,15 +6490,18 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                       width: 13,
                       height: 13,
                       borderRadius: 999,
-                      border: "2px solid rgba(255,255,255,0.4)",
-                      borderTopColor: "#fff",
+                      border: '2px solid rgba(255,255,255,0.4)',
+                      borderTopColor: '#fff',
                     }}
                   />
                   검증 중…
                 </>
               ) : (
                 <>
-                  <Icon name="check" className="icon icon-sm" />
+                  <Icon
+                    name="check"
+                    className="icon icon-sm"
+                  />
                   셀렉터 저장
                 </>
               )}
@@ -6239,29 +6511,27 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
           {/* 우: 실시간 브라우저 */}
           <div
             style={{
-              display: "flex",
-              flexDirection: "column",
-              background: "var(--bg-3)",
-              overflow: "hidden",
-            }}
-          >
-            <div style={{ position: "relative", flex: 1 }}>
+              display: 'flex',
+              flexDirection: 'column',
+              background: 'var(--bg-3)',
+              overflow: 'hidden',
+            }}>
+            <div style={{ position: 'relative', flex: 1 }}>
               {!isReady && (
                 <div
                   style={{
-                    position: "absolute",
+                    position: 'absolute',
                     inset: 0,
                     zIndex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     gap: 12,
-                    background: "var(--bg-3)",
-                    color: "var(--text-dim)",
-                  }}
-                >
-                  {connState === "error" ? (
+                    background: 'var(--bg-3)',
+                    color: 'var(--text-dim)',
+                  }}>
+                  {connState === 'error' ? (
                     <>
                       <Icon
                         name="x"
@@ -6271,13 +6541,14 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                       <div
                         style={{
                           fontSize: 12,
-                          textAlign: "center",
+                          textAlign: 'center',
                           lineHeight: 1.65,
-                        }}
-                      >
+                        }}>
                         서버에 연결할 수 없습니다
                         <br />
-                        <span className="mono dim" style={{ fontSize: 10.5 }}>
+                        <span
+                          className="mono dim"
+                          style={{ fontSize: 10.5 }}>
                           npm start 를 먼저 실행해 주세요
                         </span>
                       </div>
@@ -6290,8 +6561,8 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                           width: 26,
                           height: 26,
                           borderRadius: 999,
-                          border: "3px solid var(--border-strong)",
-                          borderTopColor: "var(--accent)",
+                          border: '3px solid var(--border-strong)',
+                          borderTopColor: 'var(--accent)',
                         }}
                       />
                       <div style={{ fontSize: 12 }}>{stateLabel}</div>
@@ -6304,24 +6575,24 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                 width={REMOTE_W}
                 height={REMOTE_H}
                 style={{
-                  width: "100%",
-                  display: "block",
+                  width: '100%',
+                  display: 'block',
                   aspectRatio: `${REMOTE_W} / ${REMOTE_H}`,
                   cursor: isReady
                     ? removeMode
-                      ? "not-allowed"
-                      : "crosshair"
-                    : "default",
+                      ? 'not-allowed'
+                      : 'crosshair'
+                    : 'default',
                 }}
                 onMouseMove={(e) => {
-                  if (stateRef.current !== "ready") return;
+                  if (stateRef.current !== 'ready') return;
                   const now = Date.now();
                   if (now - lastMoveAt.current < 32) return;
                   lastMoveAt.current = now;
                   const r = canvasRef.current.getBoundingClientRect();
                   wsRef.current?.send(
                     JSON.stringify({
-                      type: "mousemove",
+                      type: 'mousemove',
                       x: Math.round(
                         ((e.clientX - r.left) * REMOTE_W) / r.width,
                       ),
@@ -6332,7 +6603,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                   );
                 }}
                 onClick={(e) => {
-                  if (stateRef.current !== "ready") return;
+                  if (stateRef.current !== 'ready') return;
                   const r = canvasRef.current.getBoundingClientRect();
                   const c = {
                     x: Math.round(((e.clientX - r.left) * REMOTE_W) / r.width),
@@ -6340,7 +6611,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                   };
                   wsRef.current?.send(
                     JSON.stringify({
-                      type: removeMode ? "remove_element" : "click",
+                      type: removeMode ? 'remove_element' : 'click',
                       ...c,
                     }),
                   );
@@ -6356,15 +6627,15 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
 
 // ─── HealPanel ─────────────────────────────────────────────────────────────
 function HealPanel({ scraper, onClose }) {
-  const [v1Html, setV1Html] = React.useState("");
-  const [v2Html, setV2Html] = React.useState("");
-  const [v1State, setV1State] = React.useState("loading"); // loading | ok | error
-  const [v2State, setV2State] = React.useState("loading"); // loading | ok | error
-  const [selector, setSelector] = React.useState(scraper.css_selector || "");
-  const [intent, setIntent] = React.useState(scraper.user_intent || "");
-  const [phase, setPhase] = React.useState("idle"); // idle | healing | done | error
+  const [v1Html, setV1Html] = React.useState('');
+  const [v2Html, setV2Html] = React.useState('');
+  const [v1State, setV1State] = React.useState('loading'); // loading | ok | error
+  const [v2State, setV2State] = React.useState('loading'); // loading | ok | error
+  const [selector, setSelector] = React.useState(scraper.css_selector || '');
+  const [intent, setIntent] = React.useState(scraper.user_intent || '');
+  const [phase, setPhase] = React.useState('idle'); // idle | healing | done | error
   const [result, setResult] = React.useState(null);
-  const [errMsg, setErrMsg] = React.useState("");
+  const [errMsg, setErrMsg] = React.useState('');
 
   // 마운트 시 V1(스냅샷) + V2(현재 페이지) 자동 수집
   React.useEffect(() => {
@@ -6374,38 +6645,38 @@ function HealPanel({ scraper, onClose }) {
       .then((data) => {
         if (data.html) {
           setV1Html(data.html);
-          setV1State("ok");
-        } else throw new Error(data.error || "스냅샷 없음");
+          setV1State('ok');
+        } else throw new Error(data.error || '스냅샷 없음');
       })
-      .catch((e) => setV1State("error"));
+      .catch((e) => setV1State('error'));
 
     // V2: Playwright로 현재 페이지 수집
     const fullUrl = /^https?:\/\//i.test(scraper.url)
       ? scraper.url
-      : "https://" + scraper.url;
-    fetch("/fetch-html", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      : 'https://' + scraper.url;
+    fetch('/fetch-html', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: fullUrl }),
     })
       .then((r) => r.json())
       .then((data) => {
         if (data.html) {
           setV2Html(data.html);
-          setV2State("ok");
-        } else throw new Error(data.error || "수집 실패");
+          setV2State('ok');
+        } else throw new Error(data.error || '수집 실패');
       })
-      .catch(() => setV2State("error"));
+      .catch(() => setV2State('error'));
   }, []);
 
   const runHeal = async () => {
-    setPhase("healing");
+    setPhase('healing');
     setResult(null);
-    setErrMsg("");
+    setErrMsg('');
     try {
-      const resp = await fetch("/heal", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const resp = await fetch('/heal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           v1_html: v1Html,
           v2_html: v2Html,
@@ -6417,57 +6688,56 @@ function HealPanel({ scraper, onClose }) {
       const data = await resp.json();
       if (data.error) throw new Error(data.error);
       setResult(data);
-      setPhase("done");
+      setPhase('done');
     } catch (e) {
       setErrMsg(`치유 실패: ${e.message}`);
-      setPhase("error");
+      setPhase('error');
     }
   };
 
-  const dataReady = v1State === "ok" && v2State === "ok";
-  const canRun = dataReady && selector && phase === "idle";
+  const dataReady = v1State === 'ok' && v2State === 'ok';
+  const canRun = dataReady && selector && phase === 'idle';
 
   const HtmlStatus = ({ state, label }) => {
-    const icon = state === "loading" ? null : state === "ok" ? "check" : "x";
+    const icon = state === 'loading' ? null : state === 'ok' ? 'check' : 'x';
     const color =
-      state === "ok"
-        ? "var(--ok)"
-        : state === "error"
-          ? "var(--danger)"
-          : "var(--text-mute)";
+      state === 'ok'
+        ? 'var(--ok)'
+        : state === 'error'
+          ? 'var(--danger)'
+          : 'var(--text-mute)';
     const bg =
-      state === "ok"
-        ? "var(--ok-soft)"
-        : state === "error"
-          ? "var(--danger-soft)"
-          : "var(--bg-3)";
+      state === 'ok'
+        ? 'var(--ok-soft)'
+        : state === 'error'
+          ? 'var(--danger-soft)'
+          : 'var(--bg-3)';
     const border =
-      state === "ok"
-        ? "var(--ok-line)"
-        : state === "error"
-          ? "var(--danger-line)"
-          : "var(--border)";
+      state === 'ok'
+        ? 'var(--ok-line)'
+        : state === 'error'
+          ? 'var(--danger-line)'
+          : 'var(--border)';
     return (
       <div
         style={{
-          display: "flex",
-          alignItems: "center",
+          display: 'flex',
+          alignItems: 'center',
           gap: 8,
-          padding: "9px 12px",
+          padding: '9px 12px',
           background: bg,
           border: `1px solid ${border}`,
           borderRadius: 8,
-        }}
-      >
-        {state === "loading" ? (
+        }}>
+        {state === 'loading' ? (
           <div
             className="spin"
             style={{
               width: 13,
               height: 13,
               borderRadius: 999,
-              border: "2px solid var(--border-strong)",
-              borderTopColor: "var(--accent)",
+              border: '2px solid var(--border-strong)',
+              borderTopColor: 'var(--accent)',
               flexShrink: 0,
             }}
           />
@@ -6479,9 +6749,9 @@ function HealPanel({ scraper, onClose }) {
           />
         )}
         <span style={{ fontSize: 12.5, color }}>
-          {state === "loading"
+          {state === 'loading'
             ? `${label} 수집 중…`
-            : state === "ok"
+            : state === 'ok'
               ? `${label} 수집 완료`
               : `${label} 수집 실패`}
         </span>
@@ -6495,71 +6765,75 @@ function HealPanel({ scraper, onClose }) {
       <div
         onClick={onClose}
         style={{
-          position: "fixed",
+          position: 'fixed',
           inset: 0,
           zIndex: 19,
-          background: "rgba(0,0,0,0.28)",
-          backdropFilter: "blur(2px)",
+          background: 'rgba(0,0,0,0.28)',
+          backdropFilter: 'blur(2px)',
         }}
       />
 
       {/* 패널 */}
       <div
         style={{
-          position: "fixed",
+          position: 'fixed',
           right: 0,
           top: 0,
           bottom: 0,
           width: 460,
           zIndex: 20,
-          background: "var(--bg-2)",
-          borderLeft: "1px solid var(--border)",
-          boxShadow: "var(--shadow-lg)",
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-        }}
-      >
+          background: 'var(--bg-2)',
+          borderLeft: '1px solid var(--border)',
+          boxShadow: 'var(--shadow-lg)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto',
+        }}>
         {/* 헤더 */}
         <div
           style={{
-            padding: "16px 20px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            alignItems: "center",
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--border)',
+            display: 'flex',
+            alignItems: 'center',
             gap: 10,
-            position: "sticky",
+            position: 'sticky',
             top: 0,
-            background: "var(--bg-2)",
+            background: 'var(--bg-2)',
             zIndex: 1,
-          }}
-        >
+          }}>
           <div
             style={{
               width: 30,
               height: 30,
               borderRadius: 8,
-              background: "var(--healing-soft)",
-              color: "var(--healing)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Icon name="bolt" className="icon icon-sm" />
+              background: 'var(--healing-soft)',
+              color: 'var(--healing)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            <Icon
+              name="bolt"
+              className="icon icon-sm"
+            />
           </div>
           <div>
             <div style={{ fontWeight: 600, fontSize: 14 }}>자가치유 실행</div>
-            <div className="dim" style={{ fontSize: 11 }}>
+            <div
+              className="dim"
+              style={{ fontSize: 11 }}>
               ML + GPT-4o-mini 하이브리드
             </div>
           </div>
           <button
             className="btn ghost sm"
-            style={{ marginLeft: "auto", padding: 6 }}
-            onClick={onClose}
-          >
-            <Icon name="x" className="icon icon-sm" />
+            style={{ marginLeft: 'auto', padding: 6 }}
+            onClick={onClose}>
+            <Icon
+              name="x"
+              className="icon icon-sm"
+            />
           </button>
         </div>
 
@@ -6567,39 +6841,43 @@ function HealPanel({ scraper, onClose }) {
         <div
           style={{
             padding: 20,
-            display: "flex",
-            flexDirection: "column",
+            display: 'flex',
+            flexDirection: 'column',
             gap: 16,
             flex: 1,
-          }}
-        >
+          }}>
           {/* HTML 수집 상태 */}
           <div>
             <FieldLabel>HTML 수집 상태</FieldLabel>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <HtmlStatus state={v1State} label="V1 (첫 실행 스냅샷)" />
-              <HtmlStatus state={v2State} label="V2 (현재 페이지)" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <HtmlStatus
+                state={v1State}
+                label="V1 (첫 실행 스냅샷)"
+              />
+              <HtmlStatus
+                state={v2State}
+                label="V2 (현재 페이지)"
+              />
             </div>
-            {(v1State === "error" || v2State === "error") && (
+            {(v1State === 'error' || v2State === 'error') && (
               <div
                 style={{
                   marginTop: 8,
-                  padding: "8px 12px",
-                  background: "var(--warn-soft)",
-                  border: "1px solid var(--warn-line)",
+                  padding: '8px 12px',
+                  background: 'var(--warn-soft)',
+                  border: '1px solid var(--warn-line)',
                   borderRadius: 8,
                   fontSize: 12,
-                  color: "var(--warn)",
+                  color: 'var(--warn)',
                   lineHeight: 1.55,
-                }}
-              >
-                {v1State === "error" && (
+                }}>
+                {v1State === 'error' && (
                   <div>
                     V1 스냅샷 없음 — "지금 실행" 버튼으로 스크래퍼를 한 번 이상
                     실행해야 생성됩니다.
                   </div>
                 )}
-                {v2State === "error" && (
+                {v2State === 'error' && (
                   <div>
                     현재 페이지 수집 실패 — URL을 확인하거나 네트워크 상태를
                     점검하세요.
@@ -6616,16 +6894,16 @@ function HealPanel({ scraper, onClose }) {
               value={selector}
               onChange={(e) => setSelector(e.target.value)}
               style={{
-                width: "100%",
-                padding: "8px 12px",
-                background: "var(--bg-3)",
-                border: "1px solid var(--border)",
+                width: '100%',
+                padding: '8px 12px',
+                background: 'var(--bg-3)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
-                color: "var(--text)",
+                color: 'var(--text)',
                 fontSize: 12,
-                fontFamily: "var(--mono)",
-                outline: "none",
-                boxSizing: "border-box",
+                fontFamily: 'var(--mono)',
+                outline: 'none',
+                boxSizing: 'border-box',
               }}
             />
           </div>
@@ -6638,17 +6916,17 @@ function HealPanel({ scraper, onClose }) {
               onChange={(e) => setIntent(e.target.value)}
               rows={2}
               style={{
-                width: "100%",
-                padding: "8px 12px",
-                background: "var(--bg-3)",
-                border: "1px solid var(--border)",
+                width: '100%',
+                padding: '8px 12px',
+                background: 'var(--bg-3)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
-                color: "var(--text)",
+                color: 'var(--text)',
                 fontSize: 13,
-                fontFamily: "var(--sans)",
-                outline: "none",
-                resize: "vertical",
-                boxSizing: "border-box",
+                fontFamily: 'var(--sans)',
+                outline: 'none',
+                resize: 'vertical',
+                boxSizing: 'border-box',
               }}
             />
           </div>
@@ -6657,14 +6935,13 @@ function HealPanel({ scraper, onClose }) {
           {errMsg && (
             <div
               style={{
-                padding: "10px 12px",
-                background: "var(--danger-soft)",
-                border: "1px solid var(--danger-line)",
+                padding: '10px 12px',
+                background: 'var(--danger-soft)',
+                border: '1px solid var(--danger-line)',
                 borderRadius: 8,
                 fontSize: 12.5,
-                color: "var(--danger)",
-              }}
-            >
+                color: 'var(--danger)',
+              }}>
               {errMsg}
             </div>
           )}
@@ -6675,12 +6952,11 @@ function HealPanel({ scraper, onClose }) {
             onClick={runHeal}
             disabled={!canRun}
             style={{
-              justifyContent: "center",
+              justifyContent: 'center',
               padding: 11,
               opacity: canRun ? 1 : 0.5,
-            }}
-          >
-            {phase === "healing" ? (
+            }}>
+            {phase === 'healing' ? (
               <>
                 <div
                   className="spin"
@@ -6688,15 +6964,18 @@ function HealPanel({ scraper, onClose }) {
                     width: 14,
                     height: 14,
                     borderRadius: 999,
-                    border: "2px solid rgba(255,255,255,0.4)",
-                    borderTopColor: "#fff",
+                    border: '2px solid rgba(255,255,255,0.4)',
+                    borderTopColor: '#fff',
                   }}
                 />
                 ML 필터링 + GPT 추론 중…
               </>
             ) : (
               <>
-                <Icon name="bolt" className="icon icon-sm" />
+                <Icon
+                  name="bolt"
+                  className="icon icon-sm"
+                />
                 자가치유 실행
               </>
             )}
@@ -6704,30 +6983,28 @@ function HealPanel({ scraper, onClose }) {
 
           {/* 결과 */}
           {result && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ height: 1, background: "var(--border)" }} />
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ height: 1, background: 'var(--border)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span
                   className={`chip ${
-                    result.status === "healed"
-                      ? "ok"
-                      : result.status === "no_change_needed"
-                        ? "accent"
-                        : "danger"
-                  }`}
-                >
+                    result.status === 'healed'
+                      ? 'ok'
+                      : result.status === 'no_change_needed'
+                        ? 'accent'
+                        : 'danger'
+                  }`}>
                   <span className="dot" />
-                  {result.status === "healed"
-                    ? "치유 성공"
-                    : result.status === "no_change_needed"
-                      ? "셀렉터 유효"
-                      : "치유 실패"}
+                  {result.status === 'healed'
+                    ? '치유 성공'
+                    : result.status === 'no_change_needed'
+                      ? '셀렉터 유효'
+                      : '치유 실패'}
                 </span>
                 {result.confidence > 0 && (
                   <span
                     className="mono dim"
-                    style={{ fontSize: 12, marginLeft: "auto" }}
-                  >
+                    style={{ fontSize: 12, marginLeft: 'auto' }}>
                     신뢰도 {Math.round(result.confidence * 100)}%
                   </span>
                 )}
@@ -6738,14 +7015,13 @@ function HealPanel({ scraper, onClose }) {
                   <FieldLabel small>복구된 값</FieldLabel>
                   <div
                     style={{
-                      padding: "10px 14px",
-                      background: "var(--ok-soft)",
-                      border: "1px solid var(--ok-line)",
+                      padding: '10px 14px',
+                      background: 'var(--ok-soft)',
+                      border: '1px solid var(--ok-line)',
                       borderRadius: 8,
                       fontWeight: 600,
                       fontSize: 15,
-                    }}
-                  >
+                    }}>
                     {result.extracted_text}
                   </div>
                 </div>
@@ -6757,16 +7033,15 @@ function HealPanel({ scraper, onClose }) {
                   <pre
                     style={{
                       margin: 0,
-                      padding: "8px 12px",
-                      background: "var(--bg-3)",
-                      border: "1px solid var(--border)",
+                      padding: '8px 12px',
+                      background: 'var(--bg-3)',
+                      border: '1px solid var(--border)',
                       borderRadius: 8,
                       fontSize: 11,
-                      fontFamily: "var(--mono)",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-all",
-                    }}
-                  >
+                      fontFamily: 'var(--mono)',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-all',
+                    }}>
                     {result.robust_selector}
                   </pre>
                 </div>
@@ -6777,15 +7052,14 @@ function HealPanel({ scraper, onClose }) {
                   <FieldLabel small>AI 추론 근거</FieldLabel>
                   <div
                     style={{
-                      padding: "10px 12px",
-                      background: "var(--bg-3)",
-                      border: "1px solid var(--border)",
+                      padding: '10px 12px',
+                      background: 'var(--bg-3)',
+                      border: '1px solid var(--border)',
                       borderRadius: 8,
                       fontSize: 12.5,
                       lineHeight: 1.65,
-                      color: "var(--text-mute)",
-                    }}
-                  >
+                      color: 'var(--text-mute)',
+                    }}>
                     {result.reasoning}
                   </div>
                 </div>
@@ -6794,14 +7068,13 @@ function HealPanel({ scraper, onClose }) {
               {result.reason && (
                 <div
                   style={{
-                    padding: "10px 12px",
-                    background: "var(--danger-soft)",
-                    border: "1px solid var(--danger-line)",
+                    padding: '10px 12px',
+                    background: 'var(--danger-soft)',
+                    border: '1px solid var(--danger-line)',
                     borderRadius: 8,
                     fontSize: 12.5,
-                    color: "var(--danger)",
-                  }}
-                >
+                    color: 'var(--danger)',
+                  }}>
                   {result.reason}
                 </div>
               )}

@@ -176,20 +176,27 @@ const Stat = ({ label, value, sub, accent, icon }) => (
 );
 
 // ── 다음 실행 시각 계산 ────────────────────────────────────────────────────────
-function nextRunLabel(scheduleKey) {
-  const now = new Date();
+function nextRunLabel(scheduleKey, lastRun) {
+  const now  = new Date();
   const next = new Date(now);
 
-  if (scheduleKey === 'daily-9' || scheduleKey === '매일 09:00') {
+  const INTERVALS = { '15m': 15, '15분마다': 15, 'hourly': 60, '매시간': 60 };
+  const intervalMin = INTERVALS[scheduleKey];
+
+  if (intervalMin) {
+    // 인터벌 기반: lastRun + interval 기준
+    const base = lastRun && lastRun !== '—' ? new Date(lastRun.replace(' ', 'T')) : null;
+    if (base && !isNaN(base)) {
+      const candidate = new Date(base.getTime() + intervalMin * 60000);
+      // 이미 지났으면 다음 주기로
+      while (candidate <= now) candidate.setMinutes(candidate.getMinutes() + intervalMin);
+      next.setTime(candidate.getTime());
+    } else {
+      next.setTime(now.getTime() + intervalMin * 60000);
+    }
+  } else if (scheduleKey === 'daily-9' || scheduleKey === '매일 09:00') {
     next.setHours(9, 0, 0, 0);
     if (next <= now) next.setDate(next.getDate() + 1);
-  } else if (scheduleKey === 'hourly' || scheduleKey === '매시간') {
-    next.setMinutes(0, 0, 0);
-    next.setHours(next.getHours() + 1);
-  } else if (scheduleKey === '15m' || scheduleKey === '15분마다') {
-    const m = Math.ceil((now.getMinutes() + 1) / 15) * 15;
-    next.setMinutes(m, 0, 0);
-    if (m >= 60) { next.setHours(next.getHours() + 1); next.setMinutes(0, 0, 0); }
   } else {
     return 'Cron 일정';
   }
@@ -198,8 +205,8 @@ function nextRunLabel(scheduleKey) {
   const diffMin = Math.round(diffMs / 60000);
   if (diffMin < 1)   return '곧 실행';
   if (diffMin < 60)  return `${diffMin}분 후`;
-  const h = Math.floor(diffMin / 60), m = diffMin % 60;
-  return m > 0 ? `${h}시간 ${m}분 후` : `${h}시간 후`;
+  const h = Math.floor(diffMin / 60), m2 = diffMin % 60;
+  return m2 > 0 ? `${h}시간 ${m2}분 후` : `${h}시간 후`;
 }
 
 // expose

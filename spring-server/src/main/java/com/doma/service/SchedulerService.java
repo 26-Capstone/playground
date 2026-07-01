@@ -12,6 +12,7 @@ import org.springframework.scheduling.support.PeriodicTrigger;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,6 +35,19 @@ public class SchedulerService {
         "15m",     "0 */15 * * * *"
     );
 
+    private Duration smartInitialDelay(String lastRunAt, Duration period) {
+        if (lastRunAt == null || lastRunAt.isBlank()) return Duration.ZERO;
+        try {
+            LocalDateTime last = LocalDateTime.parse(lastRunAt,
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            Duration elapsed   = Duration.between(last, LocalDateTime.now());
+            Duration remaining = period.minus(elapsed);
+            return remaining.isNegative() ? Duration.ZERO : remaining;
+        } catch (Exception e) {
+            return Duration.ZERO;
+        }
+    }
+
     @PostConstruct
     public void init() {
         scraperRepository.findAllByOrderByCreatedAtDesc().forEach(this::addJob);
@@ -43,7 +57,7 @@ public class SchedulerService {
     public void addJob(Scraper scraper) {
         if (scraper.getCssSelector() == null || scraper.getCssSelector().isBlank()) return;
 
-        Trigger trigger = buildTrigger(scraper.getSchedule());
+        Trigger trigger = buildTrigger(scraper.getSchedule(), scraper.getLastRunAt());
         if (trigger == null) return;
 
         removeJob(scraper.getId());
@@ -63,21 +77,21 @@ public class SchedulerService {
         log.info("[scheduler] {} → \"{}\" 등록", scraper.getName(), scraper.getSchedule());
     }
 
-    private Trigger buildTrigger(String schedule) {
-        // 간격 기반: 등록 시점으로부터 N분 뒤 첫 실행, 이후 동일 간격 반복
+    private Trigger buildTrigger(String schedule, String lastRunAt) {
         switch (schedule) {
             case "15m": {
-                PeriodicTrigger t = new PeriodicTrigger(Duration.ofMinutes(15));
-                t.setInitialDelay(Duration.ofMinutes(15));
+                Duration period = Duration.ofMinutes(15);
+                PeriodicTrigger t = new PeriodicTrigger(period);
+                t.setInitialDelay(smartInitialDelay(lastRunAt, period));
                 return t;
             }
             case "hourly": {
-                PeriodicTrigger t = new PeriodicTrigger(Duration.ofHours(1));
-                t.setInitialDelay(Duration.ofHours(1));
+                Duration period = Duration.ofHours(1);
+                PeriodicTrigger t = new PeriodicTrigger(period);
+                t.setInitialDelay(smartInitialDelay(lastRunAt, period));
                 return t;
             }
             default: {
-                // 크론 표현식 (daily-9, 또는 custom cron)
                 String expr = CRON_MAP.getOrDefault(schedule, schedule);
                 try {
                     return new CronTrigger(expr);

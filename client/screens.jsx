@@ -1998,7 +1998,7 @@ function DetailSettings({ scraper, onScraperUpdate }) {
       await fetch(`/api/scrapers/${scraper.id}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ webhookUrl: webhookUrl.trim() }),
+        body: JSON.stringify({ webhookUrl: webhookUrl.trim(), webhookType: webhookType }),
       });
       const resp = await fetch(`/api/scrapers/${scraper.id}/webhook-test`, { method: 'POST' });
       const text = await resp.text();

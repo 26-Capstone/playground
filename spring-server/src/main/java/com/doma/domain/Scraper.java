@@ -64,6 +64,24 @@ public class Scraper {
     @Column(name = "created_at", nullable = false)
     private String createdAt;
 
+    @Column(name = "webhook_url")
+    private String webhookUrl;
+
+    @Column(name = "webhook_type", nullable = false)
+    private String webhookType = "generic";
+
+    @Column(name = "alert_on_change", nullable = false)
+    private Boolean alertOnChange = false;
+
+    @Column(name = "alert_delta")
+    private Double alertDelta;
+
+    @Column(name = "alert_range_min")
+    private Double alertRangeMin;
+
+    @Column(name = "alert_range_max")
+    private Double alertRangeMax;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {

@@ -11,6 +11,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
@@ -126,6 +129,18 @@ public class ScraperService {
                 Object ch = body.get("channels");
                 s.setChannels(ch instanceof List ? listToJson((List<?>) ch) : s.getChannels());
             }
+            if (body.containsKey("webhookUrl"))
+                s.setWebhookUrl((String) body.get("webhookUrl"));
+            if (body.containsKey("webhookType"))
+                s.setWebhookType((String) body.get("webhookType"));
+            if (body.containsKey("alertOnChange"))
+                s.setAlertOnChange(Boolean.TRUE.equals(body.get("alertOnChange")));
+            if (body.containsKey("alertDelta"))
+                s.setAlertDelta(body.get("alertDelta") == null ? null : ((Number) body.get("alertDelta")).doubleValue());
+            if (body.containsKey("alertRangeMin"))
+                s.setAlertRangeMin(body.get("alertRangeMin") == null ? null : ((Number) body.get("alertRangeMin")).doubleValue());
+            if (body.containsKey("alertRangeMax"))
+                s.setAlertRangeMax(body.get("alertRangeMax") == null ? null : ((Number) body.get("alertRangeMax")).doubleValue());
             return scraperRepository.save(s);
         });
     }
@@ -172,6 +187,8 @@ public class ScraperService {
             .findTop50ByScraperIdOrderByRunAtDesc(scraperId)
             .stream().findFirst().map(ScrapeResult::getScore).orElse(0.0);
 
+        String previousValue = scraper.getLastValue(); // setLastValue 전에 캡처
+
         scraper.setStatus(succeeded ? "healthy" : "healing");
         scraper.setScore(recentScore);
         scraper.setLastValue(succeeded ? value : "—");
@@ -183,7 +200,130 @@ public class ScraperService {
             new Thread(() -> healService.tryHeal(scraperId, html)).start();
         }
 
+        // 알람 판정 및 webhook 발송
+        if (succeeded && scraper.getWebhookUrl() != null && !scraper.getWebhookUrl().isBlank()) {
+            new Thread(() -> checkAndFireAlert(scraper, value, previousValue, now)).start();
+        }
+
         return result;
+    }
+
+    public Map<String, Object> testWebhook(String scraperId) {
+        Scraper scraper = scraperRepository.findById(scraperId)
+            .orElseThrow(() -> new NoSuchElementException("스크래퍼를 찾을 수 없습니다: " + scraperId));
+        if (scraper.getWebhookUrl() == null || scraper.getWebhookUrl().isBlank())
+            return Map.of("error", "webhook URL이 설정되지 않았습니다.");
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("scraper_id",     scraper.getId());
+        payload.put("name",           scraper.getName());
+        payload.put("status",         "test");
+        payload.put("value",          scraper.getLastValue());
+        payload.put("previous_value", scraper.getLastValue());
+        payload.put("trigger",        "test");
+        payload.put("run_at",         scraper.getLastRunAt());
+
+        Object body = "slack".equals(scraper.getWebhookType())
+            ? buildSlackPayload(scraper, payload, "test", null)
+            : payload;
+
+        try {
+            restTemplate.postForEntity(scraper.getWebhookUrl(), jsonEntity(body), String.class);
+            return Map.of("ok", true);
+        } catch (Exception e) {
+            return Map.of("error", e.getMessage());
+        }
+    }
+
+    private void checkAndFireAlert(Scraper scraper, String currentValue, String previousValue, String runAt) {
+        String trigger = null;
+        double currentNum = 0, previousNum = 0, delta = 0;
+        boolean isNumeric = false;
+
+        try {
+            currentNum  = Double.parseDouble(currentValue.replaceAll("[^0-9.-]", ""));
+            previousNum = Double.parseDouble(previousValue.replaceAll("[^0-9.-]", ""));
+            delta       = currentNum - previousNum;
+            isNumeric   = true;
+        } catch (NumberFormatException ignored) {}
+
+        if (!isNumeric && Boolean.TRUE.equals(scraper.getAlertOnChange())) {
+            if (!currentValue.equals(previousValue)) trigger = "on_change";
+        }
+
+        if (isNumeric) {
+            if (scraper.getAlertDelta() != null && Math.abs(delta) > scraper.getAlertDelta()) {
+                trigger = "delta_exceeded";
+            }
+            if (scraper.getAlertRangeMin() != null || scraper.getAlertRangeMax() != null) {
+                boolean belowMin = scraper.getAlertRangeMin() != null && currentNum < scraper.getAlertRangeMin();
+                boolean aboveMax = scraper.getAlertRangeMax() != null && currentNum > scraper.getAlertRangeMax();
+                if (belowMin || aboveMax) trigger = trigger == null ? "out_of_range" : trigger + ",out_of_range";
+            }
+        }
+
+        if (trigger == null) return;
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("scraper_id",      scraper.getId());
+        payload.put("name",            scraper.getName());
+        payload.put("url",             scraper.getUrl());
+        payload.put("status",          "healthy");
+        payload.put("value",           currentValue);
+        payload.put("previous_value",  previousValue);
+        payload.put("trigger",         trigger);
+        if (isNumeric) payload.put("delta", Math.round(delta * 10000.0) / 10000.0);
+        payload.put("run_at",          runAt);
+
+        Object body = "slack".equals(scraper.getWebhookType())
+            ? buildSlackPayload(scraper, payload, trigger, isNumeric ? delta : null)
+            : payload;
+
+        try {
+            restTemplate.postForEntity(scraper.getWebhookUrl(), jsonEntity(body), String.class);
+            log.info("[webhook] {} → {} (trigger={})", scraper.getName(), scraper.getWebhookUrl(), trigger);
+        } catch (Exception e) {
+            log.warn("[webhook] 발송 실패 {}: {}", scraper.getWebhookUrl(), e.getMessage());
+        }
+    }
+
+    private HttpEntity<Object> jsonEntity(Object body) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        return new HttpEntity<>(body, headers);
+    }
+
+    private Map<String, Object> buildSlackPayload(Scraper scraper, Map<String, Object> p, String trigger, Double delta) {
+        String triggerLabel = switch (trigger) {
+            case "on_change"      -> "값 변경";
+            case "delta_exceeded" -> "변동폭 초과";
+            case "out_of_range"   -> "범위 이탈";
+            case "test"           -> "테스트 발송";
+            default               -> trigger;
+        };
+        StringBuilder sb = new StringBuilder();
+        sb.append("🔔 *DOMA 알람* — *").append(scraper.getName()).append("*\n");
+        sb.append("*트리거:* `").append(triggerLabel).append("`\n");
+        sb.append("*이전값:* `").append(p.get("previous_value")).append("`  →  ");
+        sb.append("*현재값:* `").append(p.get("value")).append("`");
+        if (delta != null) {
+            sb.append("  (*Δ* ").append(delta >= 0 ? "+" : "").append(String.format("%.4f", delta)).append(")");
+        }
+        sb.append("\n*수집 시각:* ").append(p.get("run_at"));
+        sb.append("\n*URL:* ").append(scraper.getUrl());
+
+        Map<String, Object> textObj = new LinkedHashMap<>();
+        textObj.put("type", "mrkdwn");
+        textObj.put("text", sb.toString());
+
+        Map<String, Object> section = new LinkedHashMap<>();
+        section.put("type", "section");
+        section.put("text", textObj);
+
+        Map<String, Object> slack = new LinkedHashMap<>();
+        slack.put("text", "🔔 DOMA 알람 — " + scraper.getName()); // fallback (알림 미리보기)
+        slack.put("blocks", List.of(section));
+        return slack;
     }
 
     // ── 결과 조회 ────────────────────────────────────────────────────────────────
@@ -295,7 +435,13 @@ public class ScraperService {
         dto.put("type",         s.getDomain());
         dto.put("altCategory",  DOMAIN_LABELS.getOrDefault(s.getDomain(), s.getDomain()));
         dto.put("delivery",     parseJson(s.getChannels()));
-        dto.put("createdAt",    s.getCreatedAt());
+        dto.put("createdAt",      s.getCreatedAt());
+        dto.put("webhookUrl",     s.getWebhookUrl());
+        dto.put("webhookType",    s.getWebhookType() != null ? s.getWebhookType() : "generic");
+        dto.put("alertOnChange",  s.getAlertOnChange());
+        dto.put("alertDelta",     s.getAlertDelta());
+        dto.put("alertRangeMin",  s.getAlertRangeMin());
+        dto.put("alertRangeMax",  s.getAlertRangeMax());
         return dto;
     }
 

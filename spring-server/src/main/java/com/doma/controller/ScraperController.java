@@ -85,25 +85,14 @@ public class ScraperController {
 
     @PostMapping("/scrapers/{id}/webhook-test")
     public ResponseEntity<?> testWebhook(@PathVariable String id) {
-        return scraperService.getOne(id).map(s -> {
-            String url = (String) s.get("webhookUrl");
-            if (url == null || url.isBlank())
-                return ResponseEntity.badRequest().body(Map.of("error", "webhook URL이 설정되지 않았습니다."));
-            try {
-                Map<String, Object> payload = new java.util.LinkedHashMap<>();
-                payload.put("scraper_id",     s.get("id"));
-                payload.put("name",           s.get("name"));
-                payload.put("status",         "test");
-                payload.put("value",          s.get("lastValue"));
-                payload.put("previous_value", s.get("lastValue"));
-                payload.put("trigger",        "test");
-                payload.put("run_at",         s.get("lastRun"));
-                restTemplate.postForEntity(url, payload, String.class);
-                return ResponseEntity.ok(Map.of("ok", true));
-            } catch (Exception e) {
-                return ResponseEntity.status(502).body(Map.of("error", e.getMessage()));
-            }
-        }).orElse(ResponseEntity.notFound().build());
+        try {
+            Map<String, Object> result = scraperService.testWebhook(id);
+            if (result.containsKey("error"))
+                return ResponseEntity.status(502).body(result);
+            return ResponseEntity.ok(result);
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     @PostMapping("/scrapers/{id}/run")

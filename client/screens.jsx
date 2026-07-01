@@ -506,7 +506,7 @@ function OverviewScreen({
                 className="dim mono"
                 style={{ fontSize: 10.5, marginTop: 1 }}
               >
-                {nextRunLabel(c.scheduleKey || c.schedule)}
+                {nextRunLabel(c.scheduleKey || c.schedule, c.lastRun)}
               </div>
             </div>
             <button
@@ -1217,7 +1217,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                 style={{ fontSize: 10, padding: "1px 7px" }}
               >
                 <Icon name="history" className="icon icon-sm" />
-                {nextRunLabel(c.scheduleKey || c.schedule)}
+                {nextRunLabel(c.scheduleKey || c.schedule, c.lastRun)}
               </span>
             </div>
           </div>
@@ -1939,8 +1939,15 @@ function DetailSettings({ scraper, onScraperUpdate }) {
   const [channels,    setChannels]    = React.useState(
     (scraper.channels || []).map(c => Object.entries(CHANNEL_LABEL).find(([,v]) => v===c)?.[0] || c)
   );
-  const [saving, setSaving] = React.useState(false);
-  const [msg,    setMsg]    = React.useState(null); // { ok, text }
+  const [saving,       setSaving]       = React.useState(false);
+  const [msg,          setMsg]          = React.useState(null);
+  const [webhookUrl,   setWebhookUrl]   = React.useState(scraper.webhookUrl || '');
+  const [webhookType,  setWebhookType]  = React.useState(scraper.webhookType || 'generic');
+  const [alertOnChange,setAlertOnChange]= React.useState(scraper.alertOnChange || false);
+  const [alertDelta,   setAlertDelta]   = React.useState(scraper.alertDelta ?? '');
+  const [alertMin,     setAlertMin]     = React.useState(scraper.alertRangeMin ?? '');
+  const [alertMax,     setAlertMax]     = React.useState(scraper.alertRangeMax ?? '');
+  const [testing,      setTesting]      = React.useState(false);
 
   const isValidCron = (s) => /^(\S+\s+){4}\S+$/.test(s.trim()) || /^(\S+\s+){5}\S+$/.test(s.trim());
 
@@ -1956,9 +1963,15 @@ function DetailSettings({ scraper, onScraperUpdate }) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          schedule:  scheduleVal,
+          schedule:      scheduleVal,
           threshold,
-          channels:  channels.map(k => CHANNEL_LABEL[k] || k),
+          channels:      channels.map(k => CHANNEL_LABEL[k] || k),
+          webhookUrl:    webhookUrl.trim() || null,
+          webhookType:   webhookType,
+          alertOnChange: alertOnChange,
+          alertDelta:    alertDelta !== '' ? Number(alertDelta) : null,
+          alertRangeMin: alertMin   !== '' ? Number(alertMin)   : null,
+          alertRangeMax: alertMax   !== '' ? Number(alertMax)   : null,
         }),
       });
       let data = {};
@@ -1976,6 +1989,28 @@ function DetailSettings({ scraper, onScraperUpdate }) {
 
   const toggleChannel = (k) =>
     setChannels(prev => prev.includes(k) ? prev.filter(c => c !== k) : [...prev, k]);
+
+  const handleTestWebhook = async () => {
+    if (!webhookUrl.trim()) return;
+    setTesting(true);
+    try {
+      // 먼저 현재 webhookUrl 저장 후 서버에서 발송 (CORS 우회)
+      await fetch(`/api/scrapers/${scraper.id}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webhookUrl: webhookUrl.trim() }),
+      });
+      const resp = await fetch(`/api/scrapers/${scraper.id}/webhook-test`, { method: 'POST' });
+      const text = await resp.text();
+      let data = {}; try { data = JSON.parse(text); } catch {}
+      if (!resp.ok) { setMsg({ ok: false, text: data.error || '전송 실패' }); return; }
+      setMsg({ ok: true, text: '테스트 전송 완료' });
+    } catch (e) {
+      setMsg({ ok: false, text: '오류: ' + e.message });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -2034,6 +2069,86 @@ function DetailSettings({ scraper, onScraperUpdate }) {
               onClick={() => toggleChannel(k)}
             >{CHANNEL_LABEL[k]}</button>
           ))}
+        </div>
+      </div>
+
+      {/* Webhook */}
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 12 }}>Webhook 알람</div>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <input
+            value={webhookUrl} onChange={e => setWebhookUrl(e.target.value)}
+            placeholder="https://hooks.slack.com/services/..."
+            style={{
+              flex: 1, padding: '8px 12px', borderRadius: 8, fontSize: 12,
+              border: '1px solid var(--border)', background: 'var(--bg-2)',
+              color: 'var(--text)', fontFamily: 'var(--mono)',
+            }}
+          />
+          <button className="btn ghost sm" onClick={handleTestWebhook} disabled={testing || !webhookUrl.trim()}>
+            {testing ? '전송 중…' : '테스트'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+          {[['generic','Generic JSON'],['slack','Slack']].map(([val, label]) => (
+            <button key={val}
+              className={`btn sm ${webhookType === val ? 'primary' : 'ghost'}`}
+              onClick={() => setWebhookType(val)}
+              style={{ fontSize: 12 }}
+            >{label}</button>
+          ))}
+        </div>
+
+        {/* 알람 조건 */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* 텍스트 조건 */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <input type="checkbox" checked={alertOnChange} onChange={e => setAlertOnChange(e.target.checked)} />
+            <div>
+              <div style={{ fontSize: 13 }}>값 변화 시 발송</div>
+              <div className="dim" style={{ fontSize: 11.5 }}>텍스트 수집값이 이전과 달라질 때</div>
+            </div>
+          </label>
+
+          {/* 숫자 — 변동폭 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <input type="checkbox"
+              checked={alertDelta !== ''}
+              onChange={e => setAlertDelta(e.target.checked ? (scraper.alertDelta ?? '') : '')}
+            />
+            <div style={{ fontSize: 13, minWidth: 80 }}>변동폭 초과</div>
+            <input
+              type="number" min="0" placeholder="절대값 (예: 50)"
+              value={alertDelta}
+              onChange={e => setAlertDelta(e.target.value)}
+              style={{
+                width: 120, padding: '6px 10px', borderRadius: 7, fontSize: 12,
+                border: '1px solid var(--border)', background: 'var(--bg-2)', color: 'var(--text)',
+              }}
+            />
+            <span className="dim" style={{ fontSize: 12 }}>│현재 − 이전│ 초과 시</span>
+          </div>
+
+          {/* 숫자 — 범위 이탈 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <input type="checkbox"
+              checked={alertMin !== '' || alertMax !== ''}
+              onChange={e => { if (!e.target.checked) { setAlertMin(''); setAlertMax(''); } }}
+            />
+            <div style={{ fontSize: 13, minWidth: 80 }}>범위 이탈</div>
+            <input type="number" placeholder="최솟값" value={alertMin}
+              onChange={e => setAlertMin(e.target.value)}
+              style={{ width: 100, padding: '6px 10px', borderRadius: 7, fontSize: 12,
+                border: '1px solid var(--border)', background: 'var(--bg-2)', color: 'var(--text)' }}
+            />
+            <span className="dim" style={{ fontSize: 12 }}>~</span>
+            <input type="number" placeholder="최댓값" value={alertMax}
+              onChange={e => setAlertMax(e.target.value)}
+              style={{ width: 100, padding: '6px 10px', borderRadius: 7, fontSize: 12,
+                border: '1px solid var(--border)', background: 'var(--bg-2)', color: 'var(--text)' }}
+            />
+            <span className="dim" style={{ fontSize: 12 }}>범위 벗어날 때</span>
+          </div>
         </div>
       </div>
 
@@ -3116,7 +3231,7 @@ function NewScraperScreen({ onClose, onRegister }) {
       threshold,
       css_selector: selected?.selector || "",
       user_intent: intent,
-      schedule: SCHEDULE_LABEL[scheduleVal] || scheduleVal,
+      schedule: scheduleVal,
       scheduleKey: scheduleVal,
       channels: channelVals,
       delivery: channelVals,

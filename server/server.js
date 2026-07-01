@@ -1,38 +1,50 @@
-const express = require('express');
-const { createProxyMiddleware } = require('http-proxy-middleware');
-const { WebSocketServer } = require('ws');
-const { chromium } = require('playwright');
-const http = require('http');
-const path = require('path');
-const fs = require('fs');
-const { runScraper } = require('./scraper');
+const express = require("express");
+const { createProxyMiddleware } = require("http-proxy-middleware");
+const { WebSocketServer } = require("ws");
+const { chromium } = require("playwright");
+const http = require("http");
+const path = require("path");
+const fs = require("fs");
+const { runScraper } = require("./scraper");
 
 const PORT = process.env.PORT || 3001;
-const SPRING_URL = process.env.SPRING_SERVICE_URL || 'http://spring-server:8080';
-const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
+const SPRING_URL =
+  process.env.SPRING_SERVICE_URL || "http://spring-server:8080";
+const SNAPSHOTS_DIR = path.join(__dirname, "snapshots");
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
 
 // Spring Boot로 API 프록시
-app.use(['/api', '/fetch-html', '/heal'], createProxyMiddleware({
-  target: SPRING_URL,
-  changeOrigin: true,
-}));
+app.use(
+  ["/api", "/fetch-html", "/heal"],
+  createProxyMiddleware({
+    target: SPRING_URL,
+    changeOrigin: true,
+  }),
+);
 
 // 프론트엔드 정적 파일 서빙
-app.use(express.static(path.join(__dirname, 'client')));
+app.use(express.static(path.join(__dirname, "client")));
 
 // ─── Internal API (Spring Boot 전용) ─────────────────────────────────────────
 
 // Spring이 스크래퍼 정보를 body에 담아 호출 → Playwright 실행 결과 반환
-app.post('/internal/run', async (req, res) => {
+app.post("/internal/run", async (req, res) => {
   const { id, name, url, css_selector, user_intent } = req.body;
   if (!id || !url || !css_selector) {
-    return res.status(400).json({ error: 'id, url, css_selector 필드가 필요합니다.' });
+    return res
+      .status(400)
+      .json({ error: "id, url, css_selector 필드가 필요합니다." });
   }
   try {
-    const result = await runScraper({ id, name, url, css_selector, user_intent });
+    const result = await runScraper({
+      id,
+      name,
+      url,
+      css_selector,
+      user_intent,
+    });
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -40,29 +52,29 @@ app.post('/internal/run', async (req, res) => {
 });
 
 // Spring이 heal 요청 전 v1_html을 조회할 때 사용
-app.get('/internal/snapshot/:id', (req, res) => {
+app.get("/internal/snapshot/:id", (req, res) => {
   const snapshotPath = path.join(SNAPSHOTS_DIR, `${req.params.id}_v1.html`);
   if (!fs.existsSync(snapshotPath)) {
-    return res.status(404).json({ error: 'V1 스냅샷 없음' });
+    return res.status(404).json({ error: "V1 스냅샷 없음" });
   }
-  res.json({ html: fs.readFileSync(snapshotPath, 'utf-8') });
+  res.json({ html: fs.readFileSync(snapshotPath, "utf-8") });
 });
 
 // 셀렉터 변경 시 Spring이 기존 V1 스냅샷 삭제 요청
-app.delete('/internal/snapshot/:id', (req, res) => {
+app.delete("/internal/snapshot/:id", (req, res) => {
   const snapshotPath = path.join(SNAPSHOTS_DIR, `${req.params.id}_v1.html`);
   if (fs.existsSync(snapshotPath)) fs.unlinkSync(snapshotPath);
   res.json({ ok: true });
 });
 
 // 셀렉터 지정 UI에서 현재 페이지 HTML 수집
-app.post('/internal/fetch-html', async (req, res) => {
+app.post("/internal/fetch-html", async (req, res) => {
   const { url } = req.body || {};
-  if (!url) return res.status(400).json({ error: 'url 필드가 필요합니다.' });
+  if (!url) return res.status(400).json({ error: "url 필드가 필요합니다." });
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
     const html = await page.content();
     res.json({ html });
   } catch (e) {
@@ -83,6 +95,15 @@ const GET_SELECTOR_FN = `
 (function({ x, y }) {
   const el = document.elementFromPoint(x, y);
   if (!el || el.id === '__doma_hl__') return null;
+
+  const BLOCKED_TAGS = new Set(['img','picture','video','audio','canvas','svg','iframe','object','embed','script','style','meta','link','noscript','br','hr','wbr','source','track','col','colgroup','head','base','template']);
+  const tagName = el.tagName.toLowerCase();
+  if (BLOCKED_TAGS.has(tagName)) return { blocked: true, tag: tagName, reason: '<' + tagName + '> 요소는 추출할 수 없습니다' };
+  if (tagName === 'input') {
+    const t = (el.type || '').toLowerCase();
+    if (['image','file','color','range','submit','button','reset','checkbox','radio'].includes(t))
+      return { blocked: true, tag: 'input[type=' + t + ']', reason: '이 input 유형에서는 텍스트를 추출할 수 없습니다' };
+  }
 
   function isHashClass(c) {
     if (!c || c.includes('-')) return false;
@@ -154,20 +175,26 @@ const OVERLAY_SCRIPT = `
   ].join(';');
   document.body.appendChild(ov);
 
+  const BLOCKED_OV = new Set(['img','picture','video','audio','canvas','svg','iframe','object','embed','script','style','meta','link','noscript','br','hr','source','track']);
   document.addEventListener('mousemove', function(e) {
     const el = document.elementFromPoint(e.clientX, e.clientY);
     if (!el || el.id === '__doma_hl__') { ov.style.display = 'none'; return; }
     const r = el.getBoundingClientRect();
-    ov.style.display = 'block';
-    ov.style.left   = r.left   + 'px';
-    ov.style.top    = r.top    + 'px';
-    ov.style.width  = r.width  + 'px';
-    ov.style.height = r.height + 'px';
+    const tag = el.tagName.toLowerCase();
+    const isBlocked = BLOCKED_OV.has(tag) || (tag === 'input' && ['image','file','color','range','submit','button','reset','checkbox','radio'].includes((el.type||'').toLowerCase()));
+    ov.style.display    = 'block';
+    ov.style.left       = r.left   + 'px';
+    ov.style.top        = r.top    + 'px';
+    ov.style.width      = r.width  + 'px';
+    ov.style.height     = r.height + 'px';
+    ov.style.outline    = isBlocked ? '2px solid #E04A4A' : '2px solid #3182F6';
+    ov.style.background = isBlocked ? 'rgba(224,74,74,0.10)' : 'rgba(49,130,246,0.10)';
+    ov.style.boxShadow  = isBlocked ? '0 0 0 4px rgba(224,74,74,0.15)' : '0 0 0 4px rgba(49,130,246,0.15)';
   });
 })();
 `;
 
-wss.on('connection', (ws) => {
+wss.on("connection", (ws) => {
   let browser = null;
   let page = null;
   let cdp = null;
@@ -183,125 +210,164 @@ wss.on('connection', (ws) => {
       browser = await chromium.launch({ headless: true });
       const ctx = await browser.newContext({
         viewport: VIEWPORT,
-        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       });
       page = await ctx.newPage();
-      cdp  = await ctx.newCDPSession(page);
+      cdp = await ctx.newCDPSession(page);
 
-      await cdp.send('Page.startScreencast', {
-        format: 'jpeg', quality: 80,
-        maxWidth: VIEWPORT.width, maxHeight: VIEWPORT.height,
+      await cdp.send("Page.startScreencast", {
+        format: "jpeg",
+        quality: 80,
+        maxWidth: VIEWPORT.width,
+        maxHeight: VIEWPORT.height,
       });
 
-      cdp.on('Page.screencastFrame', async ({ data, sessionId }) => {
-        send({ type: 'frame', data });
-        await cdp.send('Page.screencastFrameAck', { sessionId }).catch(() => {});
+      cdp.on("Page.screencastFrame", async ({ data, sessionId }) => {
+        send({ type: "frame", data });
+        await cdp
+          .send("Page.screencastFrameAck", { sessionId })
+          .catch(() => {});
       });
 
-      send({ type: 'status', status: 'connected' });
+      send({ type: "status", status: "connected" });
     } catch (err) {
-      send({ type: 'error', message: err.message });
+      send({ type: "error", message: err.message });
     }
   })();
 
-  ws.on('message', async (raw) => {
+  ws.on("message", async (raw) => {
     try {
       const msg = JSON.parse(raw.toString());
       if (!page) return;
 
-      if (msg.type === 'navigate') {
+      if (msg.type === "navigate") {
         ready = false;
-        send({ type: 'status', status: 'navigating' });
-        await page.goto(msg.url, { waitUntil: 'domcontentloaded', timeout: 20000 });
+        send({ type: "status", status: "navigating" });
+        await page.goto(msg.url, {
+          waitUntil: "domcontentloaded",
+          timeout: 20000,
+        });
         await page.evaluate(OVERLAY_SCRIPT).catch(() => {});
-        const nodeCount = await page.evaluate(() => document.querySelectorAll('*').length).catch(() => 0);
+        const nodeCount = await page
+          .evaluate(() => document.querySelectorAll("*").length)
+          .catch(() => 0);
         ready = true;
-        send({ type: 'status', status: 'ready', nodeCount });
+        send({ type: "status", status: "ready", nodeCount });
       }
 
-      if (msg.type === 'mousemove' && ready) {
+      if (msg.type === "mousemove" && ready) {
         const now = Date.now();
         if (now - lastMoveAt < 32) return;
         lastMoveAt = now;
         await page.mouse.move(msg.x, msg.y);
       }
 
-      if (msg.type === 'click' && ready) {
+      if (msg.type === "click" && ready) {
         const result = await page.evaluate(
-          new Function('args', `return (${GET_SELECTOR_FN})(args)`),
-          { x: msg.x, y: msg.y }
+          new Function("args", `return (${GET_SELECTOR_FN})(args)`),
+          { x: msg.x, y: msg.y },
         );
-        if (result) send({ type: 'selector', ...result });
+        if (result && result.blocked) {
+          send({ type: "blocked", tag: result.tag, reason: result.reason });
+        } else if (result) {
+          send({ type: "selector", ...result });
+        }
       }
 
-      if (msg.type === 'test_selector' && ready) {
+      if (msg.type === "test_selector" && ready) {
         try {
           const result = await page.evaluate((sel) => {
             try {
               const el = document.querySelector(sel);
               if (!el) return { found: false };
-              return { found: true, text: (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120) };
+              return {
+                found: true,
+                text: (el.textContent || "")
+                  .trim()
+                  .replace(/\s+/g, " ")
+                  .slice(0, 120),
+              };
             } catch (e) {
               return { found: false, error: e.message };
             }
           }, msg.selector);
-          send({ type: 'test_result', ...result });
+          send({ type: "test_result", ...result });
         } catch (e) {
-          send({ type: 'test_result', found: false, error: e.message });
+          send({ type: "test_result", found: false, error: e.message });
         }
       }
 
-      if (msg.type === 'scroll' && ready) {
+      if (msg.type === "scroll" && ready) {
         await page.mouse.wheel(0, msg.dy);
       }
 
-      if (msg.type === 'keypress' && ready) {
+      if (msg.type === "keypress" && ready) {
         await page.keyboard.press(msg.key);
       }
 
-      if (msg.type === 'remove_overlays' && ready) {
+      if (msg.type === "remove_overlays" && ready) {
         const removed = await page.evaluate(() => {
           const isOverlay = (el) => {
             const s = getComputedStyle(el);
             const pos = s.position;
-            if (pos !== 'fixed' && pos !== 'sticky' && pos !== 'absolute') return false;
+            if (pos !== "fixed" && pos !== "sticky" && pos !== "absolute")
+              return false;
             const z = parseInt(s.zIndex, 10);
             if (isNaN(z) || z < 10) return false;
             const r = el.getBoundingClientRect();
             return r.width > 80 && r.height > 80;
           };
           let count = 0;
-          document.querySelectorAll('[role="dialog"],[role="alertdialog"],[aria-modal="true"]').forEach(el => {
-            el.remove(); count++;
-          });
-          [...document.querySelectorAll('*')].filter(isOverlay).forEach(el => {
-            el.remove(); count++;
-          });
-          document.querySelectorAll([
-            '.modal,.modal-backdrop,.overlay,.popup,.popup-overlay',
-            '.dialog,.cookie-banner,.cookie-notice,.gdpr-banner',
-            '[class*="modal"],[class*="popup"],[class*="overlay"],[class*="cookie"]',
-          ].join(',')).forEach(el => { el.remove(); count++; });
-          document.body.style.overflow = '';
-          document.documentElement.style.overflow = '';
+          document
+            .querySelectorAll(
+              '[role="dialog"],[role="alertdialog"],[aria-modal="true"]',
+            )
+            .forEach((el) => {
+              el.remove();
+              count++;
+            });
+          [...document.querySelectorAll("*")]
+            .filter(isOverlay)
+            .forEach((el) => {
+              el.remove();
+              count++;
+            });
+          document
+            .querySelectorAll(
+              [
+                ".modal,.modal-backdrop,.overlay,.popup,.popup-overlay",
+                ".dialog,.cookie-banner,.cookie-notice,.gdpr-banner",
+                '[class*="modal"],[class*="popup"],[class*="overlay"],[class*="cookie"]',
+              ].join(","),
+            )
+            .forEach((el) => {
+              el.remove();
+              count++;
+            });
+          document.body.style.overflow = "";
+          document.documentElement.style.overflow = "";
           return count;
         });
-        send({ type: 'overlays_removed', count: removed });
+        send({ type: "overlays_removed", count: removed });
       }
 
-      if (msg.type === 'remove_element' && ready) {
-        await page.evaluate(({ x, y }) => {
-          const el = document.elementFromPoint(x, y);
-          if (el && el !== document.body && el !== document.documentElement) el.remove();
-        }, { x: msg.x, y: msg.y });
+      if (msg.type === "remove_element" && ready) {
+        await page.evaluate(
+          ({ x, y }) => {
+            const el = document.elementFromPoint(x, y);
+            if (el && el !== document.body && el !== document.documentElement)
+              el.remove();
+          },
+          { x: msg.x, y: msg.y },
+        );
       }
-
     } catch (err) {
-      send({ type: 'error', message: err.message });
+      send({ type: "error", message: err.message });
     }
   });
 
-  ws.on('close', async () => {
+  ws.on("close", async () => {
     await browser?.close().catch(() => {});
   });
 });

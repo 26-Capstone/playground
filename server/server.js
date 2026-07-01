@@ -1,4 +1,5 @@
 const express = require('express');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 const { WebSocketServer } = require('ws');
 const { chromium } = require('playwright');
 const http = require('http');
@@ -7,10 +8,20 @@ const fs = require('fs');
 const { runScraper } = require('./scraper');
 
 const PORT = process.env.PORT || 3001;
+const SPRING_URL = process.env.SPRING_SERVICE_URL || 'http://spring-server:8080';
 const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
+
+// Spring Boot로 API 프록시
+app.use(['/api', '/fetch-html', '/heal'], createProxyMiddleware({
+  target: SPRING_URL,
+  changeOrigin: true,
+}));
+
+// 프론트엔드 정적 파일 서빙
+app.use(express.static(path.join(__dirname, 'client')));
 
 // ─── Internal API (Spring Boot 전용) ─────────────────────────────────────────
 

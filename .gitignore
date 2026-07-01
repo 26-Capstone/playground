@@ -13,6 +13,16 @@ npm-debug.log*
 # OS
 .DS_Store
 
-# build output (나중에 Vite 붙이면)
+# build output
 client/dist/
 client/.vite/
+
+# SQLite DB
+server/doma.db
+
+# Playwright 스냅샷 (런타임 생성)
+server/snapshots/
+
+# Spring Boot / Gradle
+spring-server/build/
+spring-server/.gradle/

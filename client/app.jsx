@@ -93,23 +93,20 @@ function App(){
   };
 
   const handleRegister = async (newScraper) => {
+    setScraperList(prev => [newScraper, ...prev]);
     try {
       const resp = await fetch('/api/scrapers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newScraper),
       });
-      const saved = await resp.json();
       if (resp.ok) {
-        setScraperList(prev => [saved, ...prev]);
-      } else {
-        // 저장 실패 시에도 UI에는 추가 (오프라인 대응)
-        setScraperList(prev => [newScraper, ...prev]);
+        const saved = await resp.json();
+        setScraperList(prev => prev.map(c => c.id === saved.id ? saved : c));
       }
     } catch {
-      setScraperList(prev => [newScraper, ...prev]);
+      // optimistic entry stays; will sync on next auto-refresh
     }
-    go('overview');
   };
 
   return (

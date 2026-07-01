@@ -4,181 +4,48 @@ const { chromium } = require('playwright');
 const http = require('http');
 const path = require('path');
 const fs = require('fs');
-const db = require('./db');
 const { runScraper } = require('./scraper');
-const scheduler = require('./scheduler');
 
-const PYTHON_API_URL = process.env.PYTHON_API_URL || 'http://localhost:8000';
+const PORT = process.env.PORT || 3001;
+const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, '../client')));
 
-// ─── Scrapers CRUD ────────────────────────────────────────────────────────────
+// ─── Internal API (Spring Boot 전용) ─────────────────────────────────────────
 
-app.get('/api/scrapers', (req, res) => {
-  const scrapers = db.scrapers.list();
-  const withSpark = scrapers.map(c => ({
-    ...c,
-    spark: db.results.sparkScores(c.id),
-  }));
-  res.json(withSpark);
-});
-
-app.get('/api/stats', (req, res) => {
-  res.json(db.stats.summary());
-});
-
-app.post('/api/scrapers', (req, res) => {
-  const b = req.body;
-  if (!b.url || !b.name) return res.status(400).json({ error: 'name, url 필드가 필요합니다.' });
-  const data = {
-    id:           b.id           || 'cr_' + Math.random().toString(36).slice(2, 6),
-    name:         b.name,
-    url:          b.url,
-    css_selector: b.css_selector || '',
-    user_intent:  b.user_intent  || '',
-    threshold:    b.threshold    ?? 85,
-    schedule:     b.schedule     || 'daily-9',
-    channels:     JSON.stringify(Array.isArray(b.channels) ? b.channels : ['REST API']),
-    domain:       b.domain       || 'commerce',
-    org:          b.org          || '',
-    owner:        b.owner        || '',
-    status:       'pending',
-  };
-  const created = db.scrapers.insert(data);
-  scheduler.addJob(created);
-  res.status(201).json(created);
-});
-
-app.get('/api/scrapers/:id', (req, res) => {
-  const c = db.scrapers.get(req.params.id);
-  if (!c) return res.status(404).json({ error: '스크래퍼를 찾을 수 없습니다.' });
-  res.json(c);
-});
-
-app.delete('/api/scrapers/:id', (req, res) => {
-  scheduler.removeJob(req.params.id);
-  db.scrapers.delete(req.params.id);
-  res.json({ ok: true });
-});
-
-app.patch('/api/scrapers/:id/selector', (req, res) => {
-  const { css_selector, user_intent } = req.body;
-  const scraper = db.scrapers.get(req.params.id);
-  if (!scraper) return res.status(404).json({ error: '스크래퍼를 찾을 수 없습니다.' });
-  db.scrapers.updateSelector(req.params.id, css_selector, user_intent ?? scraper.user_intent);
-  // 셀렉터가 바뀌면 기존 V1 스냅샷 삭제 (새 셀렉터 기준으로 다시 쌓아야 함)
-  const snapshotPath = path.join(__dirname, 'snapshots', `${req.params.id}_v1.html`);
-  if (fs.existsSync(snapshotPath)) fs.unlinkSync(snapshotPath);
-  const updated = db.scrapers.get(req.params.id);
-  scheduler.addJob(updated);
-  res.json(updated);
-});
-
-app.get('/api/scheduler/status', (req, res) => {
-  res.json(scheduler.getStatus());
-});
-
-app.get('/api/scrapers/:id/snapshot', (req, res) => {
-  const snapshotPath = path.join(__dirname, 'snapshots', `${req.params.id}_v1.html`);
-  if (!fs.existsSync(snapshotPath)) {
-    return res.status(404).json({ error: 'V1 스냅샷 없음 — 스크래퍼를 한 번 이상 실행해야 생성됩니다.' });
+// Spring이 스크래퍼 정보를 body에 담아 호출 → Playwright 실행 결과 반환
+app.post('/internal/run', async (req, res) => {
+  const { id, name, url, css_selector, user_intent } = req.body;
+  if (!id || !url || !css_selector) {
+    return res.status(400).json({ error: 'id, url, css_selector 필드가 필요합니다.' });
   }
-  res.json({ html: fs.readFileSync(snapshotPath, 'utf-8') });
-});
-
-app.get('/api/scrapers/:id/results', (req, res) => {
-  res.json(db.results.list(req.params.id));
-});
-
-app.get('/api/scrapers/:id/results/csv', (req, res) => {
-  const scraper = db.scrapers.get(req.params.id);
-  if (!scraper) return res.status(404).json({ error: '스크래퍼를 찾을 수 없습니다.' });
-  const rows = db.results.list(req.params.id);
-  const esc = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  const header = ['수집시각', '상태', '추출값', '신뢰도', '응답시간(ms)', '비고'].join(',');
-  const lines = rows.map(r => [r.run_at, r.status, esc(r.value), r.score, r.duration_ms, esc(r.note)].join(','));
-  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${req.params.id}_results.csv"`);
-  res.send('﻿' + [header, ...lines].join('\r\n'));
-});
-
-app.post('/api/scrapers/:id/run', async (req, res) => {
   try {
-    const result = await runScraper(req.params.id);
-    const updated = db.scrapers.get(req.params.id);
-    res.json({ result, scraper: updated });
+    const result = await runScraper({ id, name, url, css_selector, user_intent });
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// ─── Approvals (heal_proposals) ──────────────────────────────────────────────
-
-app.get('/api/approvals', (req, res) => {
-  res.json(db.proposals.listPending());
-});
-
-app.post('/api/approvals/:id/approve', (req, res) => {
-  const proposal = db.proposals.get(req.params.id);
-  if (!proposal) return res.status(404).json({ error: '승인 요청을 찾을 수 없습니다.' });
-
-  const scraper = db.scrapers.get(proposal.scraper_id);
-  if (!scraper) return res.status(404).json({ error: '스크래퍼를 찾을 수 없습니다.' });
-
-  db.scrapers.update({
-    id:           proposal.scraper_id,
-    status:       'healthy',
-    score:        Math.round(proposal.confidence * 1000) / 10,
-    last_value:   proposal.extracted_text || '—',
-    last_run_at:  new Date().toLocaleString('ko-KR'),
-    healed_count: (scraper.healed || 0) + 1,
-    css_selector: proposal.proposed_selector,
-  });
-  db.proposals.updateStatus(proposal.id, 'approved');
-
-  res.json({ ok: true, scraper: db.scrapers.get(proposal.scraper_id) });
-});
-
-app.post('/api/approvals/:id/reject', (req, res) => {
-  const proposal = db.proposals.get(req.params.id);
-  if (!proposal) return res.status(404).json({ error: '승인 요청을 찾을 수 없습니다.' });
-
-  const scraper = db.scrapers.get(proposal.scraper_id);
-  if (scraper) {
-    db.scrapers.update({
-      id:           proposal.scraper_id,
-      status:       'failed',
-      score:        scraper.score,
-      last_value:   '—',
-      last_run_at:  new Date().toLocaleString('ko-KR'),
-      healed_count: scraper.healed,
-      css_selector: scraper.css_selector,
-    });
+// Spring이 heal 요청 전 v1_html을 조회할 때 사용
+app.get('/internal/snapshot/:id', (req, res) => {
+  const snapshotPath = path.join(SNAPSHOTS_DIR, `${req.params.id}_v1.html`);
+  if (!fs.existsSync(snapshotPath)) {
+    return res.status(404).json({ error: 'V1 스냅샷 없음' });
   }
-  db.proposals.updateStatus(proposal.id, 'rejected');
+  res.json({ html: fs.readFileSync(snapshotPath, 'utf-8') });
+});
 
+// 셀렉터 변경 시 Spring이 기존 V1 스냅샷 삭제 요청
+app.delete('/internal/snapshot/:id', (req, res) => {
+  const snapshotPath = path.join(SNAPSHOTS_DIR, `${req.params.id}_v1.html`);
+  if (fs.existsSync(snapshotPath)) fs.unlinkSync(snapshotPath);
   res.json({ ok: true });
 });
 
-// ─── /heal: Python FastAPI 프록시 ──────────────────────────────────────────
-app.post('/heal', async (req, res) => {
-  try {
-    const upstream = await fetch(`${PYTHON_API_URL}/heal`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(req.body),
-    });
-    const data = await upstream.json();
-    res.json(data);
-  } catch (e) {
-    res.status(502).json({ error: `Python API 연결 실패: ${e.message}` });
-  }
-});
-
-// ─── /fetch-html: Playwright로 현재 페이지 HTML 수집 ──────────────────────
-app.post('/fetch-html', async (req, res) => {
+// 셀렉터 지정 UI에서 현재 페이지 HTML 수집
+app.post('/internal/fetch-html', async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url 필드가 필요합니다.' });
   const browser = await chromium.launch({ headless: true });
@@ -194,18 +61,18 @@ app.post('/fetch-html', async (req, res) => {
   }
 });
 
+// ─── WebSocket (원격 브라우저 스트리밍) ──────────────────────────────────────
+
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
 const VIEWPORT = { width: 1280, height: 800 };
 
-// 요소의 CSS 셀렉터를 생성하는 로직 (페이지 내에서 실행됨)
 const GET_SELECTOR_FN = `
 (function({ x, y }) {
   const el = document.elementFromPoint(x, y);
   if (!el || el.id === '__doma_hl__') return null;
 
-  // CSS-in-JS 해시 클래스 감지: 하이픈 없고 모음 비율 < 25%
   function isHashClass(c) {
     if (!c || c.includes('-')) return false;
     const letters = c.replace(/[^a-zA-Z]/g, '');
@@ -214,7 +81,6 @@ const GET_SELECTOR_FN = `
     return vowels / letters.length < 0.25;
   }
 
-  // 안정적인 속성 (data-testid, aria-label 등) 우선 사용
   function stableAttr(el) {
     for (const attr of ['data-testid','data-test','data-id','data-name','aria-label','name']) {
       if (el.hasAttribute(attr)) {
@@ -236,7 +102,6 @@ const GET_SELECTOR_FN = `
       if (attr) {
         s += attr;
       } else {
-        // 해시 클래스 걸러내고 의미있는 클래스만 사용
         const cls = Array.from(cur.classList)
           .filter(c => c !== '__doma_hl__' && !isHashClass(c))
           .slice(0, 2)
@@ -265,7 +130,6 @@ const GET_SELECTOR_FN = `
 })
 `;
 
-// 마우스 오버 하이라이트 오버레이를 주입하는 스크립트
 const OVERLAY_SCRIPT = `
 (function() {
   if (document.getElementById('__doma_hl__')) return;
@@ -346,7 +210,7 @@ wss.on('connection', (ws) => {
 
       if (msg.type === 'mousemove' && ready) {
         const now = Date.now();
-        if (now - lastMoveAt < 32) return; // ~30fps
+        if (now - lastMoveAt < 32) return;
         lastMoveAt = now;
         await page.mouse.move(msg.x, msg.y);
       }
@@ -393,25 +257,20 @@ wss.on('connection', (ws) => {
             const z = parseInt(s.zIndex, 10);
             if (isNaN(z) || z < 10) return false;
             const r = el.getBoundingClientRect();
-            // Must cover a meaningful area of the viewport
             return r.width > 80 && r.height > 80;
           };
           let count = 0;
-          // dialog / role patterns first
           document.querySelectorAll('[role="dialog"],[role="alertdialog"],[aria-modal="true"]').forEach(el => {
             el.remove(); count++;
           });
-          // high-z overlays
           [...document.querySelectorAll('*')].filter(isOverlay).forEach(el => {
             el.remove(); count++;
           });
-          // common overlay class names
           document.querySelectorAll([
             '.modal,.modal-backdrop,.overlay,.popup,.popup-overlay',
             '.dialog,.cookie-banner,.cookie-notice,.gdpr-banner',
             '[class*="modal"],[class*="popup"],[class*="overlay"],[class*="cookie"]',
           ].join(',')).forEach(el => { el.remove(); count++; });
-          // restore body scroll lock
           document.body.style.overflow = '';
           document.documentElement.style.overflow = '';
           return count;
@@ -436,8 +295,6 @@ wss.on('connection', (ws) => {
   });
 });
 
-const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`DOMA → http://localhost:${PORT}/DOMA.html`);
-  scheduler.initScheduler();
+  console.log(`DOMA Scraper Service → http://localhost:${PORT}`);
 });

@@ -42,15 +42,16 @@ function OverviewScreen({ scrapers = [], stats, approvalCount = 0, onOpenScraper
     return ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : ms + 'ms';
   };
   const fmtPct = v => v != null ? v.toFixed(2) + '%' : '—';
-  const activeFeeds   = stats ? stats.activeFeedsCount     : scrapers.filter(c => c.status !== 'paused').length;
-  const successRate   = stats ? fmtPct(stats.successRate7d) : '—';
-  const rateColor     = stats && stats.successRate7d != null
+  const hasStats      = stats != null && stats.activeFeedsCount != null;
+  const activeFeeds   = hasStats ? stats.activeFeedsCount : scrapers.filter(c => c.status !== 'paused').length;
+  const successRate   = hasStats ? fmtPct(stats.successRate7d) : '—';
+  const rateColor     = hasStats && stats.successRate7d != null
     ? (stats.successRate7d >= 95 ? 'var(--ok)' : stats.successRate7d >= 80 ? 'var(--warn)' : 'var(--danger)')
     : 'var(--text)';
-  const totalHealed   = stats ? stats.totalHealed          : '—';
-  const avgDur        = stats ? fmtMs(stats.avgDurationMs)  : '—';
-  const p95Dur        = stats ? fmtMs(stats.p95DurationMs)  : '—';
-  const noData        = stats && stats.resultCount7d === 0;
+  const totalHealed   = hasStats ? stats.totalHealed : '—';
+  const avgDur        = hasStats ? fmtMs(stats.avgDurationMs)  : '—';
+  const p95Dur        = hasStats ? fmtMs(stats.p95DurationMs)  : '—';
+  const noData        = hasStats && stats.resultCount7d === 0;
 
   return (
     <div className="fadein" style={{padding:'28px 32px 80px', maxWidth:1480, margin:'0 auto'}}>
@@ -513,7 +514,7 @@ function ApprovalsScreen({ onBack, onAction }) {
 // ─── Scraper Detail ────────────────────────────────────────────────────────
 function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
   const [c, setC] = React.useState(scraper);
-  const tabs = ['Overview', 'Runs', 'Healing log', 'Schema', 'Settings'];
+  const tabs = ['Overview', 'Runs', 'Healing log', 'Schema', 'Settings', 'API'];
   const [tab, setTab] = React.useState('Overview');
   const [healOpen, setHealOpen] = React.useState(false);
   const [repickOpen, setRepickOpen] = React.useState(false);
@@ -644,7 +645,8 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
 
       {tab==='Overview' && <DetailOverview scraper={c} scores={scores}/>}
       {tab==='Runs' && <DetailRuns scraperId={c.id}/>}
-      {tab!=='Overview' && tab!=='Runs' && (
+      {tab==='API' && <DetailApi scraper={c}/>}
+      {tab!=='Overview' && tab!=='Runs' && tab!=='API' && (
         <div className="card" style={{padding:'60px', textAlign:'center', color:'var(--text-mute)'}}>
           <Icon name="cube" className="icon icon-lg" style={{margin:'0 auto 12px', display:'block', color:'var(--text-dim)'}}/>
           <div style={{marginBottom:6, color:'var(--text)'}}>{tab}</div>
@@ -859,6 +861,183 @@ function DetailOverview({ scraper, scores }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CurlBlock({ url, params, token, copyId, onCopy, copied }) {
+  const paramEntries = params ? Object.entries(params) : [];
+  const queryStr = paramEntries.length
+    ? '?' + paramEntries.map(([k,v]) => `${k}=${v}`).join('&') : '';
+  const rawCmd = `curl "${url}${queryStr}" \\\n  -H "Authorization: Bearer ${token || '<YOUR_TOKEN>'}"`;
+
+  return (
+    <div style={{position:'relative'}}>
+      <pre className="code" style={{margin:0, fontSize:12, lineHeight:1.9, paddingRight:72}}>
+        {/* curl */}
+        <span style={{color:'var(--accent)', fontWeight:500}}>curl</span>
+        {' '}
+        {/* URL */}
+        <span className="str">"{url}
+        {paramEntries.map(([k,v], i) => (
+          <span key={k}>
+            <span className="punct">{i===0?'?':'&'}</span>
+            <span className="attr">{k}</span>
+            <span className="punct">=</span>
+            <span style={{color:'var(--ok)'}}>{v}</span>
+          </span>
+        ))}"</span>
+        {' \\\n  '}
+        {/* -H flag */}
+        <span className="attr">-H</span>
+        {' '}
+        {/* header value */}
+        <span className="str">"<span className="tag">Authorization</span>
+        <span className="punct">:</span>
+        {' '}
+        <span className="dim">Bearer</span>
+        {' '}
+        <span style={{color:'var(--warn)'}}>
+          {token ? token.slice(0,8) + '…' + token.slice(-4) : '<YOUR_TOKEN>'}
+        </span>"</span>
+      </pre>
+      <button
+        className="btn xs ghost"
+        onClick={() => onCopy(rawCmd, copyId)}
+        style={{position:'absolute', top:8, right:8, fontSize:11}}>
+        {copied === copyId ? '✓ 복사됨' : '복사'}
+      </button>
+    </div>
+  );
+}
+
+function DetailApi({ scraper }) {
+  const [settings, setSettings] = React.useState(null);
+  const [tokenVisible, setTokenVisible] = React.useState(false);
+  const [copied, setCopied] = React.useState('');
+  const [params, setParams] = React.useState({ from: '', to: '', status: '', limit: '' });
+
+  React.useEffect(() => {
+    fetch('/api/settings').then(r => r.json()).then(setSettings).catch(() => {});
+  }, []);
+
+  const token = settings?.apiToken;
+  const baseUrl = settings?.baseUrl || window.location.origin;
+  const endpoint = `${baseUrl}/api/v1/scrapers/${scraper.id}/data`;
+
+  const activeParams = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== ''));
+
+  const copy = (text, key) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(key);
+      setTimeout(() => setCopied(''), 1800);
+    });
+  };
+
+  const CopyBtn = ({ text, id }) => (
+    <button className="btn xs ghost" onClick={() => copy(text, id)} style={{fontSize:11}}>
+      {copied === id ? '✓ 복사됨' : '복사'}
+    </button>
+  );
+
+  const inputStyle = {
+    fontFamily: 'var(--mono)', fontSize: 12.5,
+    background: 'var(--bg-3)', border: '1px solid var(--border-mid)',
+    borderRadius: 'var(--r-1)', padding: '6px 10px',
+    color: 'var(--text)', width: '100%', outline: 'none',
+  };
+
+  return (
+    <div style={{display:'flex', flexDirection:'column', gap:16, maxWidth:780}}>
+
+      {/* 엔드포인트 */}
+      <div className="card" style={{padding:'18px 20px'}}>
+        <div style={{fontSize:11, fontWeight:600, color:'var(--text-dim)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:10}}>Endpoint</div>
+        <div style={{display:'flex', alignItems:'center', gap:8, background:'var(--bg-3)', borderRadius:'var(--r-2)', padding:'9px 12px'}}>
+          <span className="chip" style={{fontSize:10, padding:'1px 7px', flexShrink:0, background:'var(--accent-soft)', color:'var(--accent)', borderColor:'var(--accent-line)'}}>GET</span>
+          <code style={{fontFamily:'var(--mono)', fontSize:12.5, flex:1, wordBreak:'break-all', color:'var(--text)'}}>{endpoint}</code>
+          <CopyBtn text={endpoint} id="url"/>
+        </div>
+      </div>
+
+      {/* 인증 토큰 */}
+      <div className="card" style={{padding:'18px 20px'}}>
+        <div style={{fontSize:11, fontWeight:600, color:'var(--text-dim)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:10}}>API Token</div>
+        {!token ? (
+          <div className="muted" style={{fontSize:13}}>
+            서버에 <code style={{fontFamily:'var(--mono)', color:'var(--accent)'}}>DOMA_API_TOKEN</code>이 설정되지 않았습니다.
+          </div>
+        ) : (
+          <div style={{display:'flex', alignItems:'center', gap:8, background:'var(--bg-3)', borderRadius:'var(--r-2)', padding:'9px 12px'}}>
+            <code style={{fontFamily:'var(--mono)', fontSize:12.5, flex:1, color:'var(--warn)', letterSpacing: tokenVisible ? '.04em' : '.08em'}}>
+              {tokenVisible ? token : token.slice(0,8) + '  ••••••••••••••••••••••••  ' + token.slice(-4)}
+            </code>
+            <button className="btn xs ghost" onClick={() => setTokenVisible(v => !v)} style={{fontSize:11, flexShrink:0}}>
+              {tokenVisible ? '숨기기' : '표시'}
+            </button>
+            <CopyBtn text={token} id="token"/>
+          </div>
+        )}
+      </div>
+
+      {/* 파라미터 빌더 + curl 프리뷰 */}
+      <div className="card" style={{padding:'18px 20px'}}>
+        <div style={{fontSize:11, fontWeight:600, color:'var(--text-dim)', letterSpacing:'.08em', textTransform:'uppercase', marginBottom:14}}>파라미터 설정</div>
+
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16}}>
+          {/* from */}
+          <label style={{display:'flex', flexDirection:'column', gap:5}}>
+            <span style={{fontSize:11.5, color:'var(--text-mute)', fontWeight:500}}>
+              시작일 <code style={{fontFamily:'var(--mono)', fontSize:10.5, color:'var(--accent)'}}>from</code>
+            </span>
+            <input type="date" style={inputStyle} value={params.from}
+              onChange={e => setParams(p => ({...p, from: e.target.value}))}/>
+          </label>
+          {/* to */}
+          <label style={{display:'flex', flexDirection:'column', gap:5}}>
+            <span style={{fontSize:11.5, color:'var(--text-mute)', fontWeight:500}}>
+              종료일 <code style={{fontFamily:'var(--mono)', fontSize:10.5, color:'var(--accent)'}}>to</code>
+            </span>
+            <input type="date" style={inputStyle} value={params.to}
+              onChange={e => setParams(p => ({...p, to: e.target.value}))}/>
+          </label>
+          {/* status */}
+          <label style={{display:'flex', flexDirection:'column', gap:5}}>
+            <span style={{fontSize:11.5, color:'var(--text-mute)', fontWeight:500}}>
+              상태 <code style={{fontFamily:'var(--mono)', fontSize:10.5, color:'var(--accent)'}}>status</code>
+            </span>
+            <select style={inputStyle} value={params.status}
+              onChange={e => setParams(p => ({...p, status: e.target.value}))}>
+              <option value="">전체</option>
+              <option value="healthy">healthy</option>
+              <option value="failed">failed</option>
+              <option value="pending">pending</option>
+            </select>
+          </label>
+          {/* limit */}
+          <label style={{display:'flex', flexDirection:'column', gap:5}}>
+            <span style={{fontSize:11.5, color:'var(--text-mute)', fontWeight:500}}>
+              건수 <code style={{fontFamily:'var(--mono)', fontSize:10.5, color:'var(--accent)'}}>limit</code>
+              <span className="dim" style={{fontSize:10.5, marginLeft:4}}>기본 100 / 최대 1000</span>
+            </span>
+            <input type="number" min={1} max={1000} placeholder="100" style={inputStyle}
+              value={params.limit}
+              onChange={e => setParams(p => ({...p, limit: e.target.value}))}/>
+          </label>
+        </div>
+
+        {/* 리셋 버튼 */}
+        {Object.values(params).some(v => v !== '') && (
+          <button className="btn xs ghost" style={{marginBottom:14, fontSize:11}}
+            onClick={() => setParams({ from:'', to:'', status:'', limit:'' })}>
+            초기화
+          </button>
+        )}
+
+        <div style={{fontSize:11, color:'var(--text-dim)', marginBottom:6, letterSpacing:'.04em'}}>GENERATED COMMAND</div>
+        <CurlBlock url={endpoint} params={activeParams} token={token} copyId="c1" onCopy={copy} copied={copied}/>
+      </div>
+
     </div>
   );
 }
@@ -1245,21 +1424,34 @@ function NewScraperScreen({ onClose, onRegister }) {
   const CHANNEL_LABEL = { api:'REST API', webhook:'Webhook', slack:'Slack', csv:'CSV' };
 
   const handleCreate = () => {
+    const scheduleVal = schedule === 'custom' ? customCron.trim() : schedule;
+    const channelVals = channels.map(c => CHANNEL_LABEL[c] || c);
     const newScraper = {
       id:           'cr_' + Math.random().toString(36).slice(2, 6),
       name:         intent.slice(0, 40) || url,
       url,
       org:          '',
       domain,
+      type:         domain,
+      altCategory:  DOMAIN_ALTS[domain] || domain,
       threshold,
       css_selector: selected?.selector || '',
       user_intent:  intent,
-      schedule: schedule === 'custom' ? customCron.trim() : schedule,
-      channels:     channels.map(c => CHANNEL_LABEL[c] || c),
+      schedule:     SCHEDULE_LABEL[scheduleVal] || scheduleVal,
+      scheduleKey:  scheduleVal,
+      channels:     channelVals,
+      delivery:     channelVals,
       owner:        'me',
+      status:       'pending',
+      score:        0,
+      lastValue:    '—',
+      lastRun:      '—',
+      healed:       0,
+      runs7d:       0,
+      spark:        [],
     };
     if (onRegister) onRegister(newScraper);
-    else onClose();
+    onClose();
   };
 
   return (

@@ -6,9 +6,12 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.Trigger;
 import org.springframework.scheduling.support.CronTrigger;
+import org.springframework.scheduling.support.PeriodicTrigger;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,13 +43,8 @@ public class SchedulerService {
     public void addJob(Scraper scraper) {
         if (scraper.getCssSelector() == null || scraper.getCssSelector().isBlank()) return;
 
-        String expr = CRON_MAP.getOrDefault(scraper.getSchedule(), scraper.getSchedule());
-        try {
-            new CronTrigger(expr); // validate
-        } catch (IllegalArgumentException e) {
-            log.warn("[scheduler] {} — 유효하지 않은 cron: \"{}\" (건너뜀)", scraper.getName(), expr);
-            return;
-        }
+        Trigger trigger = buildTrigger(scraper.getSchedule());
+        if (trigger == null) return;
 
         removeJob(scraper.getId());
 
@@ -59,10 +57,36 @@ public class SchedulerService {
                     log.error("[scheduler] {} 실행 오류: {}", scraper.getName(), e.getMessage());
                 }
             },
-            new CronTrigger(expr)
+            trigger
         );
         jobs.put(scraper.getId(), future);
-        log.info("[scheduler] {} → \"{}\" 등록", scraper.getName(), expr);
+        log.info("[scheduler] {} → \"{}\" 등록", scraper.getName(), scraper.getSchedule());
+    }
+
+    private Trigger buildTrigger(String schedule) {
+        // 간격 기반: 등록 시점으로부터 N분 뒤 첫 실행, 이후 동일 간격 반복
+        switch (schedule) {
+            case "15m": {
+                PeriodicTrigger t = new PeriodicTrigger(Duration.ofMinutes(15));
+                t.setInitialDelay(Duration.ofMinutes(15));
+                return t;
+            }
+            case "hourly": {
+                PeriodicTrigger t = new PeriodicTrigger(Duration.ofHours(1));
+                t.setInitialDelay(Duration.ofHours(1));
+                return t;
+            }
+            default: {
+                // 크론 표현식 (daily-9, 또는 custom cron)
+                String expr = CRON_MAP.getOrDefault(schedule, schedule);
+                try {
+                    return new CronTrigger(expr);
+                } catch (IllegalArgumentException e) {
+                    log.warn("[scheduler] 유효하지 않은 스케줄: \"{}\" (건너뜀)", schedule);
+                    return null;
+                }
+            }
+        }
     }
 
     public void removeJob(String scraperId) {

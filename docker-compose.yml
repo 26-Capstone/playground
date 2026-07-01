@@ -35,6 +35,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      spring-server:
+        condition: service_healthy
 
   spring-server:
     build:
@@ -48,11 +50,15 @@ services:
       SCRAPER_SERVICE_URL: http://node-scraper:3001
       PYTHON_API_URL: http://python-ai:8000
       DOMA_API_TOKEN: ${DOMA_API_TOKEN:-}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/stats || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
-      node-scraper:
-        condition: service_started
       python-ai:
         condition: service_started
 

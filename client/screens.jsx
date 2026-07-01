@@ -1253,11 +1253,11 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                 setRunState("running");
                 setRunMsg("");
                 try {
-                  const resp = await fetch(`/api/scrapers/${c.id}/run`, {
-                    method: "POST",
-                  });
-                  const data = await resp.json();
-                  if (!resp.ok) throw new Error(data.error || "실행 실패");
+                  const resp = await fetch(`/api/scrapers/${c.id}/run`, { method: 'POST' });
+                  const text = await resp.text();
+                  let data = {};
+                  try { if (text) data = JSON.parse(text); } catch { /* non-JSON */ }
+                  if (!resp.ok) throw new Error(data.error || `실행 실패 (${resp.status}): ${text.slice(0, 120)}`);
                   setC(data.scraper);
                   if (onScraperUpdate) onScraperUpdate(data.scraper);
                   const r = data.result;
@@ -1408,31 +1408,15 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
         ))}
       </div>
 
-      {tab === "Overview" && <DetailOverview scraper={c} scores={scores} />}
-      {tab === "Runs" && <DetailRuns scraperId={c.id} />}
-      {tab === "API" && <DetailApi scraper={c} />}
-      {tab !== "Overview" && tab !== "Runs" && tab !== "API" && (
-        <div
-          className="card"
-          style={{
-            padding: "60px",
-            textAlign: "center",
-            color: "var(--text-mute)",
-          }}
-        >
-          <Icon
-            name="cube"
-            className="icon icon-lg"
-            style={{
-              margin: "0 auto 12px",
-              display: "block",
-              color: "var(--text-dim)",
-            }}
-          />
-          <div style={{ marginBottom: 6, color: "var(--text)" }}>{tab}</div>
-          <div className="dim" style={{ fontSize: 12 }}>
-            이 탭은 데모에서 생략되었습니다.
-          </div>
+      {tab==='Overview' && <DetailOverview scraper={c} scores={scores}/>}
+      {tab==='Runs' && <DetailRuns scraperId={c.id}/>}
+      {tab==='API' && <DetailApi scraper={c}/>}
+      {tab==='Settings' && <DetailSettings scraper={c} onScraperUpdate={(u) => { setC(u); if(onScraperUpdate) onScraperUpdate(u); }}/>}
+      {tab!=='Overview' && tab!=='Runs' && tab!=='API' && tab!=='Settings' && (
+        <div className="card" style={{padding:'60px', textAlign:'center', color:'var(--text-mute)'}}>
+          <Icon name="cube" className="icon icon-lg" style={{margin:'0 auto 12px', display:'block', color:'var(--text-dim)'}}/>
+          <div style={{marginBottom:6, color:'var(--text)'}}>{tab}</div>
+          <div className="dim" style={{fontSize:12}}>이 탭은 데모에서 생략되었습니다.</div>
         </div>
       )}
     </div>
@@ -1932,6 +1916,138 @@ function CurlBlock({ url, params, token, copyId, onCopy, copied }) {
       >
         {copied === copyId ? "✓ 복사됨" : "복사"}
       </button>
+    </div>
+  );
+}
+
+function DetailSettings({ scraper, onScraperUpdate }) {
+  const SCHEDULE_OPTIONS = [
+    { key: 'daily-9', label: '매일 09:00' },
+    { key: 'hourly',  label: '매시간 (등록 시점 기준)' },
+    { key: '15m',     label: '15분마다 (등록 시점 기준)' },
+    { key: 'custom',  label: '커스텀 Cron' },
+  ];
+  const CHANNEL_LABEL = { api: 'REST API', webhook: 'Webhook', slack: 'Slack', csv: 'CSV' };
+  const CHANNEL_KEYS  = Object.keys(CHANNEL_LABEL);
+
+  const currentScheduleKey = scraper.scheduleKey || 'daily-9';
+  const isCustom = !SCHEDULE_OPTIONS.slice(0, 3).some(o => o.key === currentScheduleKey);
+
+  const [scheduleKey, setScheduleKey] = React.useState(isCustom ? 'custom' : currentScheduleKey);
+  const [customCron,  setCustomCron]  = React.useState(isCustom ? currentScheduleKey : '');
+  const [threshold,   setThreshold]   = React.useState(scraper.threshold ?? 85);
+  const [channels,    setChannels]    = React.useState(
+    (scraper.channels || []).map(c => Object.entries(CHANNEL_LABEL).find(([,v]) => v===c)?.[0] || c)
+  );
+  const [saving, setSaving] = React.useState(false);
+  const [msg,    setMsg]    = React.useState(null); // { ok, text }
+
+  const isValidCron = (s) => /^(\S+\s+){4}\S+$/.test(s.trim()) || /^(\S+\s+){5}\S+$/.test(s.trim());
+
+  const handleSave = async () => {
+    const scheduleVal = scheduleKey === 'custom' ? customCron.trim() : scheduleKey;
+    if (scheduleKey === 'custom' && !isValidCron(customCron)) {
+      setMsg({ ok: false, text: '유효한 Cron 표현식을 입력하세요 (예: 0 */30 * * * *)' });
+      return;
+    }
+    setSaving(true); setMsg(null);
+    try {
+      const resp = await fetch(`/api/scrapers/${scraper.id}/settings`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          schedule:  scheduleVal,
+          threshold,
+          channels:  channels.map(k => CHANNEL_LABEL[k] || k),
+        }),
+      });
+      let data = {};
+      const text = await resp.text();
+      try { if (text) data = JSON.parse(text); } catch { /* empty / non-JSON body */ }
+      if (!resp.ok) { setMsg({ ok: false, text: data.error || `저장 실패 (${resp.status})` }); return; }
+      setMsg({ ok: true, text: '저장되었습니다. 스케줄러가 즉시 재등록됩니다.' });
+      if (onScraperUpdate) onScraperUpdate(data);
+    } catch (e) {
+      setMsg({ ok: false, text: '오류: ' + e.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleChannel = (k) =>
+    setChannels(prev => prev.includes(k) ? prev.filter(c => c !== k) : [...prev, k]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* 스케줄 */}
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 14 }}>실행 스케줄</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {SCHEDULE_OPTIONS.map(opt => (
+            <label key={opt.key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+              <input type="radio" name="schedule" value={opt.key}
+                checked={scheduleKey === opt.key}
+                onChange={() => setScheduleKey(opt.key)}
+              />
+              <span style={{ fontSize: 13 }}>{opt.label}</span>
+            </label>
+          ))}
+          {scheduleKey === 'custom' && (
+            <input
+              value={customCron} onChange={e => setCustomCron(e.target.value)}
+              placeholder="0 */30 * * * *  (초 분 시 일 월 요일)"
+              style={{
+                marginTop: 4, padding: '8px 12px', borderRadius: 8, fontSize: 12,
+                border: '1px solid var(--border)', background: 'var(--bg-2)',
+                color: 'var(--text)', fontFamily: 'var(--mono)', width: '100%',
+              }}
+            />
+          )}
+        </div>
+        <div className="dim" style={{ fontSize: 11.5, marginTop: 10 }}>
+          '매일 09:00'은 정각 기준 실행. '매시간' / '15분마다'는 저장 시점 기준으로 다음 실행이 계산됩니다.
+        </div>
+      </div>
+
+      {/* 임계값 */}
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ fontWeight: 600 }}>자동 복구 신뢰도 임계값</div>
+          <span className="mono" style={{ fontSize: 15, fontWeight: 600 }}>{threshold}</span>
+        </div>
+        <input type="range" min={40} max={100} value={threshold}
+          onChange={e => setThreshold(+e.target.value)}
+          style={{ width: '100%', accentColor: 'var(--accent)' }}
+        />
+        <div className="dim" style={{ fontSize: 11.5, marginTop: 6 }}>
+          AI 신뢰도가 이 값 이상이면 자동 복구, 미만이면 수동 승인 큐로 이동합니다.
+        </div>
+      </div>
+
+      {/* 출력 채널 */}
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 12 }}>출력 채널</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {CHANNEL_KEYS.map(k => (
+            <button key={k}
+              className={`btn sm${channels.includes(k) ? ' primary' : ' ghost'}`}
+              onClick={() => toggleChannel(k)}
+            >{CHANNEL_LABEL[k]}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* 저장 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button className="btn primary" onClick={handleSave} disabled={saving}>
+          {saving ? '저장 중…' : '설정 저장'}
+        </button>
+        {msg && (
+          <span style={{ fontSize: 12.5, color: msg.ok ? 'var(--ok)' : 'var(--danger)' }}>
+            {msg.text}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

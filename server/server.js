@@ -13,9 +13,8 @@ const SPRING_URL =
 const SNAPSHOTS_DIR = path.join(__dirname, "snapshots");
 
 const app = express();
-app.use(express.json({ limit: "10mb" }));
 
-// Spring Boot로 API 프록시
+// 프록시를 express.json() 보다 먼저 등록 — body stream을 consume하기 전에 Spring으로 전달
 app.use(
   ["/api", "/fetch-html", "/heal"],
   createProxyMiddleware({
@@ -23,6 +22,8 @@ app.use(
     changeOrigin: true,
   }),
 );
+
+app.use(express.json({ limit: "10mb" }));
 
 // 프론트엔드 정적 파일 서빙
 app.use(express.static(path.join(__dirname, "client")));

@@ -1,0 +1,20 @@
+# --- Collection (데이터 수집) ---
+requests==2.31.0
+
+# --- Processing & Mutation (HTML 파싱 및 변이) ---
+beautifulsoup4==4.12.3
+lxml==5.1.0        # bs4의 파싱 속도를 훨씬 빠르게 만들어줍니다.
+
+# --- Data Manipulation (데이터셋 가공) ---
+pandas==2.2.0
+
+# --- Machine Learning (분류 모델 학습) ---
+scikit-learn==1.4.0
+
+# --- LLM ---
+openai>=1.30.0
+
+# --- API 서버 ---
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-dotenv>=1.0.0

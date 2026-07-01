@@ -26,3 +26,11 @@ server/snapshots/
 # Spring Boot / Gradle
 spring-server/build/
 spring-server/.gradle/
+
+# Python AI
+ai/venv/
+ai/data/
+ai/html_archives/
+ai/__pycache__/
+ai/**/__pycache__/
+ai/*.pyc

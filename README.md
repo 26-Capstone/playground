@@ -233,9 +233,9 @@ Playground/
 │   ├── src/main/resources/application.yml
 │   └── Dockerfile
 │
-└── ../capstone_dataset/        # Python AI 서비스 (별도 디렉토리)
+└── ai/                         # Python AI 서비스
     ├── api/main.py             # FastAPI 앱
     ├── inference/healer.py     # 자가치유 파이프라인
-    ├── models/                 # 학습된 ML 모델
+    ├── models/                 # 학습된 ML 모델 (.pkl)
     └── Dockerfile
 ```

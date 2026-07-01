@@ -6,6 +6,8 @@ services:
       POSTGRES_DB: doma
       POSTGRES_USER: doma
       POSTGRES_PASSWORD: ${DB_PASSWORD:-doma}
+      TZ: Asia/Seoul
+      PGTZ: Asia/Seoul
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,6 +31,7 @@ services:
       - "3001:3001"
     environment:
       SPRING_SERVICE_URL: http://spring-server:8080
+      TZ: Asia/Seoul
     volumes:
       - ./client:/app/client:ro
       - snapshots:/app/snapshots
@@ -50,6 +53,7 @@ services:
       SCRAPER_SERVICE_URL: http://node-scraper:3001
       PYTHON_API_URL: http://python-ai:8000
       DOMA_API_TOKEN: ${DOMA_API_TOKEN:-}
+      TZ: Asia/Seoul
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8080/api/stats || exit 1"]
       interval: 10s

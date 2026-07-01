@@ -1258,7 +1258,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                   let data = {};
                   try { if (text) data = JSON.parse(text); } catch { /* non-JSON */ }
                   if (!resp.ok) throw new Error(data.error || `실행 실패 (${resp.status}): ${text.slice(0, 120)}`);
-                  setC(data.scraper);
+                  setC(prev => ({ ...prev, ...data.scraper, spark: prev.spark }));
                   if (onScraperUpdate) onScraperUpdate(data.scraper);
                   const r = data.result;
                   setRunMsg(
@@ -1439,11 +1439,11 @@ function DetailOverview({ scraper, scores }) {
 
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const runs7d = hasResults
-    ? results.filter((r) => new Date(r.run_at) >= sevenDaysAgo).length
+    ? results.filter((r) => new Date(r.runAt) >= sevenDaysAgo).length
     : null;
   const avgConfidence = hasResults ? results[0].score.toFixed(1) + "%" : null;
   const avgMs = hasResults
-    ? results.reduce((s, r) => s + (r.duration_ms || 0), 0) / results.length
+    ? results.reduce((s, r) => s + (r.durationMs || 0), 0) / results.length
     : null;
   const avgDur =
     avgMs != null
@@ -1481,11 +1481,11 @@ function DetailOverview({ scraper, scores }) {
         {
           scraper_id: scraper.id,
           target: scraper.url,
-          collected_at: latest.run_at,
+          collected_at: latest.runAt,
           value: latest.value || null,
           status: latest.status,
           score: latest.score,
-          duration_ms: latest.duration_ms,
+          duration_ms: latest.durationMs,
           self_healing: {
             applied: latest.note
               ? latest.note.includes("자가치유") ||
@@ -1655,7 +1655,7 @@ function DetailOverview({ scraper, scores }) {
             <div style={{ fontWeight: 600 }}>최근 수집 결과 (JSON)</div>
             {latest && (
               <span className="dim mono" style={{ fontSize: 11 }}>
-                {latest.run_at}
+                {latest.runAt}
               </span>
             )}
           </div>
@@ -2455,13 +2455,13 @@ function DetailRuns({ scraperId }) {
 
   // runs are DESC (newest first); index i+1 is the chronologically previous run
   const rows = runs.map((r, i) => ({
-    ts: r.run_at || "—",
+    ts: r.runAt || "—",
     status: r.status,
     value: r.value || "—",
     valueChanged:
       i < runs.length - 1 && !!r.value && r.value !== runs[i + 1].value,
     score: r.score,
-    dur: r.duration_ms ? `${(r.duration_ms / 1000).toFixed(1)}s` : "—",
+    dur: r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : "—",
     note: r.note,
   }));
 
@@ -2596,7 +2596,7 @@ function StockChart({ runs, parseNum, chartId }) {
   const svgRef = React.useRef(null);
 
   const vals = runs.map((r) => parseNum(r.value));
-  const times = runs.map((r) => r.run_at || "");
+  const times = runs.map((r) => r.runAt || "");
   const n = vals.length;
   if (n < 2) return null;
 
@@ -2886,7 +2886,7 @@ function ValueTrendCard({ results, scraperId }) {
         !isNaN(parseNum(r.value)) &&
         parseNum(r.value) !== 0,
     );
-  const isNumeric = numericRuns.length >= 3;
+  const isNumeric = numericRuns.length >= 2;
 
   // ±% change from oldest to latest numeric sample
   let pctChange = null;
@@ -3037,7 +3037,7 @@ function ValueTrendCard({ results, scraperId }) {
                 whiteSpace: "nowrap",
               }}
             >
-              {r.run_at || "—"}
+              {r.runAt || "—"}
             </div>
             <StatusChip status={r.status === "healed" ? "healing" : r.status} />
           </div>

@@ -23,7 +23,7 @@ public class ScrapeResult {
     @Column(nullable = false)
     private String status;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String value = "";
 
     @Column(nullable = false)
@@ -32,7 +32,7 @@ public class ScrapeResult {
     @Column(name = "duration_ms", nullable = false)
     private Integer durationMs = 0;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String note = "";
 
     @Column(name = "run_at", nullable = false)

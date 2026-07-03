@@ -19,13 +19,13 @@ public class Scraper {
     @Column(nullable = false)
     private String name;
 
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "TEXT")
     private String url;
 
-    @Column(name = "css_selector", nullable = false)
+    @Column(name = "css_selector", nullable = false, columnDefinition = "TEXT")
     private String cssSelector = "";
 
-    @Column(name = "user_intent", nullable = false)
+    @Column(name = "user_intent", nullable = false, columnDefinition = "TEXT")
     private String userIntent = "";
 
     @Column(nullable = false)
@@ -52,7 +52,7 @@ public class Scraper {
     @Column(nullable = false)
     private Double score = 0.0;
 
-    @Column(name = "last_value", nullable = false)
+    @Column(name = "last_value", nullable = false, columnDefinition = "TEXT")
     private String lastValue = "—";
 
     @Column(name = "last_run_at", nullable = false)

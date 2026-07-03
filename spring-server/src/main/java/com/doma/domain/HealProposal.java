@@ -23,13 +23,13 @@ public class HealProposal {
     @Column(name = "scraper_name", nullable = false)
     private String scraperName = "";
 
-    @Column(name = "old_selector", nullable = false)
+    @Column(name = "old_selector", nullable = false, columnDefinition = "TEXT")
     private String oldSelector;
 
-    @Column(name = "proposed_selector", nullable = false)
+    @Column(name = "proposed_selector", nullable = false, columnDefinition = "TEXT")
     private String proposedSelector;
 
-    @Column(name = "extracted_text", nullable = false)
+    @Column(name = "extracted_text", nullable = false, columnDefinition = "TEXT")
     private String extractedText = "";
 
     @Column(nullable = false)

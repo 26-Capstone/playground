@@ -103,9 +103,13 @@ function App(){
       if (resp.ok) {
         const saved = await resp.json();
         setScraperList(prev => prev.map(c => c.id === saved.id ? saved : c));
+        return true;
       }
+      setScraperList(prev => prev.filter(c => c.id !== newScraper.id));
+      return false;
     } catch {
-      // optimistic entry stays; will sync on next auto-refresh
+      setScraperList(prev => prev.filter(c => c.id !== newScraper.id));
+      return false;
     }
   };
 
@@ -129,7 +133,7 @@ function App(){
           onAction={handleApprovalAction}
         />}
         {route.name==='detail' && <DetailScreen scraper={route.payload} onBack={()=>go('overview')} onScraperUpdate={handleScraperUpdate} onDelete={handleDeleteScraper}/>}
-        {route.name==='new' && <NewScraperScreen onClose={()=>go('overview')} onRegister={handleRegister}/>}
+        {route.name==='new' && <NewScraperScreen scrapers={scraperList} onClose={()=>go('overview')} onRegister={handleRegister}/>}
         {route.name==='delivery' && <DeliveryScreen/>}
         {route.name==='settings' && <BlankScreen title="Settings" subtitle="조직 · 멤버 · API 토큰 · 알림"/>}
         {route.name==='activity' && <BlankScreen title="Activity" subtitle="조직 단위 자가치유 이벤트 타임라인"/>}

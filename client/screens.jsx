@@ -3435,7 +3435,7 @@ function ValueTrendCard({ results, scraperId }) {
 }
 
 // ─── New Scraper Wizard ────────────────────────────────────────────────────
-function NewScraperScreen({ onClose, onRegister }) {
+function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
   const [step, setStep] = React.useState(0);
   const [url, setUrl] = React.useState('coupang.com/np/categories/178794');
   const [intent, setIntent] = React.useState(
@@ -3447,6 +3447,20 @@ function NewScraperScreen({ onClose, onRegister }) {
   const [customCron, setCustomCron] = React.useState('');
   const [channels, setChannels] = React.useState(['api']);
   const [selected, setSelected] = React.useState(null);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [createError, setCreateError] = React.useState('');
+
+  const recentUrls = React.useMemo(() => {
+    const seen = new Map();
+    for (const s of scrapers) {
+      if (!s.url || seen.has(s.url)) continue;
+      seen.set(s.url, s.createdAt || '');
+    }
+    return [...seen.entries()]
+      .sort((a, b) => (a[1] < b[1] ? 1 : a[1] > b[1] ? -1 : 0))
+      .slice(0, 4)
+      .map(([u]) => u);
+  }, [scrapers]);
 
   const steps = [
     { id: 0, label: '대상 페이지', sub: 'URL 입력 및 렌더링' },
@@ -3489,7 +3503,7 @@ function NewScraperScreen({ onClose, onRegister }) {
     csv: 'CSV',
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const scheduleVal = schedule === 'custom' ? customCron.trim() : schedule;
     const channelVals = channels.map((c) => CHANNEL_LABEL[c] || c);
     const newScraper = {
@@ -3516,8 +3530,15 @@ function NewScraperScreen({ onClose, onRegister }) {
       runs7d: 0,
       spark: [],
     };
-    if (onRegister) onRegister(newScraper);
-    onClose();
+    setSubmitting(true);
+    setCreateError('');
+    const ok = onRegister ? await onRegister(newScraper) : true;
+    setSubmitting(false);
+    if (ok) {
+      onClose();
+    } else {
+      setCreateError('스크래퍼 등록에 실패했습니다. 잠시 후 다시 시도해주세요.');
+    }
   };
 
   return (
@@ -3685,6 +3706,20 @@ function NewScraperScreen({ onClose, onRegister }) {
         )}
       </div>
 
+      {createError && (
+        <div
+          style={{
+            marginTop: 'var(--s-3)',
+            padding: 'var(--s-2) var(--s-3)',
+            background: 'var(--danger-soft, #fdecec)',
+            color: 'var(--danger, #d92d20)',
+            borderRadius: 8,
+            fontSize: 12.5,
+          }}>
+          {createError}
+        </div>
+      )}
+
       <div
         style={{
           display: 'flex',
@@ -3724,12 +3759,14 @@ function NewScraperScreen({ onClose, onRegister }) {
           {step === steps.length - 1 && (
             <button
               className="btn primary"
-              onClick={handleCreate}>
+              onClick={handleCreate}
+              disabled={submitting}
+              style={{ opacity: submitting ? 0.6 : 1 }}>
               <Icon
                 name="check"
                 className="icon icon-sm"
               />
-              스크래퍼 생성
+              {submitting ? '등록 중…' : '스크래퍼 생성'}
             </button>
           )}
         </div>
@@ -3879,34 +3916,31 @@ function WizardStep1({ url, setUrl }) {
           </div>
         </div>
 
-        <div style={{ marginTop: 'var(--s-4)' }}>
-          <FieldLabel small>최근 사용한 URL</FieldLabel>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {[
-              'coupang.com/np/categories/178794',
-              'dart.fss.or.kr/dsab001',
-              'jobkorea.co.kr/recruit/joblist',
-              'land.naver.com/complexes/8928',
-            ].map((u) => (
-              <button
-                key={u}
-                className="btn ghost"
-                style={{
-                  justifyContent: 'flex-start',
-                  fontFamily: 'var(--mono)',
-                  fontSize: 12,
-                  padding: '6px var(--s-3)',
-                }}
-                onClick={() => setUrl(u)}>
-                <Icon
-                  name="history"
-                  className="icon icon-sm"
-                />
-                {u}
-              </button>
-            ))}
+        {recentUrls.length > 0 && (
+          <div style={{ marginTop: 'var(--s-4)' }}>
+            <FieldLabel small>최근 사용한 URL</FieldLabel>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {recentUrls.map((u) => (
+                <button
+                  key={u}
+                  className="btn ghost"
+                  style={{
+                    justifyContent: 'flex-start',
+                    fontFamily: 'var(--mono)',
+                    fontSize: 12,
+                    padding: '6px var(--s-3)',
+                  }}
+                  onClick={() => setUrl(u)}>
+                  <Icon
+                    name="history"
+                    className="icon icon-sm"
+                  />
+                  {u}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* ── 실제 페이지 미리보기 패널 ── */}

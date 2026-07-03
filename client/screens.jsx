@@ -4626,7 +4626,8 @@ function WizardStep3({ url, selected, setSelected }) {
   React.useEffect(() => {
     let ws;
     try {
-      ws = new WebSocket('ws://localhost:3001');
+      const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${wsProto}//${location.host}`);
     } catch (e) {
       setConn('error');
       return;
@@ -6046,7 +6047,8 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
   React.useEffect(() => {
     let ws;
     try {
-      ws = new WebSocket('ws://localhost:3001');
+      const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${wsProto}//${location.host}`);
     } catch {
       setConn('error');
       return;

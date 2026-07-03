@@ -19,7 +19,7 @@ async function runScraper({ id, name, url, css_selector, user_intent }) {
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     });
     const page = await ctx.newPage();
-    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     try {
       await page.waitForSelector(css_selector, { timeout: 5000 }).catch(() => {});

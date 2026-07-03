@@ -3673,6 +3673,7 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
           <WizardStep1
             url={url}
             setUrl={setUrl}
+            recentUrls={recentUrls}
           />
         )}
         {step === 1 && (
@@ -3775,7 +3776,7 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
   );
 }
 
-function WizardStep1({ url, setUrl }) {
+function WizardStep1({ url, setUrl, recentUrls }) {
   const [previewSrc, setPreviewSrc] = React.useState('');
   const [imgState, setImgState] = React.useState('idle'); // idle | loading | ok | err
   const timer = React.useRef(null);

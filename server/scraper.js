@@ -22,7 +22,7 @@ async function runScraper({ id, name, url, css_selector, user_intent }) {
     await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
     try {
-      await page.waitForSelector(css_selector, { timeout: 5000 }).catch(() => {});
+      await page.waitForSelector(css_selector, { timeout: 15000 }).catch(() => {});
       value = await page.$eval(
         css_selector,
         el => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 200)

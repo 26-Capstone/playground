@@ -77,7 +77,7 @@ app.post("/internal/fetch-html", async (req, res) => {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
-    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
     const html = await page.content();
     res.json({ html });
   } catch (e) {
@@ -249,7 +249,7 @@ wss.on("connection", (ws) => {
         send({ type: "status", status: "navigating" });
         await page.goto(msg.url, {
           waitUntil: "domcontentloaded",
-          timeout: 20000,
+          timeout: 45000,
         });
         await page.evaluate(OVERLAY_SCRIPT).catch(() => {});
         const nodeCount = await page

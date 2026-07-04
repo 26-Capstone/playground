@@ -6140,7 +6140,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
             testResolveRef.current({ found: false, error: '응답 시간 초과' });
             testResolveRef.current = null;
           }
-        }, 6000);
+        }, 12000);
       });
 
       if (!testResult.found) {

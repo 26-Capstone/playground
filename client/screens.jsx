@@ -6860,7 +6860,7 @@ function HealPanel({ scraper, onClose }) {
             <div
               className="dim"
               style={{ fontSize: 11 }}>
-              ML + GPT-4o-mini 하이브리드
+              ML + Claude 하이브리드
             </div>
           </div>
           <button
@@ -7005,7 +7005,7 @@ function HealPanel({ scraper, onClose }) {
                     borderTopColor: '#fff',
                   }}
                 />
-                ML 필터링 + GPT 추론 중…
+                ML 필터링 + Claude 추론 중…
               </>
             ) : (
               <>

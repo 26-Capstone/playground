@@ -41,7 +41,7 @@ PostgreSQL                           ← :5432
 |--------|------|
 | **node-scraper** | 정적 파일 서빙, `/api/*` Spring 프록시, Playwright 스크래핑, WebSocket |
 | **spring-server** | REST API, PostgreSQL 연동, 동적 스케줄러, Webhook 알람 |
-| **python-ai** | Random Forest + GPT-4o-mini 기반 셀렉터 자가치유 |
+| **python-ai** | Random Forest + Claude 기반 셀렉터 자가치유 |
 | **postgres** | 스크래퍼 · 실행 이력 · 자가치유 제안 저장 |
 
 ---

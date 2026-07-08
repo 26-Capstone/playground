@@ -58,9 +58,11 @@ public class ScraperController {
 
     @PatchMapping("/scrapers/{id}/selector")
     public ResponseEntity<?> updateSelector(@PathVariable String id, @RequestBody Map<String, Object> body) {
-        String cssSelector = (String) body.get("css_selector");
-        String userIntent  = (String) body.get("user_intent");
-        return scraperService.updateSelector(id, cssSelector, userIntent)
+        String cssSelector   = (String) body.get("css_selector");
+        String userIntent    = (String) body.get("user_intent");
+        String extraSelector = (String) body.get("extra_selector");
+        String extraLabel    = (String) body.get("extra_label");
+        return scraperService.updateSelector(id, cssSelector, userIntent, extraSelector, extraLabel)
             .map(updated -> {
                 schedulerService.addJob(updated);
                 // Node.js의 V1 스냅샷 삭제 요청
@@ -123,14 +125,24 @@ public class ScraperController {
 
         List<ScrapeResult> rows = scraperService.listResults(id);
         String esc = "";
-        StringBuilder sb = new StringBuilder("﻿수집시각,상태,추출값,신뢰도,응답시간(ms),비고\r\n");
+        Object extraLabelObj = scraperOpt.get().get("extra_label");
+        boolean hasExtra = extraLabelObj != null && !((String) extraLabelObj).isBlank();
+
+        StringBuilder sb = new StringBuilder("﻿수집시각,상태,추출값,신뢰도,응답시간(ms),비고");
+        if (hasExtra) sb.append(",").append(((String) extraLabelObj).replace(",", " "));
+        sb.append("\r\n");
         for (ScrapeResult r : rows) {
             sb.append(r.getRunAt()).append(",")
               .append(r.getStatus()).append(",")
               .append("\"").append(r.getValue().replace("\"", "\"\"")).append("\",")
               .append(r.getScore()).append(",")
               .append(r.getDurationMs()).append(",")
-              .append("\"").append(r.getNote().replace("\"", "\"\"")).append("\"\r\n");
+              .append("\"").append(r.getNote().replace("\"", "\"\"")).append("\"");
+            if (hasExtra) {
+                String ev = r.getExtraValue() != null ? r.getExtraValue() : "";
+                sb.append(",\"").append(ev.replace("\"", "\"\"")).append("\"");
+            }
+            sb.append("\r\n");
         }
         return ResponseEntity.ok()
             .header("Content-Type", "text/csv; charset=utf-8")

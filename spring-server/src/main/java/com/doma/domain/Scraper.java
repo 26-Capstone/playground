@@ -28,6 +28,12 @@ public class Scraper {
     @Column(name = "user_intent", nullable = false, columnDefinition = "TEXT")
     private String userIntent = "";
 
+    @Column(name = "extra_selector", columnDefinition = "TEXT")
+    private String extraSelector;
+
+    @Column(name = "extra_label", columnDefinition = "TEXT")
+    private String extraLabel;
+
     @Column(nullable = false)
     private Integer threshold = 85;
 
@@ -54,6 +60,9 @@ public class Scraper {
 
     @Column(name = "last_value", nullable = false, columnDefinition = "TEXT")
     private String lastValue = "—";
+
+    @Column(name = "last_extra_value", columnDefinition = "TEXT")
+    private String lastExtraValue = "—";
 
     @Column(name = "last_run_at", nullable = false)
     private String lastRunAt = "";

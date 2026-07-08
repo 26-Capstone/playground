@@ -82,6 +82,8 @@ public class ScraperService {
         s.setUrl((String) body.get("url"));
         s.setCssSelector((String) body.getOrDefault("css_selector", ""));
         s.setUserIntent((String) body.getOrDefault("user_intent", ""));
+        s.setExtraSelector((String) body.get("extra_selector"));
+        s.setExtraLabel((String) body.get("extra_label"));
         s.setThreshold(body.containsKey("threshold") ? ((Number) body.get("threshold")).intValue() : 85);
         s.setSchedule((String) body.getOrDefault("schedule", "daily-9"));
 
@@ -106,10 +108,16 @@ public class ScraperService {
 
     // ── 셀렉터 업데이트 ──────────────────────────────────────────────────────────
 
-    public Optional<Scraper> updateSelector(String id, String cssSelector, String userIntent) {
+    public Optional<Scraper> updateSelector(String id, String cssSelector, String userIntent,
+                                             String extraSelector, String extraLabel) {
         return scraperRepository.findById(id).map(s -> {
             s.setCssSelector(cssSelector);
             if (userIntent != null) s.setUserIntent(userIntent);
+            if (extraSelector != null) {
+                s.setExtraSelector(extraSelector.isBlank() ? null : extraSelector);
+                s.setExtraLabel(extraLabel);
+                s.setLastExtraValue("—");
+            }
             s.setStatus("pending");
             s.setScore(0.0);
             s.setLastValue("—");
@@ -153,13 +161,16 @@ public class ScraperService {
             .orElseThrow(() -> new NoSuchElementException("스크래퍼를 찾을 수 없습니다: " + scraperId));
 
         // Node.js 스크래퍼 서비스 호출
-        Map<String, Object> req = Map.of(
-            "id",           scraper.getId(),
-            "name",         scraper.getName(),
-            "url",          scraper.getUrl(),
-            "css_selector", scraper.getCssSelector(),
-            "user_intent",  scraper.getUserIntent()
-        );
+        boolean extraConfigured = scraper.getExtraSelector() != null && !scraper.getExtraSelector().isBlank();
+        Map<String, Object> req = new LinkedHashMap<>();
+        req.put("id",           scraper.getId());
+        req.put("name",         scraper.getName());
+        req.put("url",          scraper.getUrl());
+        req.put("css_selector", scraper.getCssSelector());
+        req.put("user_intent",  scraper.getUserIntent());
+        if (extraConfigured) {
+            req.put("extra_selector", scraper.getExtraSelector());
+        }
         Map<String, Object> result = restTemplate.postForObject(
             scraperServiceUrl + "/internal/run", req, Map.class);
 
@@ -172,11 +183,17 @@ public class ScraperService {
         String now        = LocalDateTime.now().format(FMT);
         boolean succeeded = "healthy".equals(status);
 
+        // 보조 필드(있을 때만) — primary 성공/실패와 무관하게 독립적으로 처리
+        String extraValue = (String) result.getOrDefault("extraValue", "");
+        boolean extraSucceeded = extraConfigured && extraValue != null && !extraValue.isEmpty()
+            && result.get("extraError") == null;
+
         // 결과 저장
         ScrapeResult sr = new ScrapeResult();
         sr.setScraperId(scraperId);
         sr.setStatus(status);
         sr.setValue(value);
+        sr.setExtraValue(extraConfigured ? (extraValue != null ? extraValue : "") : "");
         sr.setScore(succeeded ? 99.0 : 0.0);
         sr.setDurationMs(durationMs);
         sr.setNote(succeeded ? "정상 수집 — " + value : "셀렉터 매칭 실패");
@@ -192,6 +209,9 @@ public class ScraperService {
         scraper.setStatus(succeeded ? "healthy" : "healing");
         scraper.setScore(recentScore);
         scraper.setLastValue(succeeded ? value : "—");
+        if (extraConfigured) {
+            scraper.setLastExtraValue(extraSucceeded ? extraValue : "—");
+        }
         scraper.setLastRunAt(now);
         scraperRepository.save(scraper);
 
@@ -222,6 +242,10 @@ public class ScraperService {
         payload.put("previous_value", scraper.getLastValue());
         payload.put("trigger",        "test");
         payload.put("run_at",         scraper.getLastRunAt());
+        if (scraper.getExtraLabel() != null && !scraper.getExtraLabel().isBlank()) {
+            payload.put("extra_label", scraper.getExtraLabel());
+            payload.put("extra_value", scraper.getLastExtraValue());
+        }
 
         Object body = "slack".equals(scraper.getWebhookType())
             ? buildSlackPayload(scraper, payload, "test", null)
@@ -274,6 +298,10 @@ public class ScraperService {
         payload.put("trigger",         trigger);
         if (isNumeric) payload.put("delta", Math.round(delta * 10000.0) / 10000.0);
         payload.put("run_at",          runAt);
+        if (scraper.getExtraLabel() != null && !scraper.getExtraLabel().isBlank()) {
+            payload.put("extra_label", scraper.getExtraLabel());
+            payload.put("extra_value", scraper.getLastExtraValue());
+        }
 
         Object body = "slack".equals(scraper.getWebhookType())
             ? buildSlackPayload(scraper, payload, trigger, isNumeric ? delta : null)
@@ -308,6 +336,9 @@ public class ScraperService {
         sb.append("*현재값:* `").append(p.get("value")).append("`");
         if (delta != null) {
             sb.append("  (*Δ* ").append(delta >= 0 ? "+" : "").append(String.format("%.4f", delta)).append(")");
+        }
+        if (p.get("extra_label") != null) {
+            sb.append("\n*").append(p.get("extra_label")).append(":* `").append(p.get("extra_value")).append("`");
         }
         sb.append("\n*수집 시각:* ").append(p.get("run_at"));
         sb.append("\n*URL:* ").append(scraper.getUrl());
@@ -418,6 +449,8 @@ public class ScraperService {
         dto.put("url",          s.getUrl());
         dto.put("css_selector", s.getCssSelector());
         dto.put("user_intent",  s.getUserIntent());
+        dto.put("extra_selector", s.getExtraSelector());
+        dto.put("extra_label",    s.getExtraLabel());
         dto.put("threshold",    s.getThreshold());
         dto.put("schedule",     SCHEDULE_LABELS.getOrDefault(s.getSchedule(), "Cron: " + s.getSchedule()));
         dto.put("scheduleKey",  s.getSchedule());
@@ -428,6 +461,7 @@ public class ScraperService {
         dto.put("status",       s.getStatus());
         dto.put("score",        s.getScore());
         dto.put("lastValue",    s.getLastValue());
+        dto.put("lastExtraValue", s.getLastExtraValue());
         dto.put("lastRun",      s.getLastRunAt().isEmpty() ? "—" : s.getLastRunAt());
         dto.put("healed",       s.getHealedCount());
         dto.put("runs7d",       0);

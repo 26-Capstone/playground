@@ -34,7 +34,7 @@ app.get("/", (req, res) => res.sendFile(path.join(clientDir, "DOMA.html")));
 
 // Spring이 스크래퍼 정보를 body에 담아 호출 → Playwright 실행 결과 반환
 app.post("/internal/run", async (req, res) => {
-  const { id, name, url, css_selector, user_intent } = req.body;
+  const { id, name, url, css_selector, user_intent, extra_selector } = req.body;
   if (!id || !url || !css_selector) {
     return res
       .status(400)
@@ -47,6 +47,7 @@ app.post("/internal/run", async (req, res) => {
       url,
       css_selector,
       user_intent,
+      extra_selector,
     });
     res.json(result);
   } catch (e) {

@@ -460,6 +460,13 @@ function OverviewScreen({
                 style={{ fontSize: 13 }}>
                 {c.lastValue}
               </div>
+              {c.extra_label && (
+                <div
+                  className="mono dim"
+                  style={{ fontSize: 11, marginTop: 1 }}>
+                  {c.extra_label}: {c.lastExtraValue}
+                </div>
+              )}
               <div
                 className="dim"
                 style={{ fontSize: 11, marginTop: 1 }}>
@@ -1448,7 +1455,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
           scores={scores}
         />
       )}
-      {tab === 'Runs' && <DetailRuns scraperId={c.id} />}
+      {tab === 'Runs' && <DetailRuns scraperId={c.id} extraLabel={c.extra_label} />}
       {tab === 'API' && <DetailApi scraper={c} />}
       {tab === 'Settings' && (
         <DetailSettings
@@ -1801,6 +1808,34 @@ function DetailOverview({ scraper, scores }) {
                 </div>
                 <div style={{ color: 'var(--text-mute)', lineHeight: 1.5 }}>
                   {scraper.user_intent}
+                </div>
+              </div>
+            )}
+            {scraper.extra_label && (
+              <div>
+                <div
+                  className="dim"
+                  style={{
+                    fontSize: 10.5,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--mono)',
+                    marginBottom: 3,
+                  }}>
+                  보조 필드 — {scraper.extra_label}
+                </div>
+                <pre
+                  className="code"
+                  style={{
+                    margin: '0 0 4px',
+                    fontSize: 10.5,
+                    wordBreak: 'break-all',
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                  {scraper.extra_selector}
+                </pre>
+                <div className="mono" style={{ fontSize: 12 }}>
+                  현재 값: {scraper.lastExtraValue}
                 </div>
               </div>
             )}
@@ -2792,7 +2827,8 @@ function DetailApi({ scraper }) {
   );
 }
 
-function DetailRuns({ scraperId }) {
+function DetailRuns({ scraperId, extraLabel }) {
+  const hasExtra = !!extraLabel;
   const [runs, setRuns] = React.useState(null);
 
   React.useEffect(() => {
@@ -2838,10 +2874,15 @@ function DetailRuns({ scraperId }) {
     value: r.value || '—',
     valueChanged:
       i < runs.length - 1 && !!r.value && r.value !== runs[i + 1].value,
+    extraValue: r.extraValue || '—',
     score: r.score,
     dur: r.durationMs ? `${(r.durationMs / 1000).toFixed(1)}s` : '—',
     note: r.note,
   }));
+
+  const gridCols = hasExtra
+    ? '160px 120px minmax(100px,1.2fr) minmax(80px,1fr) 80px 100px 1fr'
+    : '160px 120px minmax(100px,1.4fr) 80px 100px 1fr';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -2869,8 +2910,7 @@ function DetailRuns({ scraperId }) {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns:
-              '160px 120px minmax(100px,1.4fr) 80px 100px 1fr',
+            gridTemplateColumns: gridCols,
             padding: '10px 18px',
             borderBottom: '1px solid var(--border)',
             fontSize: 11,
@@ -2882,6 +2922,7 @@ function DetailRuns({ scraperId }) {
           <div>수집 시각</div>
           <div>상태</div>
           <div>추출값</div>
+          {hasExtra && <div>{extraLabel}</div>}
           <div>신뢰도</div>
           <div>응답시간</div>
           <div>로그</div>
@@ -2891,8 +2932,7 @@ function DetailRuns({ scraperId }) {
             key={i}
             style={{
               display: 'grid',
-              gridTemplateColumns:
-                '160px 120px minmax(100px,1.4fr) 80px 100px 1fr',
+              gridTemplateColumns: gridCols,
               padding: '12px 18px',
               alignItems: 'center',
               borderBottom:
@@ -2942,6 +2982,18 @@ function DetailRuns({ scraperId }) {
                 </span>
               )}
             </div>
+            {hasExtra && (
+              <div
+                className="mono"
+                style={{
+                  fontSize: 12.5,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                {r.extraValue}
+              </div>
+            )}
             <div
               className="mono"
               style={{ fontSize: 12.5 }}>
@@ -6036,9 +6088,20 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
   const [removeMode, setRemoveMode] = React.useState(false);
   const [blockedMsg, setBlockedMsg] = React.useState(null);
 
+  // 보조 필드(예: 곡명) — 파일럿: 기존 스크래퍼 1개당 필드 1개만 추가 지원
+  const pickTargetRef = React.useRef('primary'); // 'primary' | 'extra'
+  const [pickTarget, _setPickTarget] = React.useState('primary');
+  const [addExtra, setAddExtra] = React.useState(!!scraper.extra_selector);
+  const [extraSelected, setExtraSelected] = React.useState(null);
+  const [extraLabel, setExtraLabel] = React.useState(scraper.extra_label || '');
+
   const setConn = (s) => {
     stateRef.current = s;
     _setConn(s);
+  };
+  const setPickTarget = (t) => {
+    pickTargetRef.current = t;
+    _setPickTarget(t);
   };
   const REMOTE_W = 1280,
     REMOTE_H = 800;
@@ -6078,7 +6141,8 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
         return;
       }
       if (msg.type === 'selector') {
-        setSelected(msg);
+        if (pickTargetRef.current === 'extra') setExtraSelected(msg);
+        else setSelected(msg);
         setSaveErr('');
         return;
       }
@@ -6121,34 +6185,57 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
     };
   };
 
+  const testSelector = (sel) =>
+    new Promise((resolve) => {
+      testResolveRef.current = resolve;
+      wsRef.current?.send(
+        JSON.stringify({ type: 'test_selector', selector: sel }),
+      );
+      setTimeout(() => {
+        if (testResolveRef.current) {
+          testResolveRef.current({ found: false, error: '응답 시간 초과' });
+          testResolveRef.current = null;
+        }
+      }, 12000);
+    });
+
   const handleSave = async () => {
     if (!selected) return;
     setSaving(true);
     setSaveErr('');
     try {
-      // 1) 저장 전 라이브 세션에서 셀렉터 검증
-      const testResult = await new Promise((resolve) => {
-        testResolveRef.current = resolve;
-        wsRef.current?.send(
-          JSON.stringify({
-            type: 'test_selector',
-            selector: selected.selector,
-          }),
-        );
-        setTimeout(() => {
-          if (testResolveRef.current) {
-            testResolveRef.current({ found: false, error: '응답 시간 초과' });
-            testResolveRef.current = null;
-          }
-        }, 12000);
-      });
-
+      // 1) 저장 전 라이브 세션에서 셀렉터 검증 (메인 필드)
+      const testResult = await testSelector(selected.selector);
       if (!testResult.found) {
         setSaveErr(
           `셀렉터가 현재 페이지에서 매칭되지 않습니다${testResult.error ? ': ' + testResult.error : ' — 다른 요소를 선택해 주세요'}`,
         );
         setSaving(false);
         return;
+      }
+
+      // 1-1) 보조 필드가 켜져 있고 새로 선택했다면 같이 검증.
+      // 이미 설정된 보조 필드를 그대로 두고 메인 필드만 다시 고르는 경우(extraSelected 없음)엔
+      // 검증/PATCH 모두 건드리지 않고 기존 값을 유지한다.
+      let extraPatch = {};
+      if (addExtra && extraSelected) {
+        if (!extraLabel.trim()) {
+          setSaveErr('보조 필드 라벨을 입력해 주세요 (예: 1위 곡명).');
+          setSaving(false);
+          return;
+        }
+        const extraTest = await testSelector(extraSelected.selector);
+        if (!extraTest.found) {
+          setSaveErr(
+            `보조 필드 셀렉터가 현재 페이지에서 매칭되지 않습니다${extraTest.error ? ': ' + extraTest.error : ' — 다른 요소를 선택해 주세요'}`,
+          );
+          setSaving(false);
+          return;
+        }
+        extraPatch = { extra_selector: extraSelected.selector, extra_label: extraLabel.trim() };
+      } else if (!addExtra && scraper.extra_selector) {
+        // 사용자가 보조 필드를 명시적으로 껐을 때만 제거
+        extraPatch = { extra_selector: '', extra_label: '' };
       }
 
       // 2) DB 저장
@@ -6158,6 +6245,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
         body: JSON.stringify({
           css_selector: selected.selector,
           user_intent: scraper.user_intent,
+          ...extraPatch,
         }),
       });
       const updated = await resp.json();
@@ -6495,6 +6583,118 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                 <div style={{ fontSize: 12 }}>아직 선택된 요소 없음</div>
               </div>
             )}
+
+            {/* 보조 필드 (파일럿: 스크래퍼 1개당 1개만) */}
+            <div
+              style={{
+                borderTop: '1px solid var(--border)',
+                paddingTop: 12,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: 12,
+                  cursor: 'pointer',
+                }}>
+                <input
+                  type="checkbox"
+                  checked={addExtra}
+                  onChange={(e) => {
+                    setAddExtra(e.target.checked);
+                    setPickTarget(e.target.checked ? 'extra' : 'primary');
+                  }}
+                />
+                보조 필드 추가 (예: 곡명)
+              </label>
+
+              {addExtra && (
+                <>
+                  <input
+                    type="text"
+                    className="input sm"
+                    placeholder="라벨 (예: 1위 곡명)"
+                    value={extraLabel}
+                    onChange={(e) => setExtraLabel(e.target.value)}
+                    style={{ fontSize: 12 }}
+                  />
+
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className={`btn sm${pickTarget === 'primary' ? ' primary' : ' ghost'}`}
+                      disabled={!isReady}
+                      style={{ fontSize: 11, padding: '4px 8px', flex: 1 }}
+                      onClick={() => setPickTarget('primary')}>
+                      메인 필드 선택 중
+                    </button>
+                    <button
+                      className={`btn sm${pickTarget === 'extra' ? ' primary' : ' ghost'}`}
+                      disabled={!isReady}
+                      style={{ fontSize: 11, padding: '4px 8px', flex: 1 }}
+                      onClick={() => setPickTarget('extra')}>
+                      보조 필드 선택 중
+                    </button>
+                  </div>
+
+                  {extraSelected ? (
+                    <div
+                      style={{
+                        padding: 12,
+                        background: 'var(--bg-2)',
+                        border: '1px solid var(--accent-line)',
+                        borderRadius: 8,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                      }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Icon
+                          name="check"
+                          className="icon icon-sm"
+                          style={{ color: 'var(--ok)' }}
+                        />
+                        <span style={{ fontSize: 12, fontWeight: 600 }}>보조 필드 선택됨</span>
+                        <button
+                          className="btn ghost sm"
+                          style={{ marginLeft: 'auto', fontSize: 11 }}
+                          onClick={() => setExtraSelected(null)}>
+                          다시 선택
+                        </button>
+                      </div>
+                      <pre
+                        className="code"
+                        style={{
+                          margin: 0,
+                          fontSize: 10.5,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-all',
+                        }}>
+                        {extraSelected.selector}
+                      </pre>
+                      {extraSelected.text && (
+                        <div style={{ fontSize: 12, fontWeight: 500 }}>
+                          {extraSelected.text}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: 'var(--text-mute)',
+                      }}>
+                      {scraper.extra_selector
+                        ? '기존 보조 필드가 유지됩니다. 바꾸려면 "보조 필드 선택 중" 상태에서 오른쪽 화면을 클릭하세요.'
+                        : '"보조 필드 선택 중" 상태에서 오른쪽 화면의 요소를 클릭하세요.'}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
 
             <div style={{ flex: 1 }} />
             {saveErr && (

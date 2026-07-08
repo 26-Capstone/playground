@@ -26,6 +26,9 @@ public class ScrapeResult {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String value = "";
 
+    @Column(name = "extra_value", columnDefinition = "TEXT")
+    private String extraValue = "";
+
     @Column(nullable = false)
     private Double score = 0.0;
 

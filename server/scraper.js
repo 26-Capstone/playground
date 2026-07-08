@@ -4,8 +4,10 @@ const fs = require('fs');
 
 const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 
-// Spring이 { id, name, url, css_selector, user_intent } 를 담아 호출
-async function runScraper({ id, name, url, css_selector, user_intent }) {
+// Spring이 { id, name, url, css_selector, user_intent, extra_selector } 를 담아 호출
+// extra_selector는 옵션 — 같은 페이지에서 같이 추적하는 보조 필드(예: 곡명)용 셀렉터.
+// 실패해도 primary 추출 결과에는 영향을 주지 않는다(non-fatal).
+async function runScraper({ id, name, url, css_selector, user_intent, extra_selector }) {
   const fullUrl = /^https?:\/\//i.test(url) ? url : 'https://' + url;
   const start = Date.now();
   const browser = await chromium.launch({ headless: true });
@@ -13,6 +15,8 @@ async function runScraper({ id, name, url, css_selector, user_intent }) {
   let html = '';
   let value = '';
   let extractError = null;
+  let extraValue = '';
+  let extraError = null;
 
   try {
     const ctx = await browser.newContext({
@@ -31,6 +35,18 @@ async function runScraper({ id, name, url, css_selector, user_intent }) {
       extractError = e.message;
     }
 
+    if (extra_selector) {
+      try {
+        await page.waitForSelector(extra_selector, { timeout: 15000 }).catch(() => {});
+        extraValue = await page.$eval(
+          extra_selector,
+          el => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 200)
+        );
+      } catch (e) {
+        extraError = e.message;
+      }
+    }
+
     html = await page.content();
 
     // 셀렉터 성공 시 V1 스냅샷 갱신 (Spring이 heal 호출 시 v1_html로 사용)
@@ -45,6 +61,9 @@ async function runScraper({ id, name, url, css_selector, user_intent }) {
   const succeeded = !!value && !extractError;
 
   console.log(`[scraper] ${name} → ${succeeded ? `성공: "${value}"` : `실패: ${extractError}`} (${durationMs}ms)`);
+  if (extra_selector) {
+    console.log(`[scraper] ${name} (보조 필드) → ${extraValue && !extraError ? `성공: "${extraValue}"` : `실패: ${extraError}`}`);
+  }
 
   return {
     status:     succeeded ? 'healthy' : 'failed',
@@ -52,6 +71,8 @@ async function runScraper({ id, name, url, css_selector, user_intent }) {
     html,           // 실패 시 Spring이 v2_html로 heal 요청에 사용
     durationMs,
     error:      extractError || null,
+    extraValue: extraValue || '',
+    extraError: extraError || null,
   };
 }
 

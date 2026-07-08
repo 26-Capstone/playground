@@ -11,7 +11,7 @@ import difflib
 import pandas as pd
 from bs4 import BeautifulSoup
 import joblib
-from openai import OpenAI
+from anthropic import Anthropic
 
 _BASE_DIR = pathlib.Path(__file__).parent.parent
 _MODEL_FILE    = _BASE_DIR / "models" / "best_self_healing_model.pkl"
@@ -31,10 +31,10 @@ def _get_resources():
         _model    = joblib.load(_MODEL_FILE)
         _features = joblib.load(_FEATURES_FILE)
     if _llm is None:
-        api_key = os.environ.get("OPENAI_API_KEY")
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
-            raise RuntimeError("OPENAI_API_KEY 환경변수가 설정되지 않았습니다.")
-        _llm = OpenAI(api_key=api_key)
+            raise RuntimeError("ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다.")
+        _llm = Anthropic(api_key=api_key)
     return _model, _features, _llm
 
 
@@ -315,17 +315,28 @@ def _call_llm(target_name, user_intent, v1_text, v1_css,
   "reasoning": "string"
 }}
 """
+    response_schema = {
+        "type": "object",
+        "properties": {
+            "selected_id":     {"anyOf": [{"type": "integer"}, {"type": "null"}]},
+            "robust_selector": {"type": "string"},
+            "confidence":      {"type": "number"},
+            "extracted_text":  {"type": "string"},
+            "reasoning":       {"type": "string"},
+        },
+        "required": ["selected_id", "robust_selector", "confidence", "extracted_text", "reasoning"],
+        "additionalProperties": False,
+    }
+
     try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user",   "content": user_prompt},
-            ],
-            temperature=0.1,
+        resp = client.messages.create(
+            model="claude-opus-4-8",
+            max_tokens=4096,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+            output_config={"format": {"type": "json_schema", "schema": response_schema}},
         )
-        return json.loads(resp.choices[0].message.content)
+        return json.loads(resp.content[0].text)
     except Exception as e:
         return {"selected_id": None, "confidence": 0, "reasoning": f"API 에러: {e}"}
 

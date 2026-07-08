@@ -1558,6 +1558,7 @@ function DetailOverview({ scraper, scores }) {
           target: scraper.url,
           collected_at: latest.runAt,
           value: latest.value || null,
+          extra_value: latest.extraValue || null,
           status: latest.status,
           score: latest.score,
           duration_ms: latest.durationMs,
@@ -1724,6 +1725,7 @@ function DetailOverview({ scraper, scores }) {
           <ValueTrendCard
             results={results}
             scraperId={scraper.id}
+            extraLabel={scraper.extra_label}
           />
         )}
 
@@ -3310,8 +3312,9 @@ function StockChart({ runs, parseNum, chartId }) {
   );
 }
 
-function ValueTrendCard({ results, scraperId }) {
+function ValueTrendCard({ results, scraperId, extraLabel }) {
   if (!results || results.length === 0) return null;
+  const hasExtra = !!extraLabel;
 
   const annotated = results.map((r, i) => ({
     ...r,
@@ -3433,40 +3436,55 @@ function ValueTrendCard({ results, scraperId }) {
                   ? '1px solid var(--border)'
                   : 'none',
             }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 7,
-                minWidth: 0,
-              }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
               <div
                 style={{
-                  fontFamily: 'var(--mono)',
-                  fontSize: 13,
-                  fontWeight: r.changed ? 600 : 400,
-                  color: r.changed ? 'var(--text)' : 'var(--text-mute)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  minWidth: 0,
                 }}>
-                {r.value || '—'}
-              </div>
-              {r.changed && (
-                <span
+                <div
                   style={{
-                    flexShrink: 0,
-                    fontSize: 9.5,
-                    padding: '1px 6px',
-                    borderRadius: 4,
-                    background: 'var(--warn-soft)',
-                    color: 'var(--warn)',
-                    border: '1px solid var(--warn-line)',
                     fontFamily: 'var(--mono)',
-                    fontWeight: 600,
+                    fontSize: 13,
+                    fontWeight: r.changed ? 600 : 400,
+                    color: r.changed ? 'var(--text)' : 'var(--text-mute)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}>
-                  변경
-                </span>
+                  {r.value || '—'}
+                </div>
+                {r.changed && (
+                  <span
+                    style={{
+                      flexShrink: 0,
+                      fontSize: 9.5,
+                      padding: '1px 6px',
+                      borderRadius: 4,
+                      background: 'var(--warn-soft)',
+                      color: 'var(--warn)',
+                      border: '1px solid var(--warn-line)',
+                      fontFamily: 'var(--mono)',
+                      fontWeight: 600,
+                    }}>
+                    변경
+                  </span>
+                )}
+              </div>
+              {hasExtra && (
+                <div
+                  className="dim"
+                  style={{
+                    fontFamily: 'var(--mono)',
+                    fontSize: 11,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}>
+                  {extraLabel}: {r.extraValue || '—'}
+                </div>
               )}
             </div>
             <div

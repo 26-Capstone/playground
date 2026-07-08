@@ -330,7 +330,7 @@ def _call_llm(target_name, user_intent, v1_text, v1_css,
 
     try:
         resp = client.messages.create(
-            model="claude-opus-4-8",
+            model="claude-haiku-4-5",
             max_tokens=4096,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],

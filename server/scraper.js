@@ -4,10 +4,12 @@ const fs = require('fs');
 
 const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 
-// Spring이 { id, name, url, css_selector, user_intent, extra_selector } 를 담아 호출
-// extra_selector는 옵션 — 같은 페이지에서 같이 추적하는 보조 필드(예: 곡명)용 셀렉터.
-// 실패해도 primary 추출 결과에는 영향을 주지 않는다(non-fatal).
-async function runScraper({ id, name, url, css_selector, user_intent, extra_selector }) {
+// Spring이 { id, name, url, css_selector, user_intent, extra_fields } 를 담아 호출
+// extra_fields는 옵션 — [{label, selector}, ...] 배열. 같은 페이지에서 같이 추적하는
+// 보조 필드(예: 곡명, 재고 상태)용. 개별 필드가 실패해도 다른 필드 추출에는 영향을
+// 주지 않는다(non-fatal). extraValues는 extra_fields와 같은 순서로 반환된다 —
+// Spring이 이 순서를 이용해 인덱스 기준으로 병합하므로 순서 보장이 불변식이다.
+async function runScraper({ id, name, url, css_selector, user_intent, extra_fields }) {
   const fullUrl = /^https?:\/\//i.test(url) ? url : 'https://' + url;
   const start = Date.now();
   const browser = await chromium.launch({ headless: true });
@@ -15,8 +17,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_sele
   let html = '';
   let value = '';
   let extractError = null;
-  let extraValue = '';
-  let extraError = null;
+  const extraValues = [];
 
   try {
     const ctx = await browser.newContext({
@@ -35,16 +36,19 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_sele
       extractError = e.message;
     }
 
-    if (extra_selector) {
+    for (const field of extra_fields || []) {
+      let fieldValue = '';
+      let fieldError = null;
       try {
-        await page.waitForSelector(extra_selector, { timeout: 15000 }).catch(() => {});
-        extraValue = await page.$eval(
-          extra_selector,
+        await page.waitForSelector(field.selector, { timeout: 15000 }).catch(() => {});
+        fieldValue = await page.$eval(
+          field.selector,
           el => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 200)
         );
       } catch (e) {
-        extraError = e.message;
+        fieldError = e.message;
       }
+      extraValues.push({ label: field.label, value: fieldValue || '', error: fieldError });
     }
 
     html = await page.content();
@@ -61,18 +65,17 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_sele
   const succeeded = !!value && !extractError;
 
   console.log(`[scraper] ${name} → ${succeeded ? `성공: "${value}"` : `실패: ${extractError}`} (${durationMs}ms)`);
-  if (extra_selector) {
-    console.log(`[scraper] ${name} (보조 필드) → ${extraValue && !extraError ? `성공: "${extraValue}"` : `실패: ${extraError}`}`);
+  for (const ev of extraValues) {
+    console.log(`[scraper] ${name} (${ev.label}) → ${ev.value && !ev.error ? `성공: "${ev.value}"` : `실패: ${ev.error}`}`);
   }
 
   return {
-    status:     succeeded ? 'healthy' : 'failed',
-    value:      value || '',
+    status:      succeeded ? 'healthy' : 'failed',
+    value:       value || '',
     html,           // 실패 시 Spring이 v2_html로 heal 요청에 사용
     durationMs,
-    error:      extractError || null,
-    extraValue: extraValue || '',
-    extraError: extraError || null,
+    error:       extractError || null,
+    extraValues, // [{label, value, error}] — extra_fields와 같은 순서
   };
 }
 

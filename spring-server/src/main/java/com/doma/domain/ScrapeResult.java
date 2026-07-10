@@ -26,8 +26,10 @@ public class ScrapeResult {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String value = "";
 
-    @Column(name = "extra_value", columnDefinition = "TEXT")
-    private String extraValue = "";
+    // 보조 필드 N개 스냅샷 — JSON 배열: [{"label":"...", "value":"..."}]
+    // (구) extra_value 단일 컬럼은 DB에 남아있지만 더 이상 참조하지 않음 — 이력 데이터는 마이그레이션 대상 아님
+    @Column(name = "extra_values", columnDefinition = "TEXT")
+    private String extraValues;
 
     @Column(nullable = false)
     private Double score = 0.0;

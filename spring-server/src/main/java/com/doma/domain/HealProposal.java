@@ -23,6 +23,10 @@ public class HealProposal {
     @Column(name = "scraper_name", nullable = false)
     private String scraperName = "";
 
+    // null이면 primary(css_selector) 필드에 대한 제안, 값이 있으면 그 라벨의 보조 필드에 대한 제안
+    @Column(name = "field_label", columnDefinition = "TEXT")
+    private String fieldLabel;
+
     @Column(name = "old_selector", nullable = false, columnDefinition = "TEXT")
     private String oldSelector;
 

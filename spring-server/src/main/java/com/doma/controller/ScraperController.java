@@ -10,9 +10,12 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.beans.factory.annotation.Value;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
@@ -44,6 +47,10 @@ public class ScraperController {
         if (!body.containsKey("name") || !body.containsKey("url")) {
             return ResponseEntity.badRequest().body(Map.of("error", "name, url 필드가 필요합니다."));
         }
+        String extraFieldsError = validateExtraFields(body.get("extra_fields"));
+        if (extraFieldsError != null) {
+            return ResponseEntity.badRequest().body(Map.of("error", extraFieldsError));
+        }
         Scraper created = scraperService.create(body);
         schedulerService.addJob(created);
         return ResponseEntity.status(201).body(scraperService.toDto(created));
@@ -58,11 +65,14 @@ public class ScraperController {
 
     @PatchMapping("/scrapers/{id}/selector")
     public ResponseEntity<?> updateSelector(@PathVariable String id, @RequestBody Map<String, Object> body) {
-        String cssSelector   = (String) body.get("css_selector");
-        String userIntent    = (String) body.get("user_intent");
-        String extraSelector = (String) body.get("extra_selector");
-        String extraLabel    = (String) body.get("extra_label");
-        return scraperService.updateSelector(id, cssSelector, userIntent, extraSelector, extraLabel)
+        String cssSelector = (String) body.get("css_selector");
+        String userIntent  = (String) body.get("user_intent");
+        Object extraFields = body.get("extra_fields");
+        String extraFieldsError = validateExtraFields(extraFields);
+        if (extraFieldsError != null) {
+            return ResponseEntity.badRequest().body(Map.of("error", extraFieldsError));
+        }
+        return scraperService.updateSelector(id, cssSelector, userIntent, extraFields)
             .map(updated -> {
                 schedulerService.addJob(updated);
                 // Node.js의 V1 스냅샷 삭제 요청
@@ -115,21 +125,26 @@ public class ScraperController {
     @GetMapping("/scrapers/{id}/results")
     public ResponseEntity<?> results(@PathVariable String id) {
         if (scraperService.getOne(id).isEmpty()) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(scraperService.listResults(id));
+        return ResponseEntity.ok(scraperService.resultsToDto(scraperService.listResults(id)));
     }
 
+    @SuppressWarnings("unchecked")
     @GetMapping("/scrapers/{id}/results/csv")
     public ResponseEntity<String> resultsCsv(@PathVariable String id) {
         var scraperOpt = scraperService.getOne(id);
         if (scraperOpt.isEmpty()) return ResponseEntity.notFound().build();
 
         List<ScrapeResult> rows = scraperService.listResults(id);
-        String esc = "";
-        Object extraLabelObj = scraperOpt.get().get("extra_label");
-        boolean hasExtra = extraLabelObj != null && !((String) extraLabelObj).isBlank();
+
+        // 스크래퍼의 "현재" extra_fields 라벨 순서 기준으로 동적 컬럼 생성.
+        // 과거 실행 시점엔 없던 라벨은 빈칸으로 채운다.
+        List<Map<String, Object>> extraFields = (List<Map<String, Object>>) scraperOpt.get().get("extra_fields");
+        List<String> labels = extraFields == null ? List.of() : extraFields.stream()
+            .map(f -> String.valueOf(f.get("label")))
+            .collect(Collectors.toList());
 
         StringBuilder sb = new StringBuilder("﻿수집시각,상태,추출값,신뢰도,응답시간(ms),비고");
-        if (hasExtra) sb.append(",").append(((String) extraLabelObj).replace(",", " "));
+        for (String label : labels) sb.append(",").append(label.replace(",", " "));
         sb.append("\r\n");
         for (ScrapeResult r : rows) {
             sb.append(r.getRunAt()).append(",")
@@ -138,9 +153,15 @@ public class ScraperController {
               .append(r.getScore()).append(",")
               .append(r.getDurationMs()).append(",")
               .append("\"").append(r.getNote().replace("\"", "\"\"")).append("\"");
-            if (hasExtra) {
-                String ev = r.getExtraValue() != null ? r.getExtraValue() : "";
-                sb.append(",\"").append(ev.replace("\"", "\"\"")).append("\"");
+            if (!labels.isEmpty()) {
+                Map<String, String> valuesByLabel = new HashMap<>();
+                for (Map<String, Object> f : scraperService.parseFields(r.getExtraValues())) {
+                    valuesByLabel.put(String.valueOf(f.get("label")), String.valueOf(f.getOrDefault("value", "")));
+                }
+                for (String label : labels) {
+                    String v = valuesByLabel.getOrDefault(label, "");
+                    sb.append(",\"").append(v.replace("\"", "\"\"")).append("\"");
+                }
             }
             sb.append("\r\n");
         }
@@ -148,6 +169,20 @@ public class ScraperController {
             .header("Content-Type", "text/csv; charset=utf-8")
             .header("Content-Disposition", "attachment; filename=\"" + id + "_results.csv\"")
             .body(sb.toString());
+    }
+
+    /** null이면 검증 통과(또는 extra_fields 없음). 라벨 공백/중복이면 에러 메시지 반환. */
+    private String validateExtraFields(Object raw) {
+        if (!(raw instanceof List<?> list)) return null;
+        Set<String> seen = new HashSet<>();
+        for (Object o : list) {
+            if (!(o instanceof Map<?, ?> m)) continue;
+            Object labelObj = m.get("label");
+            String label = labelObj == null ? "" : String.valueOf(labelObj).trim();
+            if (label.isEmpty()) return "보조 필드 라벨은 비어있을 수 없습니다.";
+            if (!seen.add(label)) return "보조 필드 라벨이 중복되었습니다: " + label;
+        }
+        return null;
     }
 
     @GetMapping("/scrapers/{id}/snapshot")
@@ -193,7 +228,8 @@ public class ScraperController {
         if (scraperOpt.isEmpty()) return ResponseEntity.notFound().build();
         Map<String, Object> s = scraperOpt.get();
 
-        List<ScrapeResult> data = scraperService.queryResults(id, from, to, status, limit);
+        List<Map<String, Object>> data = scraperService.resultsToDto(
+            scraperService.queryResults(id, from, to, status, limit));
         return ResponseEntity.ok(Map.of(
             "scraper_id", id,
             "name",       s.get("name"),

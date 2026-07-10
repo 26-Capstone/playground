@@ -4,7 +4,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install && npx playwright install --with-deps chromium
 
-COPY server.js scraper.js ./
+COPY server.js scraper.js browserLimiter.js ./
 RUN mkdir -p snapshots
 
 EXPOSE 3001

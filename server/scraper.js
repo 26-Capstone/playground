@@ -1,6 +1,7 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
+const { browserSemaphore } = require('./browserLimiter');
 
 const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 
@@ -12,6 +13,7 @@ const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 async function runScraper({ id, name, url, css_selector, user_intent, extra_fields }) {
   const fullUrl = /^https?:\/\//i.test(url) ? url : 'https://' + url;
   const start = Date.now();
+  await browserSemaphore.acquire(); // 동시 Chromium 실행 수 제한 (OOM 방지)
   const browser = await chromium.launch({ headless: true });
 
   let html = '';
@@ -59,6 +61,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
     }
   } finally {
     await browser.close();
+    browserSemaphore.release();
   }
 
   const durationMs = Date.now() - start;

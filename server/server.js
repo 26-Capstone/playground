@@ -6,6 +6,7 @@ const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const { runScraper } = require("./scraper");
+const { browserSemaphore } = require("./browserLimiter");
 
 const PORT = process.env.PORT || 3001;
 const SPRING_URL =
@@ -75,6 +76,7 @@ app.delete("/internal/snapshot/:id", (req, res) => {
 app.post("/internal/fetch-html", async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: "url 필드가 필요합니다." });
+  await browserSemaphore.acquire(); // 동시 Chromium 실행 수 제한 (OOM 방지)
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
@@ -85,6 +87,7 @@ app.post("/internal/fetch-html", async (req, res) => {
     res.status(500).json({ error: e.message });
   } finally {
     await browser.close();
+    browserSemaphore.release();
   }
 });
 
@@ -204,6 +207,14 @@ wss.on("connection", (ws) => {
   let cdp = null;
   let ready = false;
   let lastMoveAt = 0;
+  let semaphoreReleased = false;
+
+  // 세마포어는 정확히 한 번만 release — close 핸들러와 에러 경로가 둘 다 탈 수 있어서 가드 필요
+  const releaseSemaphore = () => {
+    if (semaphoreReleased) return;
+    semaphoreReleased = true;
+    browserSemaphore.release();
+  };
 
   const send = (obj) => {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
@@ -211,6 +222,7 @@ wss.on("connection", (ws) => {
 
   (async () => {
     try {
+      await browserSemaphore.acquire(); // 동시 Chromium 실행 수 제한 (OOM 방지)
       browser = await chromium.launch({ headless: true });
       const ctx = await browser.newContext({
         viewport: VIEWPORT,
@@ -237,6 +249,7 @@ wss.on("connection", (ws) => {
       send({ type: "status", status: "connected" });
     } catch (err) {
       send({ type: "error", message: err.message });
+      releaseSemaphore();
     }
   })();
 
@@ -373,6 +386,7 @@ wss.on("connection", (ws) => {
 
   ws.on("close", async () => {
     await browser?.close().catch(() => {});
+    releaseSemaphore();
   });
 });
 

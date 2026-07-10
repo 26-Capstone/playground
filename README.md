@@ -202,12 +202,14 @@ Playground/
 ├── .github/workflows/
 │   └── deploy.yml              # GitHub Actions CI/CD
 │
-├── client/                     # 프론트엔드 (React + Babel CDN)
-│   ├── DOMA.html               # 진입점
-│   ├── app.jsx                 # 앱 루트
-│   ├── screens.jsx             # 전체 화면 컴포넌트
-│   ├── data.jsx                # 공유 컴포넌트·유틸
-│   └── tweaks-panel.jsx        # 테마 조정 패널
+├── client/                     # 프론트엔드 (React + Vite)
+│   ├── index.html              # 진입점 (Vite)
+│   └── src/
+│       ├── main.jsx            # 마운트
+│       ├── app.jsx             # 앱 루트
+│       ├── screens.jsx         # 전체 화면 컴포넌트
+│       ├── data.jsx            # 공유 컴포넌트·유틸
+│       └── tweaks-panel.jsx    # 테마 조정 패널
 │
 ├── server/                     # Node.js 스크래퍼 서비스
 │   ├── server.js               # Express + /internal/* API

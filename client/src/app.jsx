@@ -1,5 +1,10 @@
 // app.jsx — Sidebar, top bar, routing, theme switching, Tweaks panel.
 
+import React from 'react';
+import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakColor, TweakSelect } from './tweaks-panel.jsx';
+import { Icon, SectionTitle } from './data.jsx';
+import { OverviewScreen, ApprovalsScreen, DetailScreen, NewScraperScreen, DeliveryScreen, TemplatesScreen } from './screens.jsx';
+
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "light",
   "density": "regular",
@@ -343,4 +348,4 @@ function TopBar({route, onGo, currentOrg, theme, onToggleTheme}){
   );
 }
 
-ReactDOM.createRoot(document.getElementById('app')).render(<App/>);
+export default App;

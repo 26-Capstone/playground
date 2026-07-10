@@ -1,5 +1,7 @@
 // screens.jsx — All the screens for DOMA.
-// Components are attached to window for cross-script access.
+
+import React from 'react';
+import { Icon, SectionTitle, Stat, StatusChip, TEMPLATES, nextRunLabel, ScoreRing, Spark } from './data.jsx';
 
 // ─── Overview (Dashboard) ──────────────────────────────────────────────────
 function OverviewScreen({
@@ -7458,11 +7460,11 @@ function HealPanel({ scraper, onClose }) {
   );
 }
 
-Object.assign(window, {
+export {
   OverviewScreen,
   ApprovalsScreen,
   DetailScreen,
   NewScraperScreen,
   DeliveryScreen,
   TemplatesScreen,
-});
+};

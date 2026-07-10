@@ -4758,8 +4758,9 @@ function WizardStep3({
     pickTargetRef.current = pickTarget;
   }, [pickTarget]);
 
-  const REMOTE_W = 1280,
-    REMOTE_H = 800;
+  // 서버(server.js)의 VIEWPORT/Page.startScreencast 설정과 반드시 같이 맞춰야 함
+  const REMOTE_W = 960,
+    REMOTE_H = 600;
 
   React.useEffect(() => {
     let ws;
@@ -4845,7 +4846,7 @@ function WizardStep3({
   const onMouseMove = (e) => {
     if (stateRef.current !== 'ready') return;
     const now = Date.now();
-    if (now - lastMoveAt.current < 32) return;
+    if (now - lastMoveAt.current < 45) return;
     lastMoveAt.current = now;
     wsRef.current?.send(JSON.stringify({ type: 'mousemove', ...coords(e) }));
   };
@@ -6327,8 +6328,9 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
     pickTargetRef.current = t;
     _setPickTarget(t);
   };
-  const REMOTE_W = 1280,
-    REMOTE_H = 800;
+  // 서버(server.js)의 VIEWPORT/Page.startScreencast 설정과 반드시 같이 맞춰야 함
+  const REMOTE_W = 960,
+    REMOTE_H = 600;
   const isReady = connState === 'ready';
 
   React.useEffect(() => {
@@ -6957,7 +6959,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                 onMouseMove={(e) => {
                   if (stateRef.current !== 'ready') return;
                   const now = Date.now();
-                  if (now - lastMoveAt.current < 32) return;
+                  if (now - lastMoveAt.current < 45) return;
                   lastMoveAt.current = now;
                   const r = canvasRef.current.getBoundingClientRect();
                   wsRef.current?.send(

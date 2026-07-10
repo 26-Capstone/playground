@@ -96,7 +96,11 @@ app.post("/internal/fetch-html", async (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-const VIEWPORT = { width: 1280, height: 800 };
+// 960x600 + quality 55 — 원래 1280x800/quality 80이었는데 EC2 인스턴스가 작아서
+// (RAM 2GB) 프레임 인코딩이 병목이 되어 커서/화면이 느리게 느껴지는 문제 개선용.
+// 클라이언트(screens.jsx)의 REMOTE_W/REMOTE_H와 반드시 같이 맞춰야 함.
+const VIEWPORT = { width: 960, height: 600 };
+const SCREENCAST_QUALITY = 55;
 
 const GET_SELECTOR_FN = `
 (function({ x, y }) {
@@ -234,7 +238,7 @@ wss.on("connection", (ws) => {
 
       await cdp.send("Page.startScreencast", {
         format: "jpeg",
-        quality: 80,
+        quality: SCREENCAST_QUALITY,
         maxWidth: VIEWPORT.width,
         maxHeight: VIEWPORT.height,
       });
@@ -275,7 +279,7 @@ wss.on("connection", (ws) => {
 
       if (msg.type === "mousemove" && ready) {
         const now = Date.now();
-        if (now - lastMoveAt < 32) return;
+        if (now - lastMoveAt < 45) return;
         lastMoveAt = now;
         await page.mouse.move(msg.x, msg.y);
       }

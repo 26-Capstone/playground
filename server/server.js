@@ -293,6 +293,8 @@ wss.on("connection", (ws) => {
           send({ type: "blocked", tag: result.tag, reason: result.reason });
         } else if (result) {
           send({ type: "selector", ...result });
+        } else {
+          send({ type: "blocked", reason: "이 위치에서 요소를 찾지 못했습니다" });
         }
       }
 

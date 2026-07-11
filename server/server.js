@@ -212,6 +212,28 @@ wss.on("connection", (ws) => {
   let ready = false;
   let lastMoveAt = 0;
   let semaphoreReleased = false;
+  let pendingMove = null;
+  let moveInFlight = false;
+
+  // 토스증권처럼 실시간으로 계속 리렌더링되는 무거운 페이지는 page.mouse.move() 한 번의
+  // CDP 왕복이 45ms 스로틀 간격보다 오래 걸릴 수 있다 — await로 순서대로 처리하면 뒤에
+  // 밀린 좌표들이 큐에 쌓여서, 사용자가 커서를 멈춰도 한참 동안 "밀린 경로"를 따라가는
+  // 것처럼 보인다. 최신 좌표 하나만 남기고 나머지는 버려서(coalescing) 항상 "지금 커서
+  // 위치"만 쫓아가게 한다.
+  const flushMove = async () => {
+    if (moveInFlight || !pendingMove) return;
+    const { x, y } = pendingMove;
+    pendingMove = null;
+    moveInFlight = true;
+    try {
+      await page?.mouse.move(x, y);
+    } catch (e) {
+      // 페이지 네비게이션 중 등 일시적 실패는 무시 — 다음 좌표가 곧 다시 온다
+    } finally {
+      moveInFlight = false;
+      if (pendingMove) flushMove();
+    }
+  };
 
   // 세마포어는 정확히 한 번만 release — close 핸들러와 에러 경로가 둘 다 탈 수 있어서 가드 필요
   const releaseSemaphore = () => {
@@ -283,7 +305,8 @@ wss.on("connection", (ws) => {
         const now = Date.now();
         if (now - lastMoveAt < 45) return;
         lastMoveAt = now;
-        await page.mouse.move(msg.x, msg.y);
+        pendingMove = { x: msg.x, y: msg.y };
+        flushMove();
       }
 
       if (msg.type === "click" && ready) {

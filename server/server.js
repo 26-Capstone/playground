@@ -253,7 +253,9 @@ wss.on("connection", (ws) => {
       send({ type: "status", status: "connected" });
     } catch (err) {
       send({ type: "error", message: err.message });
+      await browser?.close().catch(() => {});
       releaseSemaphore();
+      ws.close();
     }
   })();
 
@@ -387,6 +389,9 @@ wss.on("connection", (ws) => {
       }
     } catch (err) {
       send({ type: "error", message: err.message });
+      await browser?.close().catch(() => {});
+      releaseSemaphore();
+      ws.close();
     }
   });
 

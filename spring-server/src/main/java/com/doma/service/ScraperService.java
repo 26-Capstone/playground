@@ -19,6 +19,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -34,6 +35,11 @@ public class ScraperService {
 
     @Value("${doma.scraper-service-url}")
     private String scraperServiceUrl;
+
+    // run()을 동시에 두 번 태우는 걸 막는 가드 — "지금 실행" 버튼이 스케줄 실행과 겹치거나,
+    // updateSettings() 직후 재등록된 job이 smartInitialDelay=0으로 즉시 발동해 기존에
+    // 돌고 있던 실행과 겹치는 두 경우 모두 여기서 막힌다.
+    private final Set<String> runningIds = ConcurrentHashMap.newKeySet();
 
     private static final DateTimeFormatter FMT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -159,6 +165,19 @@ public class ScraperService {
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> run(String scraperId) {
+        if (!runningIds.add(scraperId)) {
+            log.info("[run] {} — 이미 실행 중이라 건너뜀 (중복 실행 방지)", scraperId);
+            return Map.of("status", "skipped", "reason", "already_running");
+        }
+        try {
+            return doRun(scraperId);
+        } finally {
+            runningIds.remove(scraperId);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> doRun(String scraperId) {
         Scraper scraper = scraperRepository.findById(scraperId)
             .orElseThrow(() -> new NoSuchElementException("스크래퍼를 찾을 수 없습니다: " + scraperId));
 

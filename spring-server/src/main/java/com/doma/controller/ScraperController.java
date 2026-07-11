@@ -111,6 +111,9 @@ public class ScraperController {
     public ResponseEntity<?> run(@PathVariable String id) {
         try {
             Map<String, Object> result = scraperService.run(id);
+            if ("skipped".equals(result.get("status"))) {
+                return ResponseEntity.status(409).body(Map.of("error", "이미 실행 중입니다."));
+            }
             return ResponseEntity.ok(Map.of(
                 "result",  result,
                 "scraper", scraperService.getOne(id).orElse(Map.of())

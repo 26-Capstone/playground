@@ -3,6 +3,22 @@
 import React from 'react';
 import { Icon, SectionTitle, Stat, StatusChip, TEMPLATES, nextRunLabel, ScoreRing, Spark } from './data.jsx';
 
+// nginx/프록시 단계에서 요청이 거부되면(413/502/504 등) 응답 바디가 JSON이 아니라
+// HTML 에러 페이지로 오는 경우가 있다. r.json()을 바로 호출하면 "Unexpected token '<'"
+// 같은 의미 없는 에러가 뜨므로, content-type과 상태코드를 먼저 확인해 알아볼 수 있는
+// 메시지로 바꿔준다.
+async function parseJsonResponse(resp) {
+  const contentType = resp.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    if (resp.status === 413) throw new Error('요청 데이터가 너무 큽니다 (413)');
+    if (resp.status === 504) throw new Error('서버 응답 시간이 초과되었습니다 (504)');
+    throw new Error(`서버 오류 (${resp.status})`);
+  }
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error || `서버 오류 (${resp.status})`);
+  return data;
+}
+
 // ─── Overview (Dashboard) ──────────────────────────────────────────────────
 function OverviewScreen({
   scrapers = [],
@@ -7015,7 +7031,7 @@ function HealPanel({ scraper, onClose }) {
   React.useEffect(() => {
     // V1: 서버에 저장된 스냅샷
     fetch(`/api/scrapers/${scraper.id}/snapshot`)
-      .then((r) => r.json())
+      .then(parseJsonResponse)
       .then((data) => {
         if (data.html) {
           setV1Html(data.html);
@@ -7033,7 +7049,7 @@ function HealPanel({ scraper, onClose }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url: fullUrl }),
     })
-      .then((r) => r.json())
+      .then(parseJsonResponse)
       .then((data) => {
         if (data.html) {
           setV2Html(data.html);
@@ -7059,7 +7075,7 @@ function HealPanel({ scraper, onClose }) {
           target_name: scraper.name,
         }),
       });
-      const data = await resp.json();
+      const data = await parseJsonResponse(resp);
       if (data.error) throw new Error(data.error);
       setResult(data);
       setPhase('done');

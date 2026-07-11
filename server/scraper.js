@@ -10,11 +10,22 @@ const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 // 보조 필드(예: 곡명, 재고 상태)용. 개별 필드가 실패해도 다른 필드 추출에는 영향을
 // 주지 않는다(non-fatal). extraValues는 extra_fields와 같은 순서로 반환된다 —
 // Spring이 이 순서를 이용해 인덱스 기준으로 병합하므로 순서 보장이 불변식이다.
+// Spring 쪽 RestTemplate readTimeout(90s, spring-server AppConfig.java)보다 여유를 두고
+// 강제로 끝낸다. 이전엔 goto(45s) + 기본 셀렉터(15s) + extra_fields마다 15s씩 순차 대기가
+// 쌓여서 필드 2개 이상 깨지면 90s를 넘겼는데, Spring은 타임아웃으로 결과를 조용히 버리는
+// 반면 node는 그것도 모르고 끝까지 돌며 브라우저 세마포어 슬롯을 계속 붙잡고 있었다.
+// 남은 예산만큼만 기다리게 해서 항상 이 시간 안에 반환되도록 보장한다.
+const SCRAPE_BUDGET_MS = 75000;
+
 async function runScraper({ id, name, url, css_selector, user_intent, extra_fields }) {
   const fullUrl = /^https?:\/\//i.test(url) ? url : 'https://' + url;
   const start = Date.now();
   await browserSemaphore.acquire(); // 동시 Chromium 실행 수 제한 (OOM 방지)
   const browser = await chromium.launch({ headless: true });
+
+  const deadline = start + SCRAPE_BUDGET_MS;
+  // timeout: 0은 Playwright에서 "무한 대기"를 의미하므로 항상 최소 1s는 남겨둔다.
+  const boundedTimeout = (max) => Math.max(1000, Math.min(max, deadline - Date.now()));
 
   let html = '';
   let value = '';
@@ -26,10 +37,13 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     });
     const page = await ctx.newPage();
-    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: boundedTimeout(45000) });
 
     try {
-      await page.waitForSelector(css_selector, { timeout: 15000 }).catch(() => {});
+      // 예산이 이미 거의 소진됐으면 대기 없이 바로 시도(실패하면 즉시 에러) — 무한 대기 방지
+      if (deadline - Date.now() > 1000) {
+        await page.waitForSelector(css_selector, { timeout: boundedTimeout(15000) }).catch(() => {});
+      }
       value = await page.$eval(
         css_selector,
         el => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 200)
@@ -42,7 +56,9 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
       let fieldValue = '';
       let fieldError = null;
       try {
-        await page.waitForSelector(field.selector, { timeout: 15000 }).catch(() => {});
+        if (deadline - Date.now() > 1000) {
+          await page.waitForSelector(field.selector, { timeout: boundedTimeout(15000) }).catch(() => {});
+        }
         fieldValue = await page.$eval(
           field.selector,
           el => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 200)

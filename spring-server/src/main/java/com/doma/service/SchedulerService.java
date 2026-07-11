@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.Trigger;
+import org.springframework.scheduling.support.CronExpression;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.scheduling.support.PeriodicTrigger;
 import org.springframework.stereotype.Service;
@@ -73,21 +74,46 @@ public class SchedulerService {
         // 트리거가 울리면 스레드를 붙잡고 sleep하는 대신, jitterMs 뒤로 실제 실행을
         // 한 번 더 예약만 하고 즉시 반환한다 — 지터 대기 중에도 풀 스레드가 묶이지 않는다.
         ScheduledFuture<?> future = taskScheduler.schedule(
-            () -> taskScheduler.schedule(
-                () -> {
-                    log.info("[scheduler] {} 실행 시작", scraper.getName());
-                    try {
-                        scraperService.run(scraper.getId());
-                    } catch (Exception e) {
-                        log.error("[scheduler] {} 실행 오류: {}", scraper.getName(), e.getMessage());
-                    }
-                },
-                java.time.Instant.now().plusMillis(jitterMs)
-            ),
+            () -> taskScheduler.schedule(() -> runScraperJob(scraper), java.time.Instant.now().plusMillis(jitterMs)),
             trigger
         );
         jobs.put(scraper.getId(), future);
         log.info("[scheduler] {} → \"{}\" (+{}ms 지터) 등록", scraper.getName(), scraper.getSchedule(), jitterMs);
+
+        // 캐치업: cron 스케줄(daily-9 등)은 앱이 꺼져있던 동안 정규 틱을 놓쳐도 스스로
+        // 알아채지 못하고 다음 정식 스케줄(최대 하루)까지 기다린다. lastRunAt 기준으로
+        // 이미 지나간 실행 시각이 있으면 지금 한 번 보충 실행한다. run()의 중복 실행 가드가
+        // 이미 있어 다른 경로로 마침 실행 중이어도 안전하게 스킵된다.
+        if (missedCronRun(scraper.getSchedule(), scraper.getLastRunAt())) {
+            log.info("[scheduler] {} — 놓친 실행 감지, 캐치업 실행 예약", scraper.getName());
+            taskScheduler.schedule(() -> runScraperJob(scraper), java.time.Instant.now().plusMillis(jitterMs));
+        }
+    }
+
+    private void runScraperJob(Scraper scraper) {
+        log.info("[scheduler] {} 실행 시작", scraper.getName());
+        try {
+            scraperService.run(scraper.getId());
+        } catch (Exception e) {
+            log.error("[scheduler] {} 실행 오류: {}", scraper.getName(), e.getMessage());
+        }
+    }
+
+    /** 15m/hourly는 PeriodicTrigger의 smartInitialDelay가 이미 밀린 시간을 보정해준다.
+     * cron 스케줄만 대상으로, 마지막 실행 이후 이미 지나간 예정 실행 시각이 있는지 확인한다. */
+    private boolean missedCronRun(String schedule, String lastRunAt) {
+        if ("15m".equals(schedule) || "hourly".equals(schedule)) return false;
+        if (lastRunAt == null || lastRunAt.isBlank()) return false;
+        String expr = CRON_MAP.getOrDefault(schedule, schedule);
+        try {
+            CronExpression cron = CronExpression.parse(expr);
+            LocalDateTime last = LocalDateTime.parse(lastRunAt,
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            LocalDateTime nextAfterLast = cron.next(last);
+            return nextAfterLast != null && nextAfterLast.isBefore(LocalDateTime.now());
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private Trigger buildTrigger(String schedule, String lastRunAt) {

@@ -7,6 +7,7 @@ const path = require("path");
 const fs = require("fs");
 const { runScraper } = require("./scraper");
 const { browserSemaphore } = require("./browserLimiter");
+const { extractDisplayText } = require("./extractText");
 
 const PORT = process.env.PORT || 3001;
 const SPRING_URL =
@@ -170,9 +171,11 @@ const GET_SELECTOR_FN = `
     return parts.join(' > ');
   }
 
+  ${extractDisplayText.toString()}
+
   return {
     selector: buildSelector(el),
-    text: (el.textContent || '').trim().slice(0, 120),
+    text: extractDisplayText(el).slice(0, 120),
     tag: el.tagName.toLowerCase(),
   };
 })
@@ -330,21 +333,22 @@ wss.on("connection", (ws) => {
 
       if (msg.type === "test_selector" && ready) {
         try {
-          const result = await page.evaluate((sel) => {
-            try {
-              const el = document.querySelector(sel);
-              if (!el) return { found: false };
-              return {
-                found: true,
-                text: (el.textContent || "")
-                  .trim()
-                  .replace(/\s+/g, " ")
-                  .slice(0, 120),
-              };
-            } catch (e) {
-              return { found: false, error: e.message };
-            }
-          }, msg.selector);
+          const result = await page.evaluate(
+            new Function(
+              "sel",
+              `
+              ${extractDisplayText.toString()}
+              try {
+                const el = document.querySelector(sel);
+                if (!el) return { found: false };
+                return { found: true, text: extractDisplayText(el).slice(0, 120) };
+              } catch (e) {
+                return { found: false, error: e.message };
+              }
+              `,
+            ),
+            msg.selector,
+          );
           send({ type: "test_result", ...result });
         } catch (e) {
           send({ type: "test_result", found: false, error: e.message });

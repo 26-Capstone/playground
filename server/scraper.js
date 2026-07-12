@@ -2,6 +2,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 const { browserSemaphore } = require('./browserLimiter');
+const { extractDisplayText } = require('./extractText');
 
 const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 
@@ -44,10 +45,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
       if (deadline - Date.now() > 1000) {
         await page.waitForSelector(css_selector, { timeout: boundedTimeout(15000) }).catch(() => {});
       }
-      value = await page.$eval(
-        css_selector,
-        el => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 200)
-      );
+      value = (await page.$eval(css_selector, extractDisplayText)).slice(0, 200);
     } catch (e) {
       extractError = e.message;
     }
@@ -59,10 +57,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
         if (deadline - Date.now() > 1000) {
           await page.waitForSelector(field.selector, { timeout: boundedTimeout(15000) }).catch(() => {});
         }
-        fieldValue = await page.$eval(
-          field.selector,
-          el => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 200)
-        );
+        fieldValue = (await page.$eval(field.selector, extractDisplayText)).slice(0, 200);
       } catch (e) {
         fieldError = e.message;
       }

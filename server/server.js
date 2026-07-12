@@ -140,7 +140,7 @@ const GET_SELECTOR_FN = `
     return '';
   }
 
-  function buildSelector(el) {
+  function buildSelector(el, debugTrace) {
     if (el.id) return '#' + CSS.escape(el.id);
     const parts = [];
     let cur = el;
@@ -163,9 +163,12 @@ const GET_SELECTOR_FN = `
       if (sameTagSibs.length > 1)
         s += ':nth-of-type(' + (sameTagSibs.indexOf(cur) + 1) + ')';
       parts.unshift(s);
+      let count = -1;
       try {
-        if (document.querySelectorAll(parts.join(' > ')).length === 1) break;
+        count = document.querySelectorAll(parts.join(' > ')).length;
       } catch(e) {}
+      if (debugTrace) debugTrace.push({ chain: parts.join(' > '), count });
+      if (count === 1) break;
       cur = cur.parentElement;
     }
     return parts.join(' > ');
@@ -173,10 +176,23 @@ const GET_SELECTOR_FN = `
 
   ${extractDisplayText.toString()}
 
+  // 진단용: buildSelector가 "유일하다"고 판단해서 멈춘 시점과, 그 직후(수십~수백ms 뒤)
+  // 다시 매칭해봤을 때가 다른지 확인한다 — 실시간으로 계속 리렌더링되는 페이지(토스 등)에서
+  // "고를 땐 유일했는데 방금 테스트하면 못 찾는다"는 증상의 원인이 여기 있는지 보기 위함.
+  const debugTrace = [];
+  const selector = buildSelector(el, debugTrace);
+  const recheckCount = (() => {
+    try { return document.querySelectorAll(selector).length; } catch (e) { return -1; }
+  })();
+  const recheckMatchesEl = (() => {
+    try { return document.querySelector(selector) === el; } catch (e) { return false; }
+  })();
+
   return {
-    selector: buildSelector(el),
+    selector,
     text: extractDisplayText(el).slice(0, 120),
     tag: el.tagName.toLowerCase(),
+    debug: { trace: debugTrace, recheckCount, recheckMatchesEl },
   };
 })
 `;
@@ -325,6 +341,14 @@ wss.on("connection", (ws) => {
         if (result && result.blocked) {
           send({ type: "blocked", tag: result.tag, reason: result.reason });
         } else if (result) {
+          if (result.debug) {
+            console.log(
+              `[picker-debug] selector="${result.selector}" recheckCount=${result.debug.recheckCount} recheckMatchesEl=${result.debug.recheckMatchesEl}\n` +
+                result.debug.trace
+                  .map((t, i) => `  [${i}] count=${t.count}  ${t.chain}`)
+                  .join("\n"),
+            );
+          }
           send({ type: "selector", ...result });
         } else {
           send({ type: "blocked", reason: "이 위치에서 요소를 찾지 못했습니다" });

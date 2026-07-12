@@ -117,7 +117,12 @@ const GET_SELECTOR_FN = `
   }
 
   function isHashClass(c) {
-    if (!c || c.includes('-')) return false;
+    if (!c) return false;
+    // 하이픈이 있다고 무조건 "안정적인 클래스"로 취급하지 않는다 — Tailwind 같은
+    // 유틸리티 클래스(flex-col, text-gray-500)도 하이픈을 쓰지만, 토스처럼 CSS-in-JS가
+    // 찍어내는 해시 클래스(tw69-y90cyth, tw3w-1qmwwzma)도 하이픈이 낀 형태라
+    // 예전 로직(하이픈 있으면 바로 통과)으로는 전혀 걸러지지 않았다. 모음 비율 체크를
+    // 하이픈 유무와 무관하게 항상 적용한다.
     const letters = c.replace(/[^a-zA-Z]/g, '');
     if (letters.length < 3) return false;
     const vowels = (letters.match(/[aeiouAEIOU]/g) || []).length;

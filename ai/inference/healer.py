@@ -479,6 +479,11 @@ def heal_target(
         test_node = soup_v2.select_one(robust_selector)
         if test_node and test_node != healed_node and is_ranking and test_node.get_text(strip=True):
             healed_node = test_node
+        elif not test_node:
+            # LLM이 준 robust_selector가 V2 어디에도 안 걸리는 경우 — 이 문자열을 그대로
+            # 저장하면 나중에 실제 브라우저에서 항상 매칭 실패한다. 검증된 healed_node
+            # 기준으로 다시 만든 셀렉터로 대체한다.
+            robust_selector = generate_full_selector(healed_node)
     except Exception:
         robust_selector = generate_full_selector(healed_node)
 
@@ -486,6 +491,10 @@ def heal_target(
         override = _rank_override_node(filtered[original_idx], target_rank=1)
         if override and override.get_text(strip=True):
             healed_node = override
+            # override로 healed_node가 바뀌었는데 robust_selector를 안 맞춰주면, 미리보기
+            # 텍스트(healed_node 기준)와 실제 저장되는 셀렉터가 서로 다른 노드를 가리키게
+            # 된다 — 승인해도 나중에 재수집 시 못 찾거나 다른 값을 가져오는 원인이었다.
+            robust_selector = generate_full_selector(healed_node)
 
     return {
         "status":          "healed",

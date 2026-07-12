@@ -41,9 +41,12 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
     await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: boundedTimeout(45000) });
 
     try {
-      // 예산이 이미 거의 소진됐으면 대기 없이 바로 시도(실패하면 즉시 에러) — 무한 대기 방지
+      // primary는 남은 예산을 최대한 활용해 기다린다 — 토스증권처럼 실시간 데이터가
+      // 로드된 뒤에야 행이 렌더링되는 무거운 페이지는 15초로는 부족한 경우가 있었다
+      // (실제로 22945ms 중 15초를 대기만 하다 실패 — 75초 예산 중 52초를 못 써보고 포기한 셈).
+      // extra_fields는 부가 정보라 기존처럼 15초로 짧게 유지한다.
       if (deadline - Date.now() > 1000) {
-        await page.waitForSelector(css_selector, { timeout: boundedTimeout(15000) }).catch(() => {});
+        await page.waitForSelector(css_selector, { timeout: boundedTimeout(40000) }).catch(() => {});
       }
       value = (await page.$eval(css_selector, extractDisplayText)).slice(0, 200);
     } catch (e) {

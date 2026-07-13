@@ -15,8 +15,10 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
             cd ~/playground
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             sudo cp deploy/nginx.conf /etc/nginx/sites-available/doma
             sudo nginx -t && sudo systemctl reload nginx || echo "nginx reload 실패 — 수동 확인 필요"
             docker compose up -d --build

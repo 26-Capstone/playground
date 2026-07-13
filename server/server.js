@@ -85,13 +85,11 @@ app.post("/internal/fetch-html", async (req, res) => {
     const page = await ctx.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
     // domcontentloaded는 CSR 앱에서 실제 데이터가 렌더링되기 전에 끝난다 — 자가치유가
-    // 이 HTML(V2)을 후보 요소 없는 빈 뼈대로 받으면 ML 모델에 0개 샘플이 들어가 터진다.
-    // 본문에 어느 정도 텍스트가 쌓일 때까지 짧게 더 기다린다(실패해도 있는 그대로 진행).
-    await page
-      .waitForFunction(() => document.body && document.body.innerText.trim().length > 200, {
-        timeout: 10000,
-      })
-      .catch(() => {});
+    // 이 HTML(V2)을 실제 콘텐츠 없는 뼈대(네비게이션/헤더/푸터만 있는 상태)로 받으면
+    // ML 후보가 0개거나 전부 무관한 요소라 엉뚱한 걸(예: 메뉴 탭 링크) 정답으로 착각한다.
+    // 본문 텍스트 길이 기준은 메뉴/푸터만으로도 쉽게 넘어버려서 무의미했다 — 대신 페이지의
+    // 초기 데이터 요청(XHR/fetch)이 잠잠해질 때까지 기다린다(실패해도 있는 그대로 진행).
+    await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
     const html = await page.content();
     res.json({ html });
   } catch (e) {

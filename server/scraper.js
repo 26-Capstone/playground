@@ -18,6 +18,28 @@ const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 // 남은 예산만큼만 기다리게 해서 항상 이 시간 안에 반환되도록 보장한다.
 const SCRAPE_BUDGET_MS = 75000;
 
+// waitForSelector는 "이 태그가 DOM에 존재하는가"만 본다 — 토스증권처럼 데이터 없는
+// 뼈대(스켈레톤) 구조를 먼저 그리고 실시간 데이터가 도착한 뒤에야 텍스트/속성을 채워넣는
+// 페이지는, 요소가 존재하자마자 통과해버려서 빈 값을 그대로 추출해버렸다(실패 로그에
+// extractError 없이 그냥 빈 값 — 예외가 안 나서 "찾았지만 비어있다"는 걸 구분 못 했었다).
+// "요소가 있는가"가 아니라 "실제로 뽑을 텍스트가 있는가"까지 기다리도록 바꾼다.
+const WAIT_FOR_CONTENT_FN_SRC = `
+(function(sel) {
+  ${extractDisplayText.toString()}
+  const el = document.querySelector(sel);
+  if (!el) return false;
+  return !!extractDisplayText(el);
+})
+`;
+
+async function waitForContent(page, selector, timeoutMs) {
+  await page
+    .waitForFunction(new Function('sel', `return (${WAIT_FOR_CONTENT_FN_SRC})(sel)`), selector, {
+      timeout: timeoutMs,
+    })
+    .catch(() => {});
+}
+
 async function runScraper({ id, name, url, css_selector, user_intent, extra_fields }) {
   const fullUrl = /^https?:\/\//i.test(url) ? url : 'https://' + url;
   const start = Date.now();
@@ -46,7 +68,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
       // (실제로 22945ms 중 15초를 대기만 하다 실패 — 75초 예산 중 52초를 못 써보고 포기한 셈).
       // extra_fields는 부가 정보라 기존처럼 15초로 짧게 유지한다.
       if (deadline - Date.now() > 1000) {
-        await page.waitForSelector(css_selector, { timeout: boundedTimeout(40000) }).catch(() => {});
+        await waitForContent(page, css_selector, boundedTimeout(40000));
       }
       value = (await page.$eval(css_selector, extractDisplayText)).slice(0, 200);
     } catch (e) {
@@ -58,7 +80,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
       let fieldError = null;
       try {
         if (deadline - Date.now() > 1000) {
-          await page.waitForSelector(field.selector, { timeout: boundedTimeout(15000) }).catch(() => {});
+          await waitForContent(page, field.selector, boundedTimeout(15000));
         }
         fieldValue = (await page.$eval(field.selector, extractDisplayText)).slice(0, 200);
       } catch (e) {

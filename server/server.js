@@ -8,6 +8,7 @@ const fs = require("fs");
 const { runScraper } = require("./scraper");
 const { browserSemaphore } = require("./browserLimiter");
 const { extractDisplayText } = require("./extractText");
+const { VIEWPORT } = require("./viewport");
 
 const PORT = process.env.PORT || 3001;
 const SPRING_URL =
@@ -100,7 +101,9 @@ const wss = new WebSocketServer({ server });
 // 960x600 + quality 55 — 원래 1280x800/quality 80이었는데 EC2 인스턴스가 작아서
 // (RAM 2GB) 프레임 인코딩이 병목이 되어 커서/화면이 느리게 느껴지는 문제 개선용.
 // 클라이언트(screens.jsx)의 REMOTE_W/REMOTE_H와 반드시 같이 맞춰야 함.
-const VIEWPORT = { width: 960, height: 600 };
+// scraper.js도 이 값을 그대로 가져다 쓴다 — 피커와 실제 스크래퍼가 다른 뷰포트를 쓰면
+// 반응형 페이지에서 서로 다른 DOM을 보게 돼서 피커로 고른 셀렉터가 실제 실행 시
+// "요소를 찾을 수 없음"으로 깨지는 원인이 된다.
 const SCREENCAST_QUALITY = 55;
 
 const GET_SELECTOR_FN = `

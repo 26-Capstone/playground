@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { browserSemaphore } = require('./browserLimiter');
 const { extractDisplayText } = require('./extractText');
+const { VIEWPORT } = require('./viewport');
 
 const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 
@@ -57,6 +58,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
 
   try {
     const ctx = await browser.newContext({
+      viewport: VIEWPORT, // 셀렉터 피커와 동일한 뷰포트 — 다르면 반응형 페이지에서 다른 DOM이 나온다
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
     });
     const page = await ctx.newPage();

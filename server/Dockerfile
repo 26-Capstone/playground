@@ -11,7 +11,7 @@ WORKDIR /app
 COPY server/package*.json ./
 RUN npm install && npx playwright install --with-deps chromium
 
-COPY server/server.js server/scraper.js server/browserLimiter.js ./
+COPY server/server.js server/scraper.js server/browserLimiter.js server/extractText.js server/viewport.js ./
 RUN mkdir -p snapshots
 COPY --from=client-builder /app/client/dist ./client
 

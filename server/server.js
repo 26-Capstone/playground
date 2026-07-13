@@ -87,9 +87,32 @@ app.post("/internal/fetch-html", async (req, res) => {
     // domcontentloaded는 CSR 앱에서 실제 데이터가 렌더링되기 전에 끝난다 — 자가치유가
     // 이 HTML(V2)을 실제 콘텐츠 없는 뼈대(네비게이션/헤더/푸터만 있는 상태)로 받으면
     // ML 후보가 0개거나 전부 무관한 요소라 엉뚱한 걸(예: 메뉴 탭 링크) 정답으로 착각한다.
-    // 본문 텍스트 길이 기준은 메뉴/푸터만으로도 쉽게 넘어버려서 무의미했다 — 대신 페이지의
-    // 초기 데이터 요청(XHR/fetch)이 잠잠해질 때까지 기다린다(실패해도 있는 그대로 진행).
-    await page.waitForLoadState("networkidle", { timeout: 10000 }).catch(() => {});
+    // networkidle은 광고/분석 스크립트가 계속 도는 사이트(무신사 등)에서 영영 안 걸려서
+    // 타임아웃만 날렸다(실측: 10초 내내 대기해도 idle 안 됨). 대신 body 텍스트 길이가
+    // "더 이상 크게 변하지 않을 때"까지 기다린다 — 실시간 카운터 등으로 인한 미세한
+    // 흔들림(실측 ±30자 수준)은 허용하고, 초기 로딩 시의 큰 점프(107자→3347자 같은)만
+    // 안정화 신호로 본다. 실제 무신사 랭킹 페이지에서 약 4.3초 만에 안정화되는 것을 확인함.
+    await page.evaluate(
+      (maxWaitMs) =>
+        new Promise((resolve) => {
+          const start = Date.now();
+          let lastLen = -1;
+          let stableCount = 0;
+          const check = () => {
+            const len = document.body.innerText.trim().length;
+            const closeEnough = lastLen >= 0 && Math.abs(len - lastLen) < 100;
+            stableCount = closeEnough ? stableCount + 1 : 0;
+            lastLen = len;
+            if ((stableCount >= 2 && len > 50) || Date.now() - start > maxWaitMs) {
+              resolve();
+            } else {
+              setTimeout(check, 500);
+            }
+          };
+          check();
+        }),
+      15000,
+    );
     const html = await page.content();
     res.json({ html });
   } catch (e) {

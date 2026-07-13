@@ -425,6 +425,12 @@ def heal_target(
     candidates = soup_v2.find_all(['b', 'td', 'span', 'div', 'a', 'p', 'strong', 'em', 'li'])
     filtered   = [c for c in candidates if c.get_text(strip=True) and len(c.get_text(strip=True)) < 50]
 
+    if not filtered:
+        # V2 HTML에 텍스트를 가진 후보가 하나도 없으면(예: CSR 페이지가 아직 데이터를
+        # 렌더링하기 전에 캡처됨) 0개 샘플로 StandardScaler에 넘어가 알아보기 힘든 sklearn
+        # 에러가 난다 — 여기서 먼저 걸러서 명확한 실패 사유를 반환한다.
+        return {"status": "failed", "reason": "V2 HTML에서 후보 요소를 찾지 못했습니다 (페이지가 비어있거나 아직 로드되지 않았을 수 있습니다)."}
+
     # ML 필터링
     features_list = [_extract_delta_features(target_v1, c, v1_pos_info, v2_pos_info) for c in filtered]
     df = pd.DataFrame(features_list)

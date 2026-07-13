@@ -81,8 +81,17 @@ app.post("/internal/fetch-html", async (req, res) => {
   await browserSemaphore.acquire(); // 동시 Chromium 실행 수 제한 (OOM 방지)
   const browser = await chromium.launch({ headless: true });
   try {
-    const page = await browser.newPage();
+    const ctx = await browser.newContext({ viewport: VIEWPORT }); // 피커/스크래퍼와 동일 뷰포트
+    const page = await ctx.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
+    // domcontentloaded는 CSR 앱에서 실제 데이터가 렌더링되기 전에 끝난다 — 자가치유가
+    // 이 HTML(V2)을 후보 요소 없는 빈 뼈대로 받으면 ML 모델에 0개 샘플이 들어가 터진다.
+    // 본문에 어느 정도 텍스트가 쌓일 때까지 짧게 더 기다린다(실패해도 있는 그대로 진행).
+    await page
+      .waitForFunction(() => document.body && document.body.innerText.trim().length > 200, {
+        timeout: 10000,
+      })
+      .catch(() => {});
     const html = await page.content();
     res.json({ html });
   } catch (e) {

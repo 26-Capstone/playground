@@ -222,7 +222,7 @@ function Sidebar({route, onGo, currentOrg, approvalCount}){
         }}>
           <div style={{
             width:20, height:20, borderRadius:6,
-            background:'linear-gradient(135deg, #3182F6, #7C5BFF)', flexShrink:0
+            background:'var(--accent)', flexShrink:0
           }}/>
           <span style={{flex:1, textAlign:'left', fontSize:13, fontWeight:500}}>{currentOrg}</span>
           <Icon name="chevron_d" className="icon icon-sm" style={{color:'var(--text-mute)'}}/>
@@ -276,7 +276,7 @@ function Sidebar({route, onGo, currentOrg, approvalCount}){
         <div style={{display:'flex', alignItems:'center', gap:'var(--s-2)', marginTop:'var(--s-3)', padding:'2px 4px'}}>
           <div style={{
             width:26, height:26, borderRadius:999,
-            background:'linear-gradient(135deg, #FF8A6B, #7C5BFF)', flexShrink:0,
+            background:'var(--healing)', flexShrink:0,
             display:'flex', alignItems:'center', justifyContent:'center',
             fontSize:11, fontWeight:600, color:'#fff'
           }}>MK</div>
@@ -293,12 +293,14 @@ function Sidebar({route, onGo, currentOrg, approvalCount}){
   );
 }
 
+// 오니기리(주먹밥) 실루엣 — 삼각형 쌀 모양 + 김 띠. 브랜드 아이콘(favicon)과 같은 모티프를
+// 단순한 기하학적 형태로 축소해서 배지 안에 넣었다(캐릭터화하지 않고 미니멀하게).
 function Logo(){
   return (
     <svg width="24" height="24" viewBox="0 0 24 24">
-      <rect x="0.5" y="0.5" width="23" height="23" rx="7" fill="var(--accent)" stroke="none"/>
-      <path d="M6 16 L6 8 L9 12 L12 9 L14 12 L17 8 L17 16" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-      <circle cx="17" cy="16" r="1.6" fill="#fff"/>
+      <rect x="0.5" y="0.5" width="23" height="23" rx="7" fill="#182420" stroke="none"/>
+      <path d="M12 4.5 L18.5 18 L5.5 18 Z" fill="#FDFBF6"/>
+      <rect x="6" y="12.5" width="12" height="5.5" fill="#182420"/>
     </svg>
   );
 }
@@ -314,7 +316,7 @@ function TopBar({route, onGo, currentOrg, theme, onToggleTheme}){
       position:'sticky', top:0, zIndex:5,
       display:'flex', alignItems:'center', gap:'var(--s-3)', padding:'0 var(--s-7)',
       borderBottom:'1px solid var(--border)',
-      background:theme==='light' ? 'rgba(252,251,248,0.78)' : 'rgba(15,16,20,0.78)',
+      background:theme==='light' ? 'rgba(247,248,250,0.78)' : 'rgba(15,16,20,0.78)',
       backdropFilter:'blur(16px) saturate(160%)',
       WebkitBackdropFilter:'blur(16px) saturate(160%)',
       height:'var(--topbar-h)', minHeight:'var(--topbar-h)'

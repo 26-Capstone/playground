@@ -304,16 +304,30 @@ public class ScraperService {
         }
     }
 
+    // "값에 숫자가 섞여 있는가"가 아니라 "값이 숫자로 시작하는가"로 판단한다 — 안 그러면
+    // "통밤파이만주9입"처럼 끝에 수량 표기가 붙은 상품명이 숫자값으로 오판돼 가격 변동
+    // 알림이 잘못 나간다. "81.8M subscribers"처럼 숫자로 시작하고 짧은 단위/설명이 뒤에
+    // 붙는 진짜 수치 지표는 계속 숫자로 인정돼야 한다(client screens.jsx의 isNumericStr와 동일 기준).
+    private static final java.util.regex.Pattern NUMERIC_LEAD = java.util.regex.Pattern.compile(
+        "[+-]?[$₩¥€]?\\s*[\\d,]+(\\.\\d+)?\\s*[a-zA-Z가-힣%°]{0,2}(\\s|$)"
+    );
+
+    private boolean looksNumeric(String v) {
+        return v != null && NUMERIC_LEAD.matcher(v.trim()).lookingAt();
+    }
+
     private void checkAndFireAlert(Scraper scraper, String currentValue, String previousValue, String runAt) {
         String trigger = null;
         double currentNum = 0, previousNum = 0, delta = 0;
         boolean isNumeric = false;
 
         try {
-            currentNum  = Double.parseDouble(currentValue.replaceAll("[^0-9.-]", ""));
-            previousNum = Double.parseDouble(previousValue.replaceAll("[^0-9.-]", ""));
-            delta       = currentNum - previousNum;
-            isNumeric   = true;
+            if (looksNumeric(currentValue) && looksNumeric(previousValue)) {
+                currentNum  = Double.parseDouble(currentValue.replaceAll("[^0-9.-]", ""));
+                previousNum = Double.parseDouble(previousValue.replaceAll("[^0-9.-]", ""));
+                delta       = currentNum - previousNum;
+                isNumeric   = true;
+            }
         } catch (NumberFormatException ignored) {}
 
         if (!isNumeric && Boolean.TRUE.equals(scraper.getAlertOnChange())) {

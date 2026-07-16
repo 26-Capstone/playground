@@ -3370,12 +3370,19 @@ function ValueTrendCard({ results, scraperId, extraLabels = [] }) {
   const changeCount = annotated.filter((r) => r.changed).length;
 
   const parseNum = (v) => parseFloat(String(v || '').replace(/[^0-9.-]/g, ''));
+  // "값에 숫자가 섞여 있는가"가 아니라 "값이 숫자로 시작하는가"로 판단한다 — 안 그러면
+  // "통밤파이만주9입" 같은 상품명이 끝에 붙은 수량 표기 때문에 숫자 데이터로 오판돼서
+  // 차트가 뜬다. 반대로 숫자로 시작하고 뒤에 짧은 단위/설명이
+  // 붙는 진짜 수치 지표는 계속 차트 대상으로 인정돼야 한다.
+  const isNumericStr = (v) =>
+    /^[+-]?[$₩¥€]?\s*[\d,]+(\.\d+)?\s*[a-zA-Z가-힣%°]{0,2}(\s|$)/.test(String(v || '').trim());
   const numericRuns = [...results]
     .reverse()
     .filter(
       (r) =>
         r.value &&
         r.status !== 'failed' &&
+        isNumericStr(r.value) &&
         !isNaN(parseNum(r.value)) &&
         parseNum(r.value) !== 0,
     );

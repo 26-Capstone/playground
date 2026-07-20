@@ -131,6 +131,12 @@ public class ScraperController {
         return ResponseEntity.ok(scraperService.resultsToDto(scraperService.listResults(id)));
     }
 
+    @GetMapping("/scrapers/{id}/heal-history")
+    public ResponseEntity<?> healHistory(@PathVariable String id) {
+        if (scraperService.getOne(id).isEmpty()) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(scraperService.healHistoryToDto(scraperService.listHealHistory(id)));
+    }
+
     @SuppressWarnings("unchecked")
     @GetMapping("/scrapers/{id}/results/csv")
     public ResponseEntity<String> resultsCsv(@PathVariable String id) {

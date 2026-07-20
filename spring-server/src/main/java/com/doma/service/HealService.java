@@ -100,6 +100,7 @@ public class HealService {
 
         if ("healed".equals(status) && confidence >= threshold) {
             // 신뢰도 충족 → 자동 복구
+            String oldSelector = scraper.getCssSelector();
             double scoreVal = Math.round(confidence * 1000.0) / 10.0;
             updateLastScore(scraperId, scoreVal);
             scraper.setStatus("healthy");
@@ -109,6 +110,7 @@ public class HealService {
             scraper.setHealedCount(scraper.getHealedCount() + 1);
             scraper.setCssSelector((String) result.getOrDefault("robust_selector", scraper.getCssSelector()));
             scraperRepository.save(scraper);
+            saveHistoryEntry(scraper, null, oldSelector, result, confidence, now, "auto_approved");
             log.info("[healer] {} 자동 복구 완료 (신뢰도 {}%)", scraper.getName(), Math.round(confidence * 100));
 
         } else if ("healed".equals(status)) {
@@ -187,6 +189,8 @@ public class HealService {
             scraper.setExtraFields(fieldsToJson(fields));
             scraper.setHealedCount(scraper.getHealedCount() + 1);
             scraperRepository.save(scraper);
+            saveHistoryEntry(scraper, label, selector, result, confidence,
+                LocalDateTime.now().format(FMT), "auto_approved");
             log.info("[healer] {} 보조 필드 '{}' 자동 복구 완료 (신뢰도 {}%)", scraper.getName(), label, Math.round(confidence * 100));
 
         } else if ("healed".equals(status)) {
@@ -205,6 +209,27 @@ public class HealService {
         } else {
             log.info("[healer] {} 보조 필드 '{}' 치유 불가 — {}", scraper.getName(), label, result.get("reason"));
         }
+    }
+
+    /**
+     * 승인 큐(HealProposal)는 원래 "대기 중인 제안"만 표현하도록 설계돼서, 자동 복구된
+     * 건은 레코드 자체가 안 남았다 — 자가치유 이력 화면에서 자동 복구까지 함께 보려면
+     * 이 경로도 같은 테이블에 (이미 처리 완료 상태로) 남겨야 한다.
+     */
+    private void saveHistoryEntry(Scraper scraper, String fieldLabel, String oldSelector,
+                                   Map<String, Object> result, double confidence, String now, String status) {
+        HealProposal entry = new HealProposal();
+        entry.setScraperId(scraper.getId());
+        entry.setScraperName(scraper.getName());
+        entry.setFieldLabel(fieldLabel);
+        entry.setOldSelector(oldSelector);
+        entry.setProposedSelector((String) result.getOrDefault("robust_selector", ""));
+        entry.setExtractedText((String) result.getOrDefault("extracted_text", ""));
+        entry.setConfidence(confidence);
+        entry.setReasoning((String) result.getOrDefault("reasoning", ""));
+        entry.setStatus(status);
+        entry.setReviewedAt(now);
+        healProposalRepository.save(entry);
     }
 
     private void updateScraperFailed(Scraper scraper) {

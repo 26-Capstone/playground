@@ -454,6 +454,29 @@ public class ScraperService {
         return list.stream().map(this::resultToDto).collect(Collectors.toList());
     }
 
+    // ── 자가치유 이력 ────────────────────────────────────────────────────────────
+
+    public List<HealProposal> listHealHistory(String scraperId) {
+        return healProposalRepository.findByScraperIdOrderByCreatedAtDesc(scraperId);
+    }
+
+    public List<Map<String, Object>> healHistoryToDto(List<HealProposal> list) {
+        return list.stream().map(p -> {
+            Map<String, Object> dto = new LinkedHashMap<>();
+            dto.put("id",               p.getId());
+            dto.put("fieldLabel",       p.getFieldLabel());
+            dto.put("oldSelector",      p.getOldSelector());
+            dto.put("proposedSelector", p.getProposedSelector());
+            dto.put("extractedText",    p.getExtractedText());
+            dto.put("confidence",       p.getConfidence());
+            dto.put("reasoning",        p.getReasoning());
+            dto.put("status",           p.getStatus());
+            dto.put("createdAt",        p.getCreatedAt());
+            dto.put("reviewedAt",       p.getReviewedAt().isEmpty() ? null : p.getReviewedAt());
+            return dto;
+        }).collect(Collectors.toList());
+    }
+
     // ── 통계 ────────────────────────────────────────────────────────────────────
 
     public Map<String, Object> stats() {

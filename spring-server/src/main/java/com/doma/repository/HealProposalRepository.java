@@ -9,5 +9,7 @@ public interface HealProposalRepository extends JpaRepository<HealProposal, Long
 
     List<HealProposal> findByStatusOrderByCreatedAtDesc(String status);
 
+    List<HealProposal> findByScraperIdOrderByCreatedAtDesc(String scraperId);
+
     void deleteByScraperId(String scraperId);
 }

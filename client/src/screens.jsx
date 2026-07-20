@@ -1495,6 +1495,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
           extraLabels={(c.extra_fields || []).map((f) => f.label)}
         />
       )}
+      {tab === 'Healing log' && <DetailHealHistory scraperId={c.id} />}
       {tab === 'API' && <DetailApi scraper={c} />}
       {tab === 'Settings' && (
         <DetailSettings
@@ -1507,6 +1508,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
       )}
       {tab !== 'Overview' &&
         tab !== 'Runs' &&
+        tab !== 'Healing log' &&
         tab !== 'API' &&
         tab !== 'Settings' && (
           <div
@@ -3071,6 +3073,120 @@ function DetailRuns({ scraperId, extraLabels = [] }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+const HEAL_STATUS_LABEL = {
+  auto_approved: { label: '자동 복구', cls: 'ok' },
+  approved:      { label: '수동 승인', cls: 'ok' },
+  rejected:      { label: '거절됨', cls: 'danger' },
+  pending:       { label: '승인 대기', cls: 'warn' },
+};
+
+function DetailHealHistory({ scraperId }) {
+  const [history, setHistory] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!scraperId) {
+      setHistory([]);
+      return;
+    }
+    fetch(`/api/scrapers/${scraperId}/heal-history`)
+      .then((r) => r.json())
+      .then((data) => setHistory(Array.isArray(data) ? data : []))
+      .catch(() => setHistory(null));
+  }, [scraperId]);
+
+  if (history === null) {
+    return (
+      <div
+        className="card"
+        style={{
+          padding: '40px',
+          textAlign: 'center',
+          color: 'var(--text-dim)',
+        }}>
+        <div
+          className="spin"
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: 999,
+            border: '2px solid var(--border-strong)',
+            borderTopColor: 'var(--accent)',
+            margin: '0 auto 10px',
+          }}
+        />
+        <div style={{ fontSize: 12 }}>치유 이력 로드 중…</div>
+      </div>
+    );
+  }
+
+  if (history.length === 0) {
+    return (
+      <div
+        className="card"
+        style={{ padding: '60px', textAlign: 'center', color: 'var(--text-mute)' }}>
+        <Icon
+          name="bolt"
+          className="icon icon-lg"
+          style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}
+        />
+        <div style={{ fontSize: 13 }}>아직 자가치유가 발동된 적이 없습니다.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {history.map((h) => {
+        const st = HEAL_STATUS_LABEL[h.status] || { label: h.status, cls: '' };
+        const scorePct = Math.round((h.confidence || 0) * 100);
+        return (
+          <div
+            key={h.id}
+            className="card"
+            style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span className="dim mono" style={{ fontSize: 11.5 }}>
+                {h.createdAt}
+              </span>
+              <span className="chip" style={{ fontSize: 10.5 }}>
+                {h.fieldLabel || '메인 값'}
+              </span>
+              <span className={`chip ${st.cls}`} style={{ fontSize: 10.5 }}>
+                <span className="dot" />
+                {st.label}
+              </span>
+              <span className="dim mono" style={{ fontSize: 11 }}>
+                신뢰도 {scorePct}%
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr',
+                gap: 4,
+                fontFamily: 'var(--mono)',
+                fontSize: 11.5,
+                overflowWrap: 'anywhere',
+              }}>
+              <div style={{ color: 'var(--danger)' }}>− {h.oldSelector}</div>
+              <div style={{ color: 'var(--ok)' }}>+ {h.proposedSelector}</div>
+            </div>
+
+            {h.reasoning && (
+              <div
+                className="muted"
+                style={{ fontSize: 12, lineHeight: 1.5 }}>
+                {h.reasoning}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

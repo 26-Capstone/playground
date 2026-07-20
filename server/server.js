@@ -79,8 +79,11 @@ app.post("/internal/fetch-html", async (req, res) => {
   const { url } = req.body || {};
   if (!url) return res.status(400).json({ error: "url 필드가 필요합니다." });
   await browserSemaphore.acquire(); // 동시 Chromium 실행 수 제한 (OOM 방지)
-  const browser = await chromium.launch({ headless: true });
+  let browser;
   try {
+    // launch가 try 밖에 있으면 실패 시 finally를 못 타서 세마포어 퍼밋이 영구 누수된다
+    // (MAX_CONCURRENT_BROWSERS=2라 단 2번만 실패해도 이후 모든 실행이 영원히 대기하게 됨).
+    browser = await chromium.launch({ headless: true });
     const ctx = await browser.newContext({ viewport: VIEWPORT }); // 피커/스크래퍼와 동일 뷰포트
     const page = await ctx.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
@@ -118,7 +121,7 @@ app.post("/internal/fetch-html", async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   } finally {
-    await browser.close();
+    await browser?.close().catch(() => {});
     browserSemaphore.release();
   }
 });

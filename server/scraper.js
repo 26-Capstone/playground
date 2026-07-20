@@ -45,7 +45,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
   const fullUrl = /^https?:\/\//i.test(url) ? url : 'https://' + url;
   const start = Date.now();
   await browserSemaphore.acquire(); // 동시 Chromium 실행 수 제한 (OOM 방지)
-  const browser = await chromium.launch({ headless: true });
+  let browser;
 
   const deadline = start + SCRAPE_BUDGET_MS;
   // timeout: 0은 Playwright에서 "무한 대기"를 의미하므로 항상 최소 1s는 남겨둔다.
@@ -57,6 +57,9 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
   const extraValues = [];
 
   try {
+    // launch가 try 밖에 있으면 실패 시 finally를 못 타서 세마포어 퍼밋이 영구 누수된다
+    // (MAX_CONCURRENT_BROWSERS=2라 단 2번만 실패해도 이후 모든 실행이 영원히 대기하게 됨).
+    browser = await chromium.launch({ headless: true });
     const ctx = await browser.newContext({
       viewport: VIEWPORT, // 셀렉터 피커와 동일한 뷰포트 — 다르면 반응형 페이지에서 다른 DOM이 나온다
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -98,7 +101,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
       fs.writeFileSync(path.join(SNAPSHOTS_DIR, `${id}_v1.html`), html, 'utf-8');
     }
   } finally {
-    await browser.close();
+    await browser?.close().catch(() => {});
     browserSemaphore.release();
   }
 

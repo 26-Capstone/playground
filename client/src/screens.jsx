@@ -4791,7 +4791,7 @@ function WizardStep3({
     let ws;
     try {
       const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${wsProto}//${location.host}`);
+      ws = new WebSocket(`${wsProto}//${location.host}/ws`);
     } catch (e) {
       setConn('error');
       return;
@@ -6362,7 +6362,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
     let ws;
     try {
       const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      ws = new WebSocket(`${wsProto}//${location.host}`);
+      ws = new WebSocket(`${wsProto}//${location.host}/ws`);
     } catch {
       setConn('error');
       return;

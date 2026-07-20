@@ -9,6 +9,7 @@ export default defineConfig({
       '/api': 'http://localhost:3001',
       '/fetch-html': 'http://localhost:3001',
       '/heal': 'http://localhost:3001',
+      '/ws': { target: 'http://localhost:3001', ws: true },
     },
   },
 })

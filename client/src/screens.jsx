@@ -3958,7 +3958,10 @@ function WizardStep1({ url, setUrl, recentUrls }) {
         gridTemplateColumns: '1fr 1.1fr',
         gap: 'var(--s-6)',
       }}>
-      <div>
+      {/* minWidth:0 없으면 최근 사용한 URL처럼 공백 없는 긴 문자열이 그리드 트랙
+          자동 최소폭 계산에 그대로 반영돼 왼쪽 컬럼이 폭주하고, 오른쪽 미리보기
+          패널이 몇십 px로 짜부라진다 — 자손의 minWidth:0/overflow는 여기엔 영향 없음. */}
+      <div style={{ minWidth: 0 }}>
         <FieldLabel>대상 URL</FieldLabel>
         <div
           style={{
@@ -4081,13 +4084,23 @@ function WizardStep1({ url, setUrl, recentUrls }) {
                     fontFamily: 'var(--mono)',
                     fontSize: 12,
                     padding: '6px var(--s-3)',
+                    width: '100%',
+                    minWidth: 0,
                   }}
                   onClick={() => setUrl(u)}>
                   <Icon
                     name="history"
                     className="icon icon-sm"
+                    style={{ flexShrink: 0 }}
                   />
-                  {u}
+                  <span
+                    style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      minWidth: 0,
+                    }}>
+                    {u}
+                  </span>
                 </button>
               ))}
             </div>

@@ -23,6 +23,9 @@ server/doma.db
 # Playwright 스냅샷 (런타임 생성)
 server/snapshots/
 
+# 자가치유 로컬 테스트용 임시 HTML (Wayback Machine 등에서 받은 파일)
+test-heal/
+
 # Spring Boot / Gradle
 spring-server/build/
 spring-server/.gradle/

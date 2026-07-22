@@ -26,6 +26,7 @@ function OverviewScreen({
   approvalCount = 0,
   onOpenScraper,
   onGoApprovals,
+  onGoActivity,
   onNewScraper,
   onRefresh,
   onDeleteScraper,
@@ -176,6 +177,7 @@ function OverviewScreen({
           icon="bolt"
           label="누적 자가치유"
           value={String(totalHealed)}
+          onClick={onGoActivity}
           sub={
             approvalCount > 0 ? (
               <>
@@ -3083,6 +3085,181 @@ const HEAL_STATUS_LABEL = {
   rejected:      { label: '거절됨', cls: 'danger' },
   pending:       { label: '승인 대기', cls: 'warn' },
 };
+
+// ─── Activity (조직 단위 자가치유 이벤트) ──────────────────────────────────────
+function ActivityScreen() {
+  const [list, setList] = React.useState(null); // null = loading
+  const [expandedId, setExpandedId] = React.useState(null);
+
+  React.useEffect(() => {
+    fetch('/api/heal-history')
+      .then((r) => r.json())
+      .then((data) => setList(Array.isArray(data) ? data : []))
+      .catch(() => setList([]));
+  }, []);
+
+  const gridCols = '1.3fr 1fr 90px 130px 130px 30px';
+
+  return (
+    <div
+      className="fadein"
+      style={{ padding: '28px 32px 80px', maxWidth: 1480, margin: '0 auto' }}>
+      <SectionTitle
+        eyebrow="ORG-WIDE"
+        title="자가치유 활동">
+        조직 내 모든 스크래퍼의 자가치유 이벤트 이력입니다. 항목을 클릭하면 셀렉터 변경 내역을 볼 수 있습니다.
+      </SectionTitle>
+
+      {list === null && (
+        <div
+          className="card"
+          style={{ padding: 'var(--s-11)', textAlign: 'center' }}>
+          <div className="muted">로딩 중…</div>
+        </div>
+      )}
+
+      {list !== null && list.length === 0 && (
+        <div
+          className="card"
+          style={{ padding: 'var(--s-11)', textAlign: 'center' }}>
+          <Icon
+            name="bolt"
+            className="icon icon-lg"
+            style={{ margin: '0 auto var(--s-3)', display: 'block', color: 'var(--text-dim)' }}
+          />
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>아직 자가치유 이벤트가 없습니다</div>
+          <div
+            className="muted"
+            style={{ fontSize: 13 }}>
+            스크래퍼의 셀렉터가 깨지고 AI가 복구를 시도하면 여기에 기록됩니다.
+          </div>
+        </div>
+      )}
+
+      {list !== null && list.length > 0 && (
+        <div
+          className="card"
+          style={{ padding: 0, overflow: 'hidden' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: gridCols,
+              padding: '10px 18px',
+              borderBottom: '1px solid var(--border)',
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--text-dim)',
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}>
+            <div>스크래퍼</div>
+            <div>필드</div>
+            <div>확신도</div>
+            <div>상태</div>
+            <div>시각</div>
+            <div />
+          </div>
+          {list.map((h, i) => {
+            const st = HEAL_STATUS_LABEL[h.status] || { label: h.status, cls: '' };
+            const open = expandedId === h.id;
+            const isLast = i === list.length - 1;
+            return (
+              <div key={h.id}>
+                <div
+                  className="row-hover"
+                  onClick={() => setExpandedId(open ? null : h.id)}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: gridCols,
+                    padding: '14px 18px',
+                    alignItems: 'center',
+                    cursor: 'default',
+                    borderBottom: open || isLast ? 'none' : '1px solid var(--border)',
+                  }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{h.scraperName || '(이름 없음)'}</div>
+                    <div
+                      className="dim mono"
+                      style={{ fontSize: 11 }}>
+                      {h.scraperId}
+                    </div>
+                  </div>
+                  <div>
+                    <span
+                      className="chip"
+                      style={{ fontSize: 10 }}>
+                      {h.fieldLabel || '메인 값'}
+                    </span>
+                  </div>
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color:
+                        h.confidence >= 0.9
+                          ? 'var(--ok)'
+                          : h.confidence >= 0.6
+                            ? 'var(--warn)'
+                            : 'var(--danger)',
+                    }}>
+                    {Math.round((h.confidence || 0) * 100)}%
+                  </div>
+                  <div>
+                    <span className={`chip ${st.cls}`}>
+                      <span className="dot" />
+                      {st.label}
+                    </span>
+                  </div>
+                  <div
+                    className="dim mono"
+                    style={{ fontSize: 11 }}>
+                    {h.createdAt}
+                  </div>
+                  <Icon
+                    name={open ? 'chevron_d' : 'chevron_r'}
+                    className="icon icon-sm"
+                    style={{ color: 'var(--text-dim)' }}
+                  />
+                </div>
+
+                {open && (
+                  <div
+                    style={{
+                      padding: '4px 18px 18px',
+                      borderBottom: isLast ? 'none' : '1px solid var(--border)',
+                      background: 'var(--bg-1)',
+                    }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr',
+                        gap: 4,
+                        fontFamily: 'var(--mono)',
+                        fontSize: 11.5,
+                        overflowWrap: 'anywhere',
+                        marginBottom: h.reasoning ? 10 : 0,
+                      }}>
+                      <div style={{ color: 'var(--danger)' }}>− {h.oldSelector}</div>
+                      <div style={{ color: 'var(--ok)' }}>+ {h.proposedSelector || '(제안 없음)'}</div>
+                    </div>
+                    {h.reasoning && (
+                      <div
+                        className="muted"
+                        style={{ fontSize: 12, lineHeight: 1.5 }}>
+                        {h.reasoning}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DetailHealHistory({ scraperId }) {
   const [history, setHistory] = React.useState(null);
@@ -7619,4 +7796,5 @@ export {
   NewScraperScreen,
   DeliveryScreen,
   TemplatesScreen,
+  ActivityScreen,
 };

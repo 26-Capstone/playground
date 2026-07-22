@@ -11,5 +11,7 @@ public interface HealProposalRepository extends JpaRepository<HealProposal, Long
 
     List<HealProposal> findByScraperIdOrderByCreatedAtDesc(String scraperId);
 
+    List<HealProposal> findAllByOrderByCreatedAtDesc();
+
     void deleteByScraperId(String scraperId);
 }

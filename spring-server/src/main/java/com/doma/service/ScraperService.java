@@ -460,10 +460,16 @@ public class ScraperService {
         return healProposalRepository.findByScraperIdOrderByCreatedAtDesc(scraperId);
     }
 
+    public List<HealProposal> listAllHealHistory() {
+        return healProposalRepository.findAllByOrderByCreatedAtDesc();
+    }
+
     public List<Map<String, Object>> healHistoryToDto(List<HealProposal> list) {
         return list.stream().map(p -> {
             Map<String, Object> dto = new LinkedHashMap<>();
             dto.put("id",               p.getId());
+            dto.put("scraperId",        p.getScraperId());
+            dto.put("scraperName",      p.getScraperName());
             dto.put("fieldLabel",       p.getFieldLabel());
             dto.put("oldSelector",      p.getOldSelector());
             dto.put("proposedSelector", p.getProposedSelector());

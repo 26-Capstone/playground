@@ -165,11 +165,15 @@ const SectionTitle = ({ eyebrow, title, children, action }) => (
   </div>
 );
 
-const Stat = ({ label, value, sub, accent, icon }) => (
-  <div className="card" style={{padding:'14px 16px', display:'flex', flexDirection:'column', gap:6}}>
+const Stat = ({ label, value, sub, accent, icon, onClick }) => (
+  <div
+    className={onClick ? 'card row-hover' : 'card'}
+    onClick={onClick}
+    style={{padding:'14px 16px', display:'flex', flexDirection:'column', gap:6, cursor: onClick ? 'default' : undefined}}>
     <div style={{display:'flex', alignItems:'center', gap:8, color:'var(--text-mute)', fontSize:11.5, letterSpacing:'0.04em', textTransform:'uppercase', fontFamily:'var(--mono)'}}>
       {icon && <Icon name={icon} className="icon icon-sm"/>}
       {label}
+      {onClick && <Icon name="chevron_r" className="icon icon-sm" style={{marginLeft:'auto', color:'var(--text-dim)'}}/>}
     </div>
     <div style={{fontSize:26, fontWeight:600, fontFamily:'var(--mono)', letterSpacing:'-0.02em', color: accent || 'var(--text)'}}>{value}</div>
     {sub && <div style={{fontSize:12, color:'var(--text-mute)'}}>{sub}</div>}

@@ -3,7 +3,7 @@
 import React from 'react';
 import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakColor, TweakSelect } from './tweaks-panel.jsx';
 import { Icon, SectionTitle } from './data.jsx';
-import { OverviewScreen, ApprovalsScreen, DetailScreen, NewScraperScreen, DeliveryScreen, TemplatesScreen } from './screens.jsx';
+import { OverviewScreen, ApprovalsScreen, DetailScreen, NewScraperScreen, DeliveryScreen, TemplatesScreen, ActivityScreen } from './screens.jsx';
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "light",
@@ -129,6 +129,7 @@ function App(){
           approvalCount={approvalCount}
           onOpenScraper={(c)=>go('detail', c)}
           onGoApprovals={()=>go('approvals')}
+          onGoActivity={()=>go('activity')}
           onNewScraper={()=>go('new')}
           onRefresh={handleRefresh}
           onDeleteScraper={handleDeleteScraper}
@@ -141,7 +142,7 @@ function App(){
         {route.name==='new' && <NewScraperScreen scrapers={scraperList} onClose={()=>go('overview')} onRegister={handleRegister}/>}
         {route.name==='delivery' && <DeliveryScreen/>}
         {route.name==='settings' && <BlankScreen title="Settings" subtitle="조직 · 멤버 · API 토큰 · 알림"/>}
-        {route.name==='activity' && <BlankScreen title="Activity" subtitle="조직 단위 자가치유 이벤트 타임라인"/>}
+        {route.name==='activity' && <ActivityScreen/>}
         {route.name==='templates' && <TemplatesScreen onUse={()=>go('new')}/>}
       </main>
 

@@ -56,6 +56,7 @@ const Icon = ({ name, className = "icon", size }) => {
     wand:        <><path d="M15 4l-7 7"/><path d="M19 2v2M21 4h-2M19 6V4M17 4h2"/><path d="M3 21l9-9 3 3-9 9-3-3z"/></>,
     edit:        <><path d="M12 20h9"/><path d="M16.5 3.5a2 2 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></>,
     info:        <><circle cx="12" cy="12" r="9"/><path d="M12 8v.01M11 12h1v5h1"/></>,
+    flag:        <><path d="M5 21V4"/><path d="M5 4h13l-2.5 4L18 12H5"/></>,
   };
   const s = size ? { width: size, height: size } : null;
   return <svg className={className} style={s} viewBox="0 0 24 24" aria-hidden="true">{paths[name] || null}</svg>;

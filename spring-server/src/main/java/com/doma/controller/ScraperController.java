@@ -142,6 +142,17 @@ public class ScraperController {
         return ResponseEntity.ok(scraperService.healHistoryToDto(scraperService.listAllHealHistory()));
     }
 
+    @PostMapping("/heal-history/{id}/report")
+    public ResponseEntity<?> reportHeal(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(scraperService.reportHeal(id));
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(404).body(Map.of("error", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @SuppressWarnings("unchecked")
     @GetMapping("/scrapers/{id}/results/csv")
     public ResponseEntity<String> resultsCsv(@PathVariable String id) {

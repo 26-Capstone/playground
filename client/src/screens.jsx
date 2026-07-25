@@ -1497,7 +1497,15 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
           extraLabels={(c.extra_fields || []).map((f) => f.label)}
         />
       )}
-      {tab === 'Healing log' && <DetailHealHistory scraperId={c.id} />}
+      {tab === 'Healing log' && (
+        <DetailHealHistory
+          scraperId={c.id}
+          onScraperReverted={(updated) => {
+            setC(updated);
+            if (onScraperUpdate) onScraperUpdate(updated);
+          }}
+        />
+      )}
       {tab === 'API' && <DetailApi scraper={c} />}
       {tab === 'Settings' && (
         <DetailSettings
@@ -3090,13 +3098,31 @@ const HEAL_STATUS_LABEL = {
 function ActivityScreen() {
   const [list, setList] = React.useState(null); // null = loading
   const [expandedId, setExpandedId] = React.useState(null);
+  const [reportingId, setReportingId] = React.useState(null);
 
-  React.useEffect(() => {
+  const load = () => {
     fetch('/api/heal-history')
       .then((r) => r.json())
       .then((data) => setList(Array.isArray(data) ? data : []))
       .catch(() => setList([]));
+  };
+
+  React.useEffect(() => {
+    load();
   }, []);
+
+  const handleReport = async (h) => {
+    if (
+      !window.confirm(
+        `"${h.scraperName || h.scraperId}"의 이 자가치유 결과를 신고하시겠습니까?\n\n적용된 셀렉터를 신고 이전 값으로 되돌리고, 오탐 사례로 기록해 이후 모델 개선에 활용합니다.`,
+      )
+    )
+      return;
+    setReportingId(h.id);
+    await fetch(`/api/heal-history/${h.id}/report`, { method: 'POST' }).catch(() => {});
+    setReportingId(null);
+    load();
+  };
 
   const gridCols = '1.3fr 1fr 90px 130px 130px 30px';
 
@@ -3210,6 +3236,12 @@ function ActivityScreen() {
                       <span className="dot" />
                       {st.label}
                     </span>
+                    {h.reported && (
+                      <span className="chip danger" style={{ marginLeft: 6 }}>
+                        <span className="dot" />
+                        신고됨
+                      </span>
+                    )}
                   </div>
                   <div
                     className="dim mono"
@@ -3246,8 +3278,29 @@ function ActivityScreen() {
                     {h.reasoning && (
                       <div
                         className="muted"
-                        style={{ fontSize: 12, lineHeight: 1.5 }}>
+                        style={{ fontSize: 12, lineHeight: 1.5, marginBottom: 10 }}>
                         {h.reasoning}
+                      </div>
+                    )}
+                    {(h.status === 'auto_approved' || h.status === 'approved') && (
+                      <div>
+                        {h.reported ? (
+                          <span className="dim" style={{ fontSize: 11.5 }}>
+                            신고 접수됨 · {h.reportedAt}
+                          </span>
+                        ) : (
+                          <button
+                            className="btn"
+                            style={{ color: 'var(--danger)', fontSize: 12, padding: '5px 10px' }}
+                            disabled={reportingId === h.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleReport(h);
+                            }}>
+                            <Icon name="flag" className="icon icon-sm" />
+                            {reportingId === h.id ? '신고 처리 중…' : '이 결과 신고'}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -3261,10 +3314,11 @@ function ActivityScreen() {
   );
 }
 
-function DetailHealHistory({ scraperId }) {
+function DetailHealHistory({ scraperId, onScraperReverted }) {
   const [history, setHistory] = React.useState(null);
+  const [reportingId, setReportingId] = React.useState(null);
 
-  React.useEffect(() => {
+  const load = () => {
     if (!scraperId) {
       setHistory([]);
       return;
@@ -3273,7 +3327,28 @@ function DetailHealHistory({ scraperId }) {
       .then((r) => r.json())
       .then((data) => setHistory(Array.isArray(data) ? data : []))
       .catch(() => setHistory(null));
+  };
+
+  React.useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scraperId]);
+
+  const handleReport = async (h) => {
+    if (
+      !window.confirm(
+        '이 자가치유 결과를 신고하시겠습니까?\n\n적용된 셀렉터를 신고 이전 값으로 되돌리고, 오탐 사례로 기록해 이후 모델 개선에 활용합니다.',
+      )
+    )
+      return;
+    setReportingId(h.id);
+    const res = await fetch(`/api/heal-history/${h.id}/report`, { method: 'POST' })
+      .then((r) => r.json())
+      .catch(() => null);
+    setReportingId(null);
+    load();
+    if (res && res.reverted && res.scraper && onScraperReverted) onScraperReverted(res.scraper);
+  };
 
   if (history === null) {
     return (
@@ -3336,6 +3411,12 @@ function DetailHealHistory({ scraperId }) {
                 <span className="dot" />
                 {st.label}
               </span>
+              {h.reported && (
+                <span className="chip danger" style={{ fontSize: 10.5 }}>
+                  <span className="dot" />
+                  신고됨
+                </span>
+              )}
               <span className="dim mono" style={{ fontSize: 11 }}>
                 신뢰도 {scorePct}%
               </span>
@@ -3359,6 +3440,25 @@ function DetailHealHistory({ scraperId }) {
                 className="muted"
                 style={{ fontSize: 12, lineHeight: 1.5 }}>
                 {h.reasoning}
+              </div>
+            )}
+
+            {(h.status === 'auto_approved' || h.status === 'approved') && (
+              <div>
+                {h.reported ? (
+                  <span className="dim" style={{ fontSize: 11.5 }}>
+                    신고 접수됨 · {h.reportedAt}
+                  </span>
+                ) : (
+                  <button
+                    className="btn"
+                    style={{ color: 'var(--danger)', fontSize: 12, padding: '5px 10px' }}
+                    disabled={reportingId === h.id}
+                    onClick={() => handleReport(h)}>
+                    <Icon name="flag" className="icon icon-sm" />
+                    {reportingId === h.id ? '신고 처리 중…' : '이 결과 신고'}
+                  </button>
+                )}
               </div>
             )}
           </div>

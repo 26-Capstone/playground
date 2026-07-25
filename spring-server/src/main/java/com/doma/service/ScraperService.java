@@ -479,6 +479,8 @@ public class ScraperService {
             dto.put("status",           p.getStatus());
             dto.put("createdAt",        p.getCreatedAt());
             dto.put("reviewedAt",       p.getReviewedAt().isEmpty() ? null : p.getReviewedAt());
+            dto.put("reported",         p.isReported());
+            dto.put("reportedAt",       p.getReportedAt().isEmpty() ? null : p.getReportedAt());
             return dto;
         }).collect(Collectors.toList());
     }
@@ -578,6 +580,57 @@ public class ScraperService {
         p.setReviewedAt(LocalDateTime.now().format(FMT));
         healProposalRepository.save(p);
         return Map.of("ok", true);
+    }
+
+    /**
+     * 이미 반영된(auto_approved/approved) 자가치유 결과가 잘못됐다는 신고.
+     * 스크래퍼가 신고된 셀렉터를 아직 그대로 쓰고 있으면 신고 이전 셀렉터로 되돌리고,
+     * 이미 다른 값으로 바뀌었다면(재치유/수동 수정) 라이브 상태는 건드리지 않고
+     * 오탐 기록만 남긴다 — 이 기록은 추후 모델 재학습 데이터로 쓴다.
+     */
+    public Map<String, Object> reportHeal(Long proposalId) {
+        HealProposal p = healProposalRepository.findById(proposalId)
+            .orElseThrow(() -> new NoSuchElementException("치유 이력을 찾을 수 없습니다."));
+
+        if (!"auto_approved".equals(p.getStatus()) && !"approved".equals(p.getStatus())) {
+            throw new IllegalStateException("적용된 자가치유 결과만 신고할 수 있습니다.");
+        }
+        if (p.isReported()) {
+            return Map.of("ok", true, "reverted", false);
+        }
+
+        boolean reverted = false;
+        Scraper s = scraperRepository.findById(p.getScraperId()).orElse(null);
+        if (s != null) {
+            if (p.getFieldLabel() == null) {
+                if (p.getProposedSelector().equals(s.getCssSelector())) {
+                    s.setCssSelector(p.getOldSelector());
+                    s.setStatus("failed");
+                    s.setHealedCount(Math.max(0, s.getHealedCount() - 1));
+                    scraperRepository.save(s);
+                    reverted = true;
+                }
+            } else {
+                List<Map<String, Object>> fields = parseFields(s.getExtraFields());
+                for (Map<String, Object> f : fields) {
+                    if (p.getFieldLabel().equals(f.get("label"))
+                            && p.getProposedSelector().equals(String.valueOf(f.get("selector")))) {
+                        f.put("selector", p.getOldSelector());
+                        s.setExtraFields(listToJson(fields));
+                        s.setHealedCount(Math.max(0, s.getHealedCount() - 1));
+                        scraperRepository.save(s);
+                        reverted = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        p.setReported(true);
+        p.setReportedAt(LocalDateTime.now().format(FMT));
+        healProposalRepository.save(p);
+
+        return Map.of("ok", true, "reverted", reverted, "scraper", s != null ? toDto(s) : Map.of());
     }
 
     // ── 내부 헬퍼 ────────────────────────────────────────────────────────────────

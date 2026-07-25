@@ -54,10 +54,12 @@ public class HealProposal {
     // 사용자가 "이 자가치유는 잘못됐다"고 신고한 건. 실제 반영된(auto_approved/approved)
     // 건에만 의미가 있으며, 신고 시 라이브 셀렉터를 되돌리고 이후 모델 재학습용
     // 오탐 데이터로 활용한다.
-    @Column(nullable = false)
+    // 기존 row가 있는 테이블에 ddl-auto=update로 붙는 컬럼이라 DEFAULT를 명시해야
+    // ALTER TABLE이 "contains null values"로 실패하지 않는다.
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
     private boolean reported = false;
 
-    @Column(name = "reported_at", nullable = false)
+    @Column(name = "reported_at", nullable = false, columnDefinition = "text not null default ''")
     private String reportedAt = "";
 
     @PrePersist

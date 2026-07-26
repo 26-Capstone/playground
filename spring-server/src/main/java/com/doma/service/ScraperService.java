@@ -332,7 +332,7 @@ public class ScraperService {
         payload.put("run_at",         runAt);
 
         Object body = "slack".equals(scraper.getWebhookType())
-            ? buildSlackPayload(scraper, payload, "scrape_failed", null)
+            ? buildSlackFailurePayload(scraper, payload)
             : payload;
 
         try {
@@ -409,12 +409,33 @@ public class ScraperService {
         return new HttpEntity<>(body, headers);
     }
 
+    private Map<String, Object> buildSlackFailurePayload(Scraper scraper, Map<String, Object> p) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("🚨 *DOMA 수집 실패* — *").append(scraper.getName()).append("*\n");
+        sb.append("셀렉터가 페이지에서 값을 찾지 못했습니다.\n");
+        sb.append("*마지막 정상값:* `").append(p.get("previous_value")).append("`\n");
+        sb.append("*실패 시각:* ").append(p.get("run_at")).append("\n");
+        sb.append("*URL:* ").append(scraper.getUrl());
+
+        Map<String, Object> textObj = new LinkedHashMap<>();
+        textObj.put("type", "mrkdwn");
+        textObj.put("text", sb.toString());
+
+        Map<String, Object> section = new LinkedHashMap<>();
+        section.put("type", "section");
+        section.put("text", textObj);
+
+        Map<String, Object> slack = new LinkedHashMap<>();
+        slack.put("text", "🚨 DOMA 수집 실패 — " + scraper.getName());
+        slack.put("blocks", List.of(section));
+        return slack;
+    }
+
     private Map<String, Object> buildSlackPayload(Scraper scraper, Map<String, Object> p, String trigger, Double delta) {
         String triggerLabel = switch (trigger) {
             case "on_change"      -> "값 변경";
             case "delta_exceeded" -> "변동폭 초과";
             case "out_of_range"   -> "범위 이탈";
-            case "scrape_failed"  -> "수집 실패";
             case "test"           -> "테스트 발송";
             default               -> trigger;
         };

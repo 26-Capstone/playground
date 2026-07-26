@@ -110,7 +110,7 @@ public class HealService {
             scraper.setHealedCount(scraper.getHealedCount() + 1);
             scraper.setCssSelector((String) result.getOrDefault("robust_selector", scraper.getCssSelector()));
             scraperRepository.save(scraper);
-            saveHistoryEntry(scraper, null, oldSelector, result, confidence, now, "auto_approved");
+            saveHistoryEntry(scraper, null, oldSelector, result, confidence, now, "auto_approved", v1Html, v2Html);
             log.info("[healer] {} 자동 복구 완료 (신뢰도 {}%)", scraper.getName(), Math.round(confidence * 100));
 
         } else if ("healed".equals(status)) {
@@ -131,6 +131,8 @@ public class HealService {
             proposal.setExtractedText((String) result.getOrDefault("extracted_text", ""));
             proposal.setConfidence(confidence);
             proposal.setReasoning((String) result.getOrDefault("reasoning", ""));
+            proposal.setV1Html(v1Html);
+            proposal.setV2Html(v2Html);
             healProposalRepository.save(proposal);
             log.info("[healer] {} 신뢰도 미달 ({}%) → 승인 큐 저장", scraper.getName(), Math.round(confidence * 100));
 
@@ -190,7 +192,7 @@ public class HealService {
             scraper.setHealedCount(scraper.getHealedCount() + 1);
             scraperRepository.save(scraper);
             saveHistoryEntry(scraper, label, selector, result, confidence,
-                LocalDateTime.now().format(FMT), "auto_approved");
+                LocalDateTime.now().format(FMT), "auto_approved", v1Html, v2Html);
             log.info("[healer] {} 보조 필드 '{}' 자동 복구 완료 (신뢰도 {}%)", scraper.getName(), label, Math.round(confidence * 100));
 
         } else if ("healed".equals(status)) {
@@ -203,6 +205,8 @@ public class HealService {
             proposal.setExtractedText((String) result.getOrDefault("extracted_text", ""));
             proposal.setConfidence(confidence);
             proposal.setReasoning((String) result.getOrDefault("reasoning", ""));
+            proposal.setV1Html(v1Html);
+            proposal.setV2Html(v2Html);
             healProposalRepository.save(proposal);
             log.info("[healer] {} 보조 필드 '{}' 신뢰도 미달 ({}%) → 승인 큐 저장", scraper.getName(), label, Math.round(confidence * 100));
 
@@ -217,7 +221,8 @@ public class HealService {
      * 이 경로도 같은 테이블에 (이미 처리 완료 상태로) 남겨야 한다.
      */
     private void saveHistoryEntry(Scraper scraper, String fieldLabel, String oldSelector,
-                                   Map<String, Object> result, double confidence, String now, String status) {
+                                   Map<String, Object> result, double confidence, String now, String status,
+                                   String v1Html, String v2Html) {
         HealProposal entry = new HealProposal();
         entry.setScraperId(scraper.getId());
         entry.setScraperName(scraper.getName());
@@ -229,6 +234,8 @@ public class HealService {
         entry.setReasoning((String) result.getOrDefault("reasoning", ""));
         entry.setStatus(status);
         entry.setReviewedAt(now);
+        entry.setV1Html(v1Html);
+        entry.setV2Html(v2Html);
         healProposalRepository.save(entry);
     }
 

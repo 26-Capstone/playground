@@ -633,6 +633,46 @@ public class ScraperService {
         return Map.of("ok", true, "reverted", reverted, "scraper", s != null ? toDto(s) : Map.of());
     }
 
+    /**
+     * 신고된(reported=true) 자가치유 건 전체를 재학습 데이터 추출용으로 내려준다.
+     * HTML이 캡처 안 된(마이그레이션 이전) 건은 목록에서 빼고 skippedMissingHtmlIds로 분리한다.
+     * 매번 전체 재수출 — 서버 쪽에 "이미 내보냄" 상태를 따로 안 만들고, 호출하는
+     * 쪽(재학습 스크립트)이 매번 통째로 덮어쓰는 걸 전제로 한다.
+     */
+    public Map<String, Object> exportReportedHeals() {
+        List<HealProposal> reported = healProposalRepository.findByReportedTrueOrderByIdAsc();
+
+        List<Map<String, Object>> items = new ArrayList<>();
+        List<Long> skippedMissingHtmlIds = new ArrayList<>();
+
+        for (HealProposal p : reported) {
+            if (p.getV1Html() == null || p.getV2Html() == null) {
+                skippedMissingHtmlIds.add(p.getId());
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id",               p.getId());
+            item.put("scraperId",        p.getScraperId());
+            item.put("scraperName",      p.getScraperName());
+            item.put("fieldLabel",       p.getFieldLabel());
+            item.put("oldSelector",      p.getOldSelector());
+            item.put("proposedSelector", p.getProposedSelector());
+            item.put("v1Html",           p.getV1Html());
+            item.put("v2Html",           p.getV2Html());
+            item.put("status",           p.getStatus());
+            item.put("createdAt",        p.getCreatedAt());
+            item.put("reportedAt",       p.getReportedAt());
+            items.add(item);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("count",                items.size());
+        result.put("generatedAt",          LocalDateTime.now().format(FMT));
+        result.put("items",                items);
+        result.put("skippedMissingHtmlIds", skippedMissingHtmlIds);
+        return result;
+    }
+
     // ── 내부 헬퍼 ────────────────────────────────────────────────────────────────
 
     public Map<String, Object> toDto(Scraper s) {

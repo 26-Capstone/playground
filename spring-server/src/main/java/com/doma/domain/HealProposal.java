@@ -62,6 +62,16 @@ public class HealProposal {
     @Column(name = "reported_at", nullable = false, columnDefinition = "text not null default ''")
     private String reportedAt = "";
 
+    // 치유 판단 근거였던 V1/V2 HTML. 신고된 건을 나중에 재학습용 negative feature로
+    // 재추출하려면 그 시점의 실제 HTML이 있어야 하는데, node-scraper는 롤링 V1
+    // 스냅샷 1장만 유지하고 V2는 아예 저장하지 않으므로 치유 시점에 여기 같이 남긴다.
+    // nullable — DEFAULT 신경 쓸 필요 없이 과거 row는 그냥 NULL(미캡처)로 둔다.
+    @Column(name = "v1_html", columnDefinition = "TEXT")
+    private String v1Html;
+
+    @Column(name = "v2_html", columnDefinition = "TEXT")
+    private String v2Html;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {

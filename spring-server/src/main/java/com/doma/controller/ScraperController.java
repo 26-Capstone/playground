@@ -264,6 +264,11 @@ public class ScraperController {
         ));
     }
 
+    @GetMapping("/v1/heal-history/export")
+    public ResponseEntity<?> exportReportedHeals() {
+        return ResponseEntity.ok(scraperService.exportReportedHeals());
+    }
+
     // ── Python AI 프록시 ─────────────────────────────────────────────────────────
 
     @Value("${doma.python-api-url}")

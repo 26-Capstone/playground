@@ -8,12 +8,16 @@ import com.doma.repository.ScraperRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -111,6 +115,7 @@ public class HealService {
             scraper.setCssSelector((String) result.getOrDefault("robust_selector", scraper.getCssSelector()));
             scraperRepository.save(scraper);
             saveHistoryEntry(scraper, null, oldSelector, result, confidence, now, "auto_approved", v1Html, v2Html);
+            sendHealSlackAlert(scraper, null, oldSelector, result, confidence, "auto_approved", now);
             log.info("[healer] {} 자동 복구 완료 (신뢰도 {}%)", scraper.getName(), Math.round(confidence * 100));
 
         } else if ("healed".equals(status)) {
@@ -134,6 +139,7 @@ public class HealService {
             proposal.setV1Html(v1Html);
             proposal.setV2Html(v2Html);
             healProposalRepository.save(proposal);
+            sendHealSlackAlert(scraper, null, scraper.getCssSelector(), result, confidence, "pending", now);
             log.info("[healer] {} 신뢰도 미달 ({}%) → 승인 큐 저장", scraper.getName(), Math.round(confidence * 100));
 
         } else {
@@ -191,8 +197,9 @@ public class HealService {
             scraper.setExtraFields(fieldsToJson(fields));
             scraper.setHealedCount(scraper.getHealedCount() + 1);
             scraperRepository.save(scraper);
-            saveHistoryEntry(scraper, label, selector, result, confidence,
-                LocalDateTime.now().format(FMT), "auto_approved", v1Html, v2Html);
+            String now = LocalDateTime.now().format(FMT);
+            saveHistoryEntry(scraper, label, selector, result, confidence, now, "auto_approved", v1Html, v2Html);
+            sendHealSlackAlert(scraper, label, selector, result, confidence, "auto_approved", now);
             log.info("[healer] {} 보조 필드 '{}' 자동 복구 완료 (신뢰도 {}%)", scraper.getName(), label, Math.round(confidence * 100));
 
         } else if ("healed".equals(status)) {
@@ -208,6 +215,7 @@ public class HealService {
             proposal.setV1Html(v1Html);
             proposal.setV2Html(v2Html);
             healProposalRepository.save(proposal);
+            sendHealSlackAlert(scraper, label, selector, result, confidence, "pending", LocalDateTime.now().format(FMT));
             log.info("[healer] {} 보조 필드 '{}' 신뢰도 미달 ({}%) → 승인 큐 저장", scraper.getName(), label, Math.round(confidence * 100));
 
         } else {
@@ -237,6 +245,52 @@ public class HealService {
         entry.setV1Html(v1Html);
         entry.setV2Html(v2Html);
         healProposalRepository.save(entry);
+    }
+
+    /**
+     * 자가치유(자동복구/승인대기) 발생 시 스크래퍼에 설정된 Slack webhook으로 알린다.
+     * ScraperService의 데이터 알람(buildSlackPayload)과는 별도 경로 — HealService가
+     * ScraperService를 의존하면 순환 의존성이 생기므로 치유 알림은 여기서 독립적으로 처리한다.
+     * webhook 발송 실패가 치유 흐름에 영향을 주면 안 되므로 예외는 로그만 남기고 삼킨다.
+     */
+    private void sendHealSlackAlert(Scraper scraper, String fieldLabel, String oldSelector,
+                                     Map<String, Object> result, double confidence, String status, String now) {
+        if (!"slack".equals(scraper.getWebhookType())) return;
+        String webhookUrl = scraper.getWebhookUrl();
+        if (webhookUrl == null || webhookUrl.isBlank()) return;
+
+        String statusLabel = "auto_approved".equals(status) ? "자동복구 완료" : "승인 대기";
+        String newSelector = (String) result.getOrDefault("robust_selector", "");
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("🩹 *DOMA 자가치유* — *").append(scraper.getName()).append("*\n");
+        sb.append("*상태:* `").append(statusLabel).append("`\n");
+        sb.append("*필드:* ").append(fieldLabel != null ? fieldLabel : "기본값").append("\n");
+        sb.append("*셀렉터:* `").append(oldSelector).append("` → `").append(newSelector).append("`\n");
+        sb.append("*신뢰도:* ").append(Math.round(confidence * 100)).append("%\n");
+        sb.append("*시각:* ").append(now).append("\n");
+        sb.append("*URL:* ").append(scraper.getUrl());
+
+        Map<String, Object> textObj = new LinkedHashMap<>();
+        textObj.put("type", "mrkdwn");
+        textObj.put("text", sb.toString());
+
+        Map<String, Object> section = new LinkedHashMap<>();
+        section.put("type", "section");
+        section.put("text", textObj);
+
+        Map<String, Object> slack = new LinkedHashMap<>();
+        slack.put("text", "🩹 DOMA 자가치유 — " + scraper.getName());
+        slack.put("blocks", List.of(section));
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        try {
+            restTemplate.postForEntity(webhookUrl, new HttpEntity<>(slack, headers), String.class);
+            log.info("[healer] Slack 알림 발송 — {} ({})", scraper.getName(), statusLabel);
+        } catch (Exception e) {
+            log.warn("[healer] Slack 알림 발송 실패 {}: {}", webhookUrl, e.getMessage());
+        }
     }
 
     private void updateScraperFailed(Scraper scraper) {

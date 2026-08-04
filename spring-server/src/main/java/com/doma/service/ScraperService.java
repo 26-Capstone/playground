@@ -264,8 +264,12 @@ public class ScraperService {
         }
 
         // 알람 판정 및 webhook 발송 (primary 기준)
-        if (succeeded && scraper.getWebhookUrl() != null && !scraper.getWebhookUrl().isBlank()) {
-            new Thread(() -> checkAndFireAlert(scraper, value, previousValue, now)).start();
+        if (scraper.getWebhookUrl() != null && !scraper.getWebhookUrl().isBlank()) {
+            if (succeeded) {
+                new Thread(() -> checkAndFireAlert(scraper, value, previousValue, now)).start();
+            } else {
+                new Thread(() -> fireFailureAlert(scraper, previousValue, now)).start();
+            }
         }
 
         return result;
@@ -376,6 +380,51 @@ public class ScraperService {
         }
     }
 
+    private void fireFailureAlert(Scraper scraper, String previousValue, String runAt) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("scraper_id",     scraper.getId());
+        payload.put("name",           scraper.getName());
+        payload.put("url",            scraper.getUrl());
+        payload.put("status",         "failed");
+        payload.put("value",          "—");
+        payload.put("previous_value", previousValue);
+        payload.put("trigger",        "scrape_failed");
+        payload.put("run_at",         runAt);
+
+        Object body = "slack".equals(scraper.getWebhookType())
+            ? buildFailureSlackPayload(scraper, previousValue, runAt)
+            : payload;
+
+        try {
+            restTemplate.postForEntity(scraper.getWebhookUrl(), jsonEntity(body), String.class);
+            log.info("[webhook] {} → {} (trigger=scrape_failed)", scraper.getName(), scraper.getWebhookUrl());
+        } catch (Exception e) {
+            log.warn("[webhook] 발송 실패 {}: {}", scraper.getWebhookUrl(), e.getMessage());
+        }
+    }
+
+    private Map<String, Object> buildFailureSlackPayload(Scraper scraper, String previousValue, String runAt) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("🚨 *DOMA 스크래핑 실패* — *").append(scraper.getName()).append("*\n");
+        sb.append("*셀렉터 매칭 실패로 데이터를 수집하지 못했습니다.*\n");
+        sb.append("*마지막 정상값:* `").append(previousValue != null ? previousValue : "—").append("`\n");
+        sb.append("*수집 시각:* ").append(runAt).append("\n");
+        sb.append("*URL:* ").append(scraper.getUrl());
+
+        Map<String, Object> textObj = new LinkedHashMap<>();
+        textObj.put("type", "mrkdwn");
+        textObj.put("text", sb.toString());
+
+        Map<String, Object> section = new LinkedHashMap<>();
+        section.put("type", "section");
+        section.put("text", textObj);
+
+        Map<String, Object> slack = new LinkedHashMap<>();
+        slack.put("text", "🚨 DOMA 스크래핑 실패 — " + scraper.getName());
+        slack.put("blocks", List.of(section));
+        return slack;
+    }
+
     private HttpEntity<Object> jsonEntity(Object body) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
@@ -387,6 +436,7 @@ public class ScraperService {
             case "on_change"      -> "값 변경";
             case "delta_exceeded" -> "변동폭 초과";
             case "out_of_range"   -> "범위 이탈";
+            case "scrape_failed"  -> "스크래핑 실패";
             case "test"           -> "테스트 발송";
             default               -> trigger;
         };

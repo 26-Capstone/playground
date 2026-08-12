@@ -24,13 +24,13 @@ public class TokenAuthFilter implements Filter {
         if (request.getRequestURI().startsWith("/api/v1/")) {
             if (apiToken.isBlank()) {
                 response.setStatus(503);
-                response.getWriter().write("{\"error\":\"DOMA_API_TOKEN이 서버에 설정되지 않았습니다.\"}");
+                response.getWriter().write("{\"error\":\"DOMA_API_TOKEN is not configured on the server.\"}");
                 return;
             }
             String auth = request.getHeader("Authorization");
             if (auth == null || !auth.equals("Bearer " + apiToken)) {
                 response.setStatus(401);
-                response.getWriter().write("{\"error\":\"유효하지 않은 API 토큰입니다.\"}");
+                response.getWriter().write("{\"error\":\"Invalid API token.\"}");
                 return;
             }
         }

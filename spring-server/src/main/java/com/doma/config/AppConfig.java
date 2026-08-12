@@ -15,10 +15,11 @@ public class AppConfig {
 
     @Bean
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
-        // HTTP/1.1 전용 SimpleClientHttpRequestFactory를 명시적으로 지정한다.
-        // RestTemplateBuilder의 기본 팩토리(JDK HttpClient)는 cleartext(h2c) 업그레이드를
-        // 시도하는데, node-scraper가 같은 포트에서 ws WebSocket 서버를 같이 띄우고 있어서
-        // Upgrade 헤더가 붙은 요청을 ws가 가로채 "405 Invalid HTTP method"로 거부해버린다.
+        // Explicitly use an HTTP/1.1-only SimpleClientHttpRequestFactory.
+        // RestTemplateBuilder's default factory (JDK HttpClient) attempts a cleartext
+        // (h2c) upgrade, but node-scraper also runs a ws WebSocket server on the same
+        // port, so the ws server intercepts requests carrying an Upgrade header and
+        // rejects them with "405 Invalid HTTP method".
         return builder
             .requestFactory(SimpleClientHttpRequestFactory.class)
             .connectTimeout(Duration.ofSeconds(5))

@@ -28,18 +28,19 @@ public class Scraper {
     @Column(name = "user_intent", nullable = false, columnDefinition = "TEXT")
     private String userIntent = "";
 
-    /** @deprecated 1개짜리 파일럿 시절 컬럼. {@link #extraFields}로 대체됨 — ExtraFieldMigration이
-     * 이 값을 읽어 extraFields로 옮긴 뒤에만 참조해야 하며, 마이그레이션 확인 후 제거 예정. */
+    /** @deprecated Column from the single-field pilot era. Replaced by {@link #extraFields} —
+     * should only be referenced after ExtraFieldMigration reads this value and moves it into
+     * extraFields; scheduled for removal once migration is confirmed. */
     @Deprecated
     @Column(name = "extra_selector", columnDefinition = "TEXT")
     private String extraSelector;
 
-    /** @deprecated {@link #extraFields}로 대체됨. */
+    /** @deprecated Replaced by {@link #extraFields}. */
     @Deprecated
     @Column(name = "extra_label", columnDefinition = "TEXT")
     private String extraLabel;
 
-    // 보조 필드 N개 — JSON 배열: [{"label":"...", "selector":"...", "lastValue":"..."}]
+    // N extra fields — JSON array: [{"label":"...", "selector":"...", "lastValue":"..."}]
     @Column(name = "extra_fields", columnDefinition = "TEXT")
     private String extraFields;
 
@@ -70,7 +71,7 @@ public class Scraper {
     @Column(name = "last_value", nullable = false, columnDefinition = "TEXT")
     private String lastValue = "—";
 
-    /** @deprecated {@link #extraFields}의 각 항목 lastValue로 대체됨. */
+    /** @deprecated Replaced by the lastValue of each entry in {@link #extraFields}. */
     @Deprecated
     @Column(name = "last_extra_value", columnDefinition = "TEXT")
     private String lastExtraValue = "—";

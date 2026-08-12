@@ -36,30 +36,31 @@ public class ScraperService {
     @Value("${doma.scraper-service-url}")
     private String scraperServiceUrl;
 
-    // run()을 동시에 두 번 태우는 걸 막는 가드 — "지금 실행" 버튼이 스케줄 실행과 겹치거나,
-    // updateSettings() 직후 재등록된 job이 smartInitialDelay=0으로 즉시 발동해 기존에
-    // 돌고 있던 실행과 겹치는 두 경우 모두 여기서 막힌다.
+    // Guard against run() firing twice concurrently — this blocks both cases: the "Run now"
+    // button overlapping with a scheduled run, and a job re-registered right after
+    // updateSettings() firing immediately via smartInitialDelay=0 while a previous run is
+    // still in flight.
     private final Set<String> runningIds = ConcurrentHashMap.newKeySet();
 
     private static final DateTimeFormatter FMT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private static final Map<String, String> SCHEDULE_LABELS = Map.of(
-        "daily-9", "매일 09:00",
-        "hourly",  "매시간",
-        "15m",     "15분마다"
+        "daily-9", "Daily at 09:00",
+        "hourly",  "Hourly",
+        "15m",     "Every 15 min"
     );
 
     private static final Map<String, String> DOMAIN_LABELS = Map.of(
-        "commerce",   "소비 수요",
-        "labor",      "노동 시장",
-        "realestate", "부동산",
-        "regulatory", "규제·공시",
-        "media",      "미디어",
-        "finance",    "금융"
+        "commerce",   "Consumer demand",
+        "labor",      "Labor market",
+        "realestate", "Real estate",
+        "regulatory", "Regulatory & disclosure",
+        "media",      "Media",
+        "finance",    "Finance"
     );
 
-    // ── 목록 ────────────────────────────────────────────────────────────────────
+    // ── Listing ─────────────────────────────────────────────────────────────────
 
     public List<Map<String, Object>> listAll() {
         return scraperRepository.findAllByOrderByCreatedAtDesc().stream()
@@ -75,7 +76,7 @@ public class ScraperService {
         return scraperRepository.findById(id).map(this::toDto);
     }
 
-    // ── 생성 ────────────────────────────────────────────────────────────────────
+    // ── Create ──────────────────────────────────────────────────────────────────
 
     public Scraper create(Map<String, Object> body) {
         String id = body.containsKey("id")
@@ -102,7 +103,7 @@ public class ScraperService {
         return scraperRepository.save(s);
     }
 
-    // ── 삭제 ────────────────────────────────────────────────────────────────────
+    // ── Delete ──────────────────────────────────────────────────────────────────
 
     @Transactional
     public void delete(String id) {
@@ -111,12 +112,13 @@ public class ScraperService {
         scraperRepository.deleteById(id);
     }
 
-    // ── 셀렉터 업데이트 ──────────────────────────────────────────────────────────
+    // ── Selector update ────────────────────────────────────────────────────────
 
     /**
-     * extraFields는 "전체 교체" 시맨틱이다 — 호출자가 유지하고 싶은 필드까지 포함해서
-     * 매번 완전한 배열을 보내야 한다 (channels와 동일한 계약). null이면 보조 필드는
-     * 건드리지 않고, 비어있지 않은(빈 배열 포함) 값이 오면 그 배열로 완전히 대체한다.
+     * extraFields uses "full replace" semantics — the caller must send the complete
+     * array every time, including any fields it wants to keep (same contract as
+     * channels). null leaves the extra fields untouched; any non-null value
+     * (including an empty array) fully replaces them.
      */
     public Optional<Scraper> updateSelector(String id, String cssSelector, String userIntent,
                                              Object extraFieldsRaw) {
@@ -133,7 +135,7 @@ public class ScraperService {
         });
     }
 
-    // ── 운영 설정 업데이트 (스케줄 · 임계값 · 채널) ──────────────────────────────
+    // ── Operational settings update (schedule · threshold · channels) ───────────
 
     public Optional<Scraper> updateSettings(String id, Map<String, Object> body) {
         return scraperRepository.findById(id).map(s -> {
@@ -161,12 +163,12 @@ public class ScraperService {
         });
     }
 
-    // ── 즉시 실행 ────────────────────────────────────────────────────────────────
+    // ── Run now ────────────────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> run(String scraperId) {
         if (!runningIds.add(scraperId)) {
-            log.info("[run] {} — 이미 실행 중이라 건너뜀 (중복 실행 방지)", scraperId);
+            log.info("[run] {} — already running, skipping (duplicate-run guard)", scraperId);
             return Map.of("status", "skipped", "reason", "already_running");
         }
         try {
@@ -179,11 +181,11 @@ public class ScraperService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> doRun(String scraperId) {
         Scraper scraper = scraperRepository.findById(scraperId)
-            .orElseThrow(() -> new NoSuchElementException("스크래퍼를 찾을 수 없습니다: " + scraperId));
+            .orElseThrow(() -> new NoSuchElementException("Scraper not found: " + scraperId));
 
         List<Map<String, Object>> extraFields = parseFields(scraper.getExtraFields());
 
-        // Node.js 스크래퍼 서비스 호출
+        // Call the Node.js scraper service
         Map<String, Object> req = new LinkedHashMap<>();
         req.put("id",           scraper.getId());
         req.put("name",         scraper.getName());
@@ -198,7 +200,7 @@ public class ScraperService {
         Map<String, Object> result = restTemplate.postForObject(
             scraperServiceUrl + "/internal/run", req, Map.class);
 
-        if (result == null) throw new RuntimeException("Node.js 스크래퍼 응답 없음");
+        if (result == null) throw new RuntimeException("No response from the Node.js scraper service");
 
         String status     = (String) result.getOrDefault("status", "failed");
         String value      = (String) result.getOrDefault("value", "");
@@ -207,8 +209,8 @@ public class ScraperService {
         String now        = LocalDateTime.now().format(FMT);
         boolean succeeded = "healthy".equals(status);
 
-        // 보조 필드 응답 병합 — Node가 입력 순서를 보장하므로 인덱스 기준 매칭
-        // (라벨 유일성에 의존하지 않기 위함. 라벨 기준 매칭은 approve()에서만 사용)
+        // Merge extra-field responses — Node preserves input order, so we match by index
+        // (this avoids relying on label uniqueness; label-based matching is only used in approve())
         List<Map<String, Object>> extraResults =
             (List<Map<String, Object>>) result.getOrDefault("extraValues", List.of());
         List<String> brokenExtraLabels = new ArrayList<>();
@@ -233,7 +235,7 @@ public class ScraperService {
             scraper.setExtraFields(listToJson(extraFields));
         }
 
-        // 결과 저장
+        // Save the result
         ScrapeResult sr = new ScrapeResult();
         sr.setScraperId(scraperId);
         sr.setStatus(status);
@@ -241,15 +243,15 @@ public class ScraperService {
         sr.setExtraValues(snapshotExtraValues.isEmpty() ? null : listToJson(snapshotExtraValues));
         sr.setScore(succeeded ? 99.0 : 0.0);
         sr.setDurationMs(durationMs);
-        sr.setNote(succeeded ? "정상 수집 — " + value : "셀렉터 매칭 실패");
+        sr.setNote(succeeded ? "Collected successfully — " + value : "Selector match failed");
         scrapeResultRepository.save(sr);
 
-        // 스크래퍼 상태 업데이트 (primary 결과만 반영 — 보조 필드는 status/score에 영향 없음)
+        // Update scraper status (only the primary result is reflected — extra fields don't affect status/score)
         double recentScore = scrapeResultRepository
             .findTop50ByScraperIdOrderByRunAtDesc(scraperId)
             .stream().findFirst().map(ScrapeResult::getScore).orElse(0.0);
 
-        String previousValue = scraper.getLastValue(); // setLastValue 전에 캡처
+        String previousValue = scraper.getLastValue(); // captured before setLastValue
 
         scraper.setStatus(succeeded ? "healthy" : "healing");
         scraper.setScore(recentScore);
@@ -257,13 +259,13 @@ public class ScraperService {
         scraper.setLastRunAt(now);
         scraperRepository.save(scraper);
 
-        // primary 또는 보조 필드 중 하나라도 깨졌으면 자가치유 비동기 시도 (단일 스레드에서 순차 처리)
+        // If the primary or any extra field is broken, attempt self-heal asynchronously (processed sequentially on a single thread)
         boolean primaryBroken = !succeeded;
         if ((primaryBroken || !brokenExtraLabels.isEmpty()) && !html.isEmpty()) {
             new Thread(() -> healService.tryHeal(scraperId, html, primaryBroken, brokenExtraLabels)).start();
         }
 
-        // 알람 판정 및 webhook 발송 (primary 기준)
+        // Determine alert and send webhook (based on the primary field)
         if (scraper.getWebhookUrl() != null && !scraper.getWebhookUrl().isBlank()) {
             if (succeeded) {
                 new Thread(() -> checkAndFireAlert(scraper, value, previousValue, now)).start();
@@ -277,9 +279,9 @@ public class ScraperService {
 
     public Map<String, Object> testWebhook(String scraperId) {
         Scraper scraper = scraperRepository.findById(scraperId)
-            .orElseThrow(() -> new NoSuchElementException("스크래퍼를 찾을 수 없습니다: " + scraperId));
+            .orElseThrow(() -> new NoSuchElementException("Scraper not found: " + scraperId));
         if (scraper.getWebhookUrl() == null || scraper.getWebhookUrl().isBlank())
-            return Map.of("error", "webhook URL이 설정되지 않았습니다.");
+            return Map.of("error", "Webhook URL is not configured.");
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("scraper_id",     scraper.getId());
@@ -308,10 +310,12 @@ public class ScraperService {
         }
     }
 
-    // "값에 숫자가 섞여 있는가"가 아니라 "값이 숫자로 시작하는가"로 판단한다 — 안 그러면
-    // "통밤파이만주9입"처럼 끝에 수량 표기가 붙은 상품명이 숫자값으로 오판돼 가격 변동
-    // 알림이 잘못 나간다. "81.8M subscribers"처럼 숫자로 시작하고 짧은 단위/설명이 뒤에
-    // 붙는 진짜 수치 지표는 계속 숫자로 인정돼야 한다(client screens.jsx의 isNumericStr와 동일 기준).
+    // We judge "does the value START with a number" rather than "does the value CONTAIN
+    // a number" — otherwise product names like "Chestnut Pie Manju 9pk" get misclassified
+    // as numeric because of a trailing quantity suffix, firing a bogus price-change alert.
+    // Genuine numeric metrics that start with a number and are followed by a short
+    // unit/description, like "81.8M subscribers", must still be recognized as numeric
+    // (same rule as isNumericStr in the client's screens.jsx).
     private static final java.util.regex.Pattern NUMERIC_LEAD = java.util.regex.Pattern.compile(
         "[+-]?[$₩¥€]?\\s*[\\d,]+(\\.\\d+)?\\s*[a-zA-Z가-힣%°]{0,2}(\\s|$)"
     );
@@ -376,7 +380,7 @@ public class ScraperService {
             restTemplate.postForEntity(scraper.getWebhookUrl(), jsonEntity(body), String.class);
             log.info("[webhook] {} → {} (trigger={})", scraper.getName(), scraper.getWebhookUrl(), trigger);
         } catch (Exception e) {
-            log.warn("[webhook] 발송 실패 {}: {}", scraper.getWebhookUrl(), e.getMessage());
+            log.warn("[webhook] send failed {}: {}", scraper.getWebhookUrl(), e.getMessage());
         }
     }
 
@@ -399,16 +403,16 @@ public class ScraperService {
             restTemplate.postForEntity(scraper.getWebhookUrl(), jsonEntity(body), String.class);
             log.info("[webhook] {} → {} (trigger=scrape_failed)", scraper.getName(), scraper.getWebhookUrl());
         } catch (Exception e) {
-            log.warn("[webhook] 발송 실패 {}: {}", scraper.getWebhookUrl(), e.getMessage());
+            log.warn("[webhook] send failed {}: {}", scraper.getWebhookUrl(), e.getMessage());
         }
     }
 
     private Map<String, Object> buildFailureSlackPayload(Scraper scraper, String previousValue, String runAt) {
         StringBuilder sb = new StringBuilder();
-        sb.append("🚨 *DOMA 스크래핑 실패* — *").append(scraper.getName()).append("*\n");
-        sb.append("*셀렉터 매칭 실패로 데이터를 수집하지 못했습니다.*\n");
-        sb.append("*마지막 정상값:* `").append(previousValue != null ? previousValue : "—").append("`\n");
-        sb.append("*수집 시각:* ").append(runAt).append("\n");
+        sb.append("🚨 *DOMA scrape failed* — *").append(scraper.getName()).append("*\n");
+        sb.append("*Failed to collect data due to a selector match failure.*\n");
+        sb.append("*Last good value:* `").append(previousValue != null ? previousValue : "—").append("`\n");
+        sb.append("*Collected at:* ").append(runAt).append("\n");
         sb.append("*URL:* ").append(scraper.getUrl());
 
         Map<String, Object> textObj = new LinkedHashMap<>();
@@ -420,7 +424,7 @@ public class ScraperService {
         section.put("text", textObj);
 
         Map<String, Object> slack = new LinkedHashMap<>();
-        slack.put("text", "🚨 DOMA 스크래핑 실패 — " + scraper.getName());
+        slack.put("text", "🚨 DOMA scrape failed — " + scraper.getName());
         slack.put("blocks", List.of(section));
         return slack;
     }
@@ -433,18 +437,18 @@ public class ScraperService {
 
     private Map<String, Object> buildSlackPayload(Scraper scraper, Map<String, Object> p, String trigger, Double delta) {
         String triggerLabel = switch (trigger) {
-            case "on_change"      -> "값 변경";
-            case "delta_exceeded" -> "변동폭 초과";
-            case "out_of_range"   -> "범위 이탈";
-            case "scrape_failed"  -> "스크래핑 실패";
-            case "test"           -> "테스트 발송";
+            case "on_change"      -> "Value changed";
+            case "delta_exceeded" -> "Delta exceeded";
+            case "out_of_range"   -> "Out of range";
+            case "scrape_failed"  -> "Scrape failed";
+            case "test"           -> "Test send";
             default               -> trigger;
         };
         StringBuilder sb = new StringBuilder();
-        sb.append("🔔 *DOMA 알람* — *").append(scraper.getName()).append("*\n");
-        sb.append("*트리거:* `").append(triggerLabel).append("`\n");
-        sb.append("*이전값:* `").append(p.get("previous_value")).append("`  →  ");
-        sb.append("*현재값:* `").append(p.get("value")).append("`");
+        sb.append("🔔 *DOMA alert* — *").append(scraper.getName()).append("*\n");
+        sb.append("*Trigger:* `").append(triggerLabel).append("`\n");
+        sb.append("*Previous value:* `").append(p.get("previous_value")).append("`  →  ");
+        sb.append("*Current value:* `").append(p.get("value")).append("`");
         if (delta != null) {
             sb.append("  (*Δ* ").append(delta >= 0 ? "+" : "").append(String.format("%.4f", delta)).append(")");
         }
@@ -456,7 +460,7 @@ public class ScraperService {
                 }
             }
         }
-        sb.append("\n*수집 시각:* ").append(p.get("run_at"));
+        sb.append("\n*Collected at:* ").append(p.get("run_at"));
         sb.append("\n*URL:* ").append(scraper.getUrl());
 
         Map<String, Object> textObj = new LinkedHashMap<>();
@@ -468,12 +472,12 @@ public class ScraperService {
         section.put("text", textObj);
 
         Map<String, Object> slack = new LinkedHashMap<>();
-        slack.put("text", "🔔 DOMA 알람 — " + scraper.getName()); // fallback (알림 미리보기)
+        slack.put("text", "🔔 DOMA alert — " + scraper.getName()); // fallback (notification preview)
         slack.put("blocks", List.of(section));
         return slack;
     }
 
-    // ── 결과 조회 ────────────────────────────────────────────────────────────────
+    // ── Result lookup ──────────────────────────────────────────────────────────
 
     public List<ScrapeResult> listResults(String scraperId) {
         return scrapeResultRepository.findTop50ByScraperIdOrderByRunAtDesc(scraperId);
@@ -483,9 +487,9 @@ public class ScraperService {
         return scrapeResultRepository.query(id, from, to, status, Math.min(limit, 1000));
     }
 
-    /** ScrapeResult.extraValues는 엔티티에 JSON 문자열로 저장돼 있다 — 그대로 직렬화하면
-     * 프론트가 배열이 아니라 이스케이프된 문자열을 받게 되므로, API로 나갈 땐 항상
-     * 이 메서드로 파싱해서 내보내야 한다. */
+    /** ScrapeResult.extraValues is stored on the entity as a JSON string — serializing it
+     * as-is would send the frontend an escaped string instead of an array, so it must
+     * always be parsed through this method before going out over the API. */
     public Map<String, Object> resultToDto(ScrapeResult r) {
         Map<String, Object> dto = new LinkedHashMap<>();
         dto.put("id",          r.getId());
@@ -504,7 +508,7 @@ public class ScraperService {
         return list.stream().map(this::resultToDto).collect(Collectors.toList());
     }
 
-    // ── 자가치유 이력 ────────────────────────────────────────────────────────────
+    // ── Self-heal history ──────────────────────────────────────────────────────
 
     public List<HealProposal> listHealHistory(String scraperId) {
         return healProposalRepository.findByScraperIdOrderByCreatedAtDesc(scraperId);
@@ -535,7 +539,7 @@ public class ScraperService {
         }).collect(Collectors.toList());
     }
 
-    // ── 통계 ────────────────────────────────────────────────────────────────────
+    // ── Stats ───────────────────────────────────────────────────────────────────
 
     public Map<String, Object> stats() {
         long activeFeeds = scraperRepository.countActive();
@@ -569,16 +573,16 @@ public class ScraperService {
         return result;
     }
 
-    // ── 승인 처리 ────────────────────────────────────────────────────────────────
+    // ── Approval processing ────────────────────────────────────────────────────
 
     public Map<String, Object> approve(Long proposalId) {
         HealProposal p = healProposalRepository.findById(proposalId)
-            .orElseThrow(() -> new NoSuchElementException("승인 요청을 찾을 수 없습니다."));
+            .orElseThrow(() -> new NoSuchElementException("Approval request not found."));
         Scraper s = scraperRepository.findById(p.getScraperId())
-            .orElseThrow(() -> new NoSuchElementException("스크래퍼를 찾을 수 없습니다."));
+            .orElseThrow(() -> new NoSuchElementException("Scraper not found."));
 
         if (p.getFieldLabel() == null) {
-            // primary 필드 승인 — 기존 로직 그대로
+            // Primary field approval — unchanged existing logic
             double scoreVal = Math.round(p.getConfidence() * 1000.0) / 10.0;
             s.setStatus("healthy");
             s.setScore(scoreVal);
@@ -587,7 +591,7 @@ public class ScraperService {
             s.setHealedCount(s.getHealedCount() + 1);
             s.setCssSelector(p.getProposedSelector());
         } else {
-            // 보조 필드 승인 — primary 상태(status/score/lastValue)는 건드리지 않음
+            // Extra field approval — doesn't touch primary status (status/score/lastValue)
             List<Map<String, Object>> fields = parseFields(s.getExtraFields());
             boolean found = false;
             for (Map<String, Object> f : fields) {
@@ -602,7 +606,7 @@ public class ScraperService {
                 s.setExtraFields(listToJson(fields));
                 s.setHealedCount(s.getHealedCount() + 1);
             } else {
-                log.warn("[approve] {} — 보조 필드 '{}' 승인 대상 없음(이미 삭제/변경됨), 무시", s.getId(), p.getFieldLabel());
+                log.warn("[approve] {} — no matching extra field '{}' to approve (already deleted/changed), ignoring", s.getId(), p.getFieldLabel());
             }
         }
         scraperRepository.save(s);
@@ -616,8 +620,8 @@ public class ScraperService {
 
     public Map<String, Object> reject(Long proposalId) {
         HealProposal p = healProposalRepository.findById(proposalId)
-            .orElseThrow(() -> new NoSuchElementException("승인 요청을 찾을 수 없습니다."));
-        // primary 필드 제안 거절 시에만 스크래퍼 상태를 failed로 — 보조 필드 거절은 primary에 영향 없음
+            .orElseThrow(() -> new NoSuchElementException("Approval request not found."));
+        // Only set the scraper status to failed when rejecting a primary field proposal — rejecting an extra field doesn't affect primary
         if (p.getFieldLabel() == null) {
             Scraper s = scraperRepository.findById(p.getScraperId()).orElse(null);
             if (s != null) {
@@ -633,17 +637,18 @@ public class ScraperService {
     }
 
     /**
-     * 이미 반영된(auto_approved/approved) 자가치유 결과가 잘못됐다는 신고.
-     * 스크래퍼가 신고된 셀렉터를 아직 그대로 쓰고 있으면 신고 이전 셀렉터로 되돌리고,
-     * 이미 다른 값으로 바뀌었다면(재치유/수동 수정) 라이브 상태는 건드리지 않고
-     * 오탐 기록만 남긴다 — 이 기록은 추후 모델 재학습 데이터로 쓴다.
+     * A report that an already-applied (auto_approved/approved) self-heal result was wrong.
+     * If the scraper is still using the reported selector, it's reverted to the
+     * pre-report selector; if it has already changed to something else (re-healed or
+     * manually edited), the live state is left untouched and only a false-positive
+     * record is kept — this record is later used as model retraining data.
      */
     public Map<String, Object> reportHeal(Long proposalId) {
         HealProposal p = healProposalRepository.findById(proposalId)
-            .orElseThrow(() -> new NoSuchElementException("치유 이력을 찾을 수 없습니다."));
+            .orElseThrow(() -> new NoSuchElementException("Heal history not found."));
 
         if (!"auto_approved".equals(p.getStatus()) && !"approved".equals(p.getStatus())) {
-            throw new IllegalStateException("적용된 자가치유 결과만 신고할 수 있습니다.");
+            throw new IllegalStateException("Only an applied self-heal result can be reported.");
         }
         if (p.isReported()) {
             return Map.of("ok", true, "reverted", false);
@@ -684,10 +689,11 @@ public class ScraperService {
     }
 
     /**
-     * 신고된(reported=true) 자가치유 건 전체를 재학습 데이터 추출용으로 내려준다.
-     * HTML이 캡처 안 된(마이그레이션 이전) 건은 목록에서 빼고 skippedMissingHtmlIds로 분리한다.
-     * 매번 전체 재수출 — 서버 쪽에 "이미 내보냄" 상태를 따로 안 만들고, 호출하는
-     * 쪽(재학습 스크립트)이 매번 통째로 덮어쓰는 걸 전제로 한다.
+     * Exports every reported (reported=true) self-heal case for retraining data extraction.
+     * Cases where HTML wasn't captured (from before the migration) are excluded from the
+     * list and split out into skippedMissingHtmlIds. This always does a full re-export —
+     * the server doesn't track an "already exported" state; the caller (the retraining
+     * script) is expected to overwrite its data wholesale each time.
      */
     public Map<String, Object> exportReportedHeals() {
         List<HealProposal> reported = healProposalRepository.findByReportedTrueOrderByIdAsc();
@@ -723,7 +729,7 @@ public class ScraperService {
         return result;
     }
 
-    // ── 내부 헬퍼 ────────────────────────────────────────────────────────────────
+    // ── Internal helpers ───────────────────────────────────────────────────────
 
     public Map<String, Object> toDto(Scraper s) {
         Map<String, Object> dto = new LinkedHashMap<>();
@@ -783,10 +789,11 @@ public class ScraperService {
         }
     }
 
-    // ── 보조 필드(N개) 헬퍼 ─────────────────────────────────────────────────────
+    // ── Extra field (N) helpers ────────────────────────────────────────────────
 
-    /** Scraper.extraFields([{label,selector,lastValue}])와 ScrapeResult.extraValues([{label,value}])
-     * 둘 다 이 메서드로 파싱한다 — 둘 다 "라벨을 가진 객체의 JSON 배열"이라는 형태만 공유하면 됨. */
+    /** Both Scraper.extraFields ([{label,selector,lastValue}]) and ScrapeResult.extraValues
+     * ([{label,value}]) are parsed through this method — they only need to share the shape
+     * "a JSON array of objects with a label". */
     public List<Map<String, Object>> parseFields(String json) {
         if (json == null || json.isBlank()) return new ArrayList<>();
         try {
@@ -798,8 +805,9 @@ public class ScraperService {
         }
     }
 
-    /** raw는 프론트가 보낸 [{label, selector}, ...] 형태. 라벨/셀렉터가 비어있는 항목은 버리고,
-     * 매번 lastValue를 "—"로 리셋한다(선택자 재선택 시 기존 값은 무효화 — 기존 단일 필드 시절과 동일한 정책). */
+    /** raw is the [{label, selector}, ...] shape sent by the frontend. Entries with an empty
+     * label/selector are dropped, and lastValue is reset to "—" every time (re-selecting a
+     * selector invalidates the existing value — same policy as in the old single-field days). */
     @SuppressWarnings("unchecked")
     private String normalizeExtraFieldsJson(Object raw) {
         if (!(raw instanceof List<?> list) || list.isEmpty()) return null;

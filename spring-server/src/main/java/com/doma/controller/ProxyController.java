@@ -8,7 +8,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 
-// 클라이언트가 직접 호출하는 레거시 경로 프록시
+// Legacy proxy path called directly by the client
 @RestController
 @RequiredArgsConstructor
 public class ProxyController {
@@ -21,7 +21,7 @@ public class ProxyController {
     @Value("${doma.python-api-url}")
     private String pythonApiUrl;
 
-    // 셀렉터 지정 UI에서 호출 → Node.js Playwright로 프록시
+    // Called from the selector-picker UI → proxies to Node.js Playwright
     @PostMapping("/fetch-html")
     public ResponseEntity<?> fetchHtml(@RequestBody Map<String, Object> body) {
         try {
@@ -29,11 +29,11 @@ public class ProxyController {
                 scraperServiceUrl + "/internal/fetch-html", body, Map.class);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            return ResponseEntity.status(502).body(Map.of("error", "Node.js 연결 실패: " + e.getMessage()));
+            return ResponseEntity.status(502).body(Map.of("error", "Node.js connection failed: " + e.getMessage()));
         }
     }
 
-    // 수동 heal 호출 → Python AI로 프록시
+    // Manual heal call → proxies to Python AI
     @PostMapping("/heal")
     public ResponseEntity<?> heal(@RequestBody Map<String, Object> body) {
         try {
@@ -41,7 +41,7 @@ public class ProxyController {
                 pythonApiUrl + "/heal", body, Map.class);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            return ResponseEntity.status(502).body(Map.of("error", "Python API 연결 실패: " + e.getMessage()));
+            return ResponseEntity.status(502).body(Map.of("error", "Python API connection failed: " + e.getMessage()));
         }
     }
 }

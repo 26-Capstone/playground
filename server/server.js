@@ -17,7 +17,7 @@ const SNAPSHOTS_DIR = path.join(__dirname, "snapshots");
 
 const app = express();
 
-// 프록시를 express.json() 보다 먼저 등록 — body stream을 consume하기 전에 Spring으로 전달
+// Register the proxy before express.json() — forward to Spring before the body stream is consumed
 app.use(
   ["/api", "/fetch-html", "/heal"],
   createProxyMiddleware({
@@ -28,20 +28,20 @@ app.use(
 
 app.use(express.json({ limit: "10mb" }));
 
-// 프론트엔드 정적 파일 서빙
+// Serve frontend static files
 const clientDir = path.join(__dirname, "client");
 app.use(express.static(clientDir));
 app.get("/", (req, res) => res.sendFile(path.join(clientDir, "index.html")));
 
-// ─── Internal API (Spring Boot 전용) ─────────────────────────────────────────
+// ─── Internal API (Spring Boot only) ─────────────────────────────────────────
 
-// Spring이 스크래퍼 정보를 body에 담아 호출 → Playwright 실행 결과 반환
+// Spring calls this with scraper info in the body → returns the Playwright run result
 app.post("/internal/run", async (req, res) => {
   const { id, name, url, css_selector, user_intent, extra_fields } = req.body;
   if (!id || !url || !css_selector) {
     return res
       .status(400)
-      .json({ error: "id, url, css_selector 필드가 필요합니다." });
+      .json({ error: "id, url, css_selector fields are required." });
   }
   try {
     const result = await runScraper({
@@ -58,43 +58,49 @@ app.post("/internal/run", async (req, res) => {
   }
 });
 
-// Spring이 heal 요청 전 v1_html을 조회할 때 사용
+// Used by Spring to look up v1_html before a heal request
 app.get("/internal/snapshot/:id", (req, res) => {
   const snapshotPath = path.join(SNAPSHOTS_DIR, `${req.params.id}_v1.html`);
   if (!fs.existsSync(snapshotPath)) {
-    return res.status(404).json({ error: "V1 스냅샷 없음" });
+    return res.status(404).json({ error: "V1 snapshot not found" });
   }
   res.json({ html: fs.readFileSync(snapshotPath, "utf-8") });
 });
 
-// 셀렉터 변경 시 Spring이 기존 V1 스냅샷 삭제 요청
+// Spring requests deletion of the existing V1 snapshot when the selector changes
 app.delete("/internal/snapshot/:id", (req, res) => {
   const snapshotPath = path.join(SNAPSHOTS_DIR, `${req.params.id}_v1.html`);
   if (fs.existsSync(snapshotPath)) fs.unlinkSync(snapshotPath);
   res.json({ ok: true });
 });
 
-// 셀렉터 지정 UI에서 현재 페이지 HTML 수집
+// Collects the current page HTML for the selector-picking UI
 app.post("/internal/fetch-html", async (req, res) => {
   const { url } = req.body || {};
-  if (!url) return res.status(400).json({ error: "url 필드가 필요합니다." });
-  await browserSemaphore.acquire(); // 동시 Chromium 실행 수 제한 (OOM 방지)
+  if (!url) return res.status(400).json({ error: "url field is required." });
+  await browserSemaphore.acquire(); // Limit concurrent Chromium instances (avoid OOM)
   let browser;
   try {
-    // launch가 try 밖에 있으면 실패 시 finally를 못 타서 세마포어 퍼밋이 영구 누수된다
-    // (MAX_CONCURRENT_BROWSERS=2라 단 2번만 실패해도 이후 모든 실행이 영원히 대기하게 됨).
+    // If launch were outside the try block, a failure would skip finally and
+    // leak the semaphore permit permanently (with MAX_CONCURRENT_BROWSERS=2,
+    // just 2 failures would make every subsequent run wait forever).
     browser = await chromium.launch({ headless: true });
-    const ctx = await browser.newContext({ viewport: VIEWPORT }); // 피커/스크래퍼와 동일 뷰포트
+    const ctx = await browser.newContext({ viewport: VIEWPORT }); // Same viewport as the picker/scraper
     const page = await ctx.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
-    // domcontentloaded는 CSR 앱에서 실제 데이터가 렌더링되기 전에 끝난다 — 자가치유가
-    // 이 HTML(V2)을 실제 콘텐츠 없는 뼈대(네비게이션/헤더/푸터만 있는 상태)로 받으면
-    // ML 후보가 0개거나 전부 무관한 요소라 엉뚱한 걸(예: 메뉴 탭 링크) 정답으로 착각한다.
-    // networkidle은 광고/분석 스크립트가 계속 도는 사이트(무신사 등)에서 영영 안 걸려서
-    // 타임아웃만 날렸다(실측: 10초 내내 대기해도 idle 안 됨). 대신 body 텍스트 길이가
-    // "더 이상 크게 변하지 않을 때"까지 기다린다 — 실시간 카운터 등으로 인한 미세한
-    // 흔들림(실측 ±30자 수준)은 허용하고, 초기 로딩 시의 큰 점프(107자→3347자 같은)만
-    // 안정화 신호로 본다. 실제 무신사 랭킹 페이지에서 약 4.3초 만에 안정화되는 것을 확인함.
+    // domcontentloaded fires before real data has rendered in a CSR app — if
+    // self-heal receives this HTML (V2) as an empty skeleton (just nav/header/
+    // footer, no real content), the ML candidates end up either zero or all
+    // irrelevant elements, causing it to mistake something wrong (e.g. a menu
+    // tab link) for the answer.
+    // networkidle never fires on sites that keep running ads/analytics
+    // scripts (e.g. Musinsa), so it just burns the timeout (measured: still
+    // not idle after waiting the full 10s). Instead, we wait until the body
+    // text length "stops changing significantly" — small fluctuations from
+    // things like live counters (measured around ±30 chars) are tolerated,
+    // while only a large jump during initial load (e.g. 107 chars → 3347
+    // chars) is treated as the stabilization signal. Confirmed this
+    // stabilizes in about 4.3s on the actual Musinsa ranking page.
     await page.evaluate(
       (maxWaitMs) =>
         new Promise((resolve) => {
@@ -126,17 +132,19 @@ app.post("/internal/fetch-html", async (req, res) => {
   }
 });
 
-// ─── WebSocket (원격 브라우저 스트리밍) ──────────────────────────────────────
+// ─── WebSocket (remote browser streaming) ──────────────────────────────────────
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// 960x600 + quality 55 — 원래 1280x800/quality 80이었는데 EC2 인스턴스가 작아서
-// (RAM 2GB) 프레임 인코딩이 병목이 되어 커서/화면이 느리게 느껴지는 문제 개선용.
-// 클라이언트(screens.jsx)의 REMOTE_W/REMOTE_H와 반드시 같이 맞춰야 함.
-// scraper.js도 이 값을 그대로 가져다 쓴다 — 피커와 실제 스크래퍼가 다른 뷰포트를 쓰면
-// 반응형 페이지에서 서로 다른 DOM을 보게 돼서 피커로 고른 셀렉터가 실제 실행 시
-// "요소를 찾을 수 없음"으로 깨지는 원인이 된다.
+// 960x600 + quality 55 — originally 1280x800/quality 80, but the small EC2
+// instance (2GB RAM) made frame encoding a bottleneck, making the cursor/
+// screen feel laggy; these values fix that.
+// Must always be kept in sync with REMOTE_W/REMOTE_H in the client (screens.jsx).
+// scraper.js also reuses this value directly — if the picker and the actual
+// scraper used different viewports, they'd see different DOMs on responsive
+// pages, causing selectors chosen in the picker to break with "element not
+// found" during the actual run.
 const SCREENCAST_QUALITY = 55;
 
 const GET_SELECTOR_FN = `
@@ -146,20 +154,22 @@ const GET_SELECTOR_FN = `
 
   const BLOCKED_TAGS = new Set(['img','picture','video','audio','canvas','svg','iframe','object','embed','script','style','meta','link','noscript','br','hr','wbr','source','track','col','colgroup','head','base','template']);
   const tagName = el.tagName.toLowerCase();
-  if (BLOCKED_TAGS.has(tagName)) return { blocked: true, tag: tagName, reason: '<' + tagName + '> 요소는 추출할 수 없습니다' };
+  if (BLOCKED_TAGS.has(tagName)) return { blocked: true, tag: tagName, reason: 'Cannot extract from <' + tagName + '> elements' };
   if (tagName === 'input') {
     const t = (el.type || '').toLowerCase();
     if (['image','file','color','range','submit','button','reset','checkbox','radio'].includes(t))
-      return { blocked: true, tag: 'input[type=' + t + ']', reason: '이 input 유형에서는 텍스트를 추출할 수 없습니다' };
+      return { blocked: true, tag: 'input[type=' + t + ']', reason: 'Cannot extract text from this input type' };
   }
 
   function isHashClass(c) {
     if (!c) return false;
-    // 하이픈이 있다고 무조건 "안정적인 클래스"로 취급하지 않는다 — Tailwind 같은
-    // 유틸리티 클래스(flex-col, text-gray-500)도 하이픈을 쓰지만, 토스처럼 CSS-in-JS가
-    // 찍어내는 해시 클래스(tw69-y90cyth, tw3w-1qmwwzma)도 하이픈이 낀 형태라
-    // 예전 로직(하이픈 있으면 바로 통과)으로는 전혀 걸러지지 않았다. 모음 비율 체크를
-    // 하이픈 유무와 무관하게 항상 적용한다.
+    // Having a hyphen doesn't automatically make a class "stable" — utility
+    // classes like Tailwind's (flex-col, text-gray-500) use hyphens too, but
+    // so do hashed classes generated by CSS-in-JS libraries like Toss's
+    // (tw69-y90cyth, tw3w-1qmwwzma), which also contain hyphens. The old
+    // logic (pass immediately if a hyphen is present) didn't filter these out
+    // at all. The vowel-ratio check is now always applied regardless of
+    // whether a hyphen is present.
     const letters = c.replace(/[^a-zA-Z]/g, '');
     if (letters.length < 3) return false;
     const vowels = (letters.match(/[aeiouAEIOU]/g) || []).length;
@@ -212,9 +222,12 @@ const GET_SELECTOR_FN = `
 
   ${extractDisplayText.toString()}
 
-  // 진단용: buildSelector가 "유일하다"고 판단해서 멈춘 시점과, 그 직후(수십~수백ms 뒤)
-  // 다시 매칭해봤을 때가 다른지 확인한다 — 실시간으로 계속 리렌더링되는 페이지(토스 등)에서
-  // "고를 땐 유일했는데 방금 테스트하면 못 찾는다"는 증상의 원인이 여기 있는지 보기 위함.
+  // For diagnostics: checks whether the moment buildSelector decides a
+  // selector is "unique" and stops differs from a re-match performed right
+  // after (tens to hundreds of ms later) — meant to reveal whether this is
+  // the cause of the symptom where pages that keep re-rendering live (e.g.
+  // Toss) show "it was unique when picked, but can't be found when tested
+  // right after."
   const debugTrace = [];
   const selector = buildSelector(el, debugTrace);
   const recheckCount = (() => {
@@ -275,11 +288,13 @@ wss.on("connection", (ws) => {
   let pendingMove = null;
   let moveInFlight = false;
 
-  // 토스증권처럼 실시간으로 계속 리렌더링되는 무거운 페이지는 page.mouse.move() 한 번의
-  // CDP 왕복이 45ms 스로틀 간격보다 오래 걸릴 수 있다 — await로 순서대로 처리하면 뒤에
-  // 밀린 좌표들이 큐에 쌓여서, 사용자가 커서를 멈춰도 한참 동안 "밀린 경로"를 따라가는
-  // 것처럼 보인다. 최신 좌표 하나만 남기고 나머지는 버려서(coalescing) 항상 "지금 커서
-  // 위치"만 쫓아가게 한다.
+  // On heavy pages that keep re-rendering live, like Toss Securities, a
+  // single page.mouse.move() CDP round trip can take longer than the 45ms
+  // throttle interval — if handled sequentially with await, backlogged
+  // coordinates pile up in the queue, so even after the user stops moving
+  // the cursor, it keeps visibly following the "backlogged path" for a
+  // while. We keep only the latest coordinate and drop the rest
+  // (coalescing) so the cursor always tracks the "current position" only.
   const flushMove = async () => {
     if (moveInFlight || !pendingMove) return;
     const { x, y } = pendingMove;
@@ -288,14 +303,15 @@ wss.on("connection", (ws) => {
     try {
       await page?.mouse.move(x, y);
     } catch (e) {
-      // 페이지 네비게이션 중 등 일시적 실패는 무시 — 다음 좌표가 곧 다시 온다
+      // Ignore transient failures, e.g. during page navigation — the next coordinate will arrive shortly
     } finally {
       moveInFlight = false;
       if (pendingMove) flushMove();
     }
   };
 
-  // 세마포어는 정확히 한 번만 release — close 핸들러와 에러 경로가 둘 다 탈 수 있어서 가드 필요
+  // The semaphore must be released exactly once — both the close handler and
+  // the error path can trigger it, so a guard is needed
   const releaseSemaphore = () => {
     if (semaphoreReleased) return;
     semaphoreReleased = true;
@@ -308,7 +324,7 @@ wss.on("connection", (ws) => {
 
   (async () => {
     try {
-      await browserSemaphore.acquire(); // 동시 Chromium 실행 수 제한 (OOM 방지)
+      await browserSemaphore.acquire(); // Limit concurrent Chromium instances (avoid OOM)
       browser = await chromium.launch({ headless: true });
       const ctx = await browser.newContext({
         viewport: VIEWPORT,
@@ -387,7 +403,7 @@ wss.on("connection", (ws) => {
           }
           send({ type: "selector", ...result });
         } else {
-          send({ type: "blocked", reason: "이 위치에서 요소를 찾지 못했습니다" });
+          send({ type: "blocked", reason: "No element found at this position" });
         }
       }
 

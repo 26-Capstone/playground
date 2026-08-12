@@ -29,8 +29,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * HealService의 자가치유 Slack 알림 로직(sendHealSlackAlert)만 검증한다.
- * 치유 판정 로직 자체는 기존 동작이라 다시 검증하지 않는다.
+ * Verifies only HealService's self-heal Slack notification logic (sendHealSlackAlert).
+ * The heal-decision logic itself is pre-existing behavior and is not re-verified here.
  */
 @ExtendWith(MockitoExtension.class)
 class HealServiceTest {
@@ -52,7 +52,7 @@ class HealServiceTest {
 
         scraper = new Scraper();
         scraper.setId("s1");
-        scraper.setName("테스트 스크래퍼");
+        scraper.setName("Test Scraper");
         scraper.setUrl("https://example.com");
         scraper.setCssSelector(".old-selector");
         scraper.setThreshold(50);
@@ -71,41 +71,41 @@ class HealServiceTest {
                 "status", status,
                 "confidence", confidence,
                 "robust_selector", ".new-selector",
-                "extracted_text", "값",
-                "reasoning", "이유"
+                "extracted_text", "Value",
+                "reasoning", "Reason"
             ));
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void 자동복구시_슬랙알림이_발송된다() {
+    void slackAlertIsSentOnAutoRecovery() {
         scraper.setWebhookType("slack");
         scraper.setWebhookUrl("https://hooks.slack.com/test");
-        stubHealResult("healed", 0.9); // threshold 0.5 이상
+        stubHealResult("healed", 0.9); // threshold 0.5 or above
 
         healService.tryHeal("s1", "<html>v2</html>", true, List.of());
 
         ArgumentCaptor<HttpEntity<?>> captor = ArgumentCaptor.forClass(HttpEntity.class);
         verify(restTemplate).postForEntity(eq("https://hooks.slack.com/test"), captor.capture(), eq(String.class));
-        assertThat(captor.getValue().getBody().toString()).contains("자동복구 완료");
+        assertThat(captor.getValue().getBody().toString()).contains("Auto-recovery complete");
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    void 승인대기시_슬랙알림이_발송된다() {
+    void slackAlertIsSentOnPendingApproval() {
         scraper.setWebhookType("slack");
         scraper.setWebhookUrl("https://hooks.slack.com/test");
-        stubHealResult("healed", 0.3); // threshold 0.5 미달
+        stubHealResult("healed", 0.3); // below threshold 0.5
 
         healService.tryHeal("s1", "<html>v2</html>", true, List.of());
 
         ArgumentCaptor<HttpEntity<?>> captor = ArgumentCaptor.forClass(HttpEntity.class);
         verify(restTemplate).postForEntity(eq("https://hooks.slack.com/test"), captor.capture(), eq(String.class));
-        assertThat(captor.getValue().getBody().toString()).contains("승인 대기");
+        assertThat(captor.getValue().getBody().toString()).contains("Pending approval");
     }
 
     @Test
-    void webhookType가_generic이면_슬랙알림_발송안함() {
+    void noSlackAlertWhenWebhookTypeIsGeneric() {
         scraper.setWebhookType("generic");
         scraper.setWebhookUrl("https://example.com/hook");
         stubHealResult("healed", 0.9);
@@ -116,7 +116,7 @@ class HealServiceTest {
     }
 
     @Test
-    void webhookUrl이_비어있으면_슬랙알림_발송안함() {
+    void noSlackAlertWhenWebhookUrlIsBlank() {
         scraper.setWebhookType("slack");
         scraper.setWebhookUrl("");
         stubHealResult("healed", 0.9);
@@ -127,7 +127,7 @@ class HealServiceTest {
     }
 
     @Test
-    void 치유실패시_슬랙알림_발송안함() {
+    void noSlackAlertWhenHealFails() {
         scraper.setWebhookType("slack");
         scraper.setWebhookUrl("https://hooks.slack.com/test");
         stubHealResult("failed", 0.0);

@@ -45,7 +45,7 @@ public class ScraperController {
     @PostMapping("/scrapers")
     public ResponseEntity<?> create(@RequestBody Map<String, Object> body) {
         if (!body.containsKey("name") || !body.containsKey("url")) {
-            return ResponseEntity.badRequest().body(Map.of("error", "name, url 필드가 필요합니다."));
+            return ResponseEntity.badRequest().body(Map.of("error", "name and url fields are required."));
         }
         String extraFieldsError = validateExtraFields(body.get("extra_fields"));
         if (extraFieldsError != null) {
@@ -75,7 +75,7 @@ public class ScraperController {
         return scraperService.updateSelector(id, cssSelector, userIntent, extraFields)
             .map(updated -> {
                 schedulerService.addJob(updated);
-                // Node.js의 V1 스냅샷 삭제 요청
+                // Request Node.js to delete the V1 snapshot
                 try {
                     restTemplate.delete(scraperServiceUrl + "/internal/snapshot/" + id);
                 } catch (Exception ignored) {}
@@ -112,7 +112,7 @@ public class ScraperController {
         try {
             Map<String, Object> result = scraperService.run(id);
             if ("skipped".equals(result.get("status"))) {
-                return ResponseEntity.status(409).body(Map.of("error", "이미 실행 중입니다."));
+                return ResponseEntity.status(409).body(Map.of("error", "Already running."));
             }
             return ResponseEntity.ok(Map.of(
                 "result",  result,
@@ -161,14 +161,14 @@ public class ScraperController {
 
         List<ScrapeResult> rows = scraperService.listResults(id);
 
-        // 스크래퍼의 "현재" extra_fields 라벨 순서 기준으로 동적 컬럼 생성.
-        // 과거 실행 시점엔 없던 라벨은 빈칸으로 채운다.
+        // Build dynamic columns based on the scraper's "current" extra_fields label order.
+        // Labels that didn't exist at the time of a past run are left blank.
         List<Map<String, Object>> extraFields = (List<Map<String, Object>>) scraperOpt.get().get("extra_fields");
         List<String> labels = extraFields == null ? List.of() : extraFields.stream()
             .map(f -> String.valueOf(f.get("label")))
             .collect(Collectors.toList());
 
-        StringBuilder sb = new StringBuilder("﻿수집시각,상태,추출값,신뢰도,응답시간(ms),비고");
+        StringBuilder sb = new StringBuilder("﻿Collected At,Status,Extracted Value,Confidence,Response Time (ms),Note");
         for (String label : labels) sb.append(",").append(label.replace(",", " "));
         sb.append("\r\n");
         for (ScrapeResult r : rows) {
@@ -196,7 +196,7 @@ public class ScraperController {
             .body(sb.toString());
     }
 
-    /** null이면 검증 통과(또는 extra_fields 없음). 라벨 공백/중복이면 에러 메시지 반환. */
+    /** Returns null if validation passes (or extra_fields is absent). Returns an error message if a label is blank or duplicated. */
     private String validateExtraFields(Object raw) {
         if (!(raw instanceof List<?> list)) return null;
         Set<String> seen = new HashSet<>();
@@ -204,8 +204,8 @@ public class ScraperController {
             if (!(o instanceof Map<?, ?> m)) continue;
             Object labelObj = m.get("label");
             String label = labelObj == null ? "" : String.valueOf(labelObj).trim();
-            if (label.isEmpty()) return "보조 필드 라벨은 비어있을 수 없습니다.";
-            if (!seen.add(label)) return "보조 필드 라벨이 중복되었습니다: " + label;
+            if (label.isEmpty()) return "Extra field label cannot be empty.";
+            if (!seen.add(label)) return "Duplicate extra field label: " + label;
         }
         return null;
     }
@@ -217,7 +217,7 @@ public class ScraperController {
                 scraperServiceUrl + "/internal/snapshot/" + id, Map.class);
             return ResponseEntity.ok(snap);
         } catch (Exception e) {
-            return ResponseEntity.status(404).body(Map.of("error", "V1 스냅샷 없음"));
+            return ResponseEntity.status(404).body(Map.of("error", "No V1 snapshot"));
         }
     }
 
@@ -239,7 +239,7 @@ public class ScraperController {
         return Map.of("apiToken", token, "baseUrl", "http://localhost:" + port);
     }
 
-    // ── 외부 데이터 API (토큰 인증은 TokenAuthFilter에서 처리) ────────────────────
+    // ── External data API (token auth handled in TokenAuthFilter) ────────────────
 
     @GetMapping("/v1/scrapers/{id}/data")
     public ResponseEntity<?> externalData(
@@ -269,7 +269,7 @@ public class ScraperController {
         return ResponseEntity.ok(scraperService.exportReportedHeals());
     }
 
-    // ── Python AI 프록시 ─────────────────────────────────────────────────────────
+    // ── Python AI proxy ────────────────────────────────────────────────────────
 
     @Value("${doma.python-api-url}")
     private String pythonApiUrl;
@@ -281,7 +281,7 @@ public class ScraperController {
                 pythonApiUrl + "/heal", body, Map.class);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
-            return ResponseEntity.status(502).body(Map.of("error", "Python API 연결 실패: " + e.getMessage()));
+            return ResponseEntity.status(502).body(Map.of("error", "Python API connection failed: " + e.getMessage()));
         }
     }
 }

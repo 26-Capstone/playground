@@ -41,28 +41,29 @@ public class HealService {
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     /**
-     * primaryBroken/brokenExtraFieldLabels 중 깨진 것만 치유를 시도한다.
-     * V1 스냅샷은 공용으로 한 번만 조회. primary 치유는 기존 로직 그대로(scraper의
-     * status/score/lastValue를 갱신), 보조 필드 치유는 완전히 격리된 별도 경로로
-     * 처리해서 서로의 결과가 덮어써지지 않도록 한다.
+     * Attempts to heal only whichever of primaryBroken/brokenExtraFieldLabels is
+     * actually broken. The V1 snapshot is fetched once and shared. Primary healing
+     * keeps the existing logic (updates the scraper's status/score/lastValue),
+     * while extra-field healing runs through a fully isolated separate path so
+     * neither result overwrites the other.
      */
     public void tryHeal(String scraperId, String v2Html, boolean primaryBroken, List<String> brokenExtraFieldLabels) {
         Scraper scraper = scraperRepository.findById(scraperId).orElse(null);
         if (scraper == null) return;
 
-        // V1 스냅샷 조회
+        // Fetch the V1 snapshot
         String v1Html;
         try {
             Map<String, String> snap = restTemplate.getForObject(
                 scraperServiceUrl + "/internal/snapshot/" + scraperId, Map.class);
             if (snap == null || snap.get("html") == null) {
-                log.info("[healer] {} — V1 스냅샷 없음, 자가치유 건너뜀", scraper.getName());
+                log.info("[healer] {} — no V1 snapshot, skipping self-heal", scraper.getName());
                 if (primaryBroken) updateScraperFailed(scraper);
                 return;
             }
             v1Html = snap.get("html");
         } catch (Exception e) {
-            log.info("[healer] {} — V1 스냅샷 없음, 자가치유 건너뜀", scraper.getName());
+            log.info("[healer] {} — no V1 snapshot, skipping self-heal", scraper.getName());
             if (primaryBroken) updateScraperFailed(scraper);
             return;
         }
@@ -90,7 +91,7 @@ public class HealService {
             result = restTemplate.postForObject(
                 pythonApiUrl + "/heal", healReq, Map.class);
         } catch (Exception e) {
-            log.error("[healer] {} — Python API 오류: {}", scraper.getName(), e.getMessage());
+            log.error("[healer] {} — Python API error: {}", scraper.getName(), e.getMessage());
             updateScraperFailed(scraper);
             return;
         }
@@ -103,7 +104,7 @@ public class HealService {
         String now        = LocalDateTime.now().format(FMT);
 
         if ("healed".equals(status) && confidence >= threshold) {
-            // 신뢰도 충족 → 자동 복구
+            // Confidence threshold met → auto-recovered
             String oldSelector = scraper.getCssSelector();
             double scoreVal = Math.round(confidence * 1000.0) / 10.0;
             updateLastScore(scraperId, scoreVal);
@@ -116,10 +117,10 @@ public class HealService {
             scraperRepository.save(scraper);
             saveHistoryEntry(scraper, null, oldSelector, result, confidence, now, "auto_approved", v1Html, v2Html);
             sendHealSlackAlert(scraper, null, oldSelector, result, confidence, "auto_approved", now);
-            log.info("[healer] {} 자동 복구 완료 (신뢰도 {}%)", scraper.getName(), Math.round(confidence * 100));
+            log.info("[healer] {} auto-recovery complete (confidence {}%)", scraper.getName(), Math.round(confidence * 100));
 
         } else if ("healed".equals(status)) {
-            // 신뢰도 미달 → 승인 큐 저장
+            // Below confidence threshold → saved to approval queue
             double scoreVal = Math.round(confidence * 1000.0) / 10.0;
             updateLastScore(scraperId, scoreVal);
             scraper.setStatus("pending");
@@ -140,20 +141,21 @@ public class HealService {
             proposal.setV2Html(v2Html);
             healProposalRepository.save(proposal);
             sendHealSlackAlert(scraper, null, scraper.getCssSelector(), result, confidence, "pending", now);
-            log.info("[healer] {} 신뢰도 미달 ({}%) → 승인 큐 저장", scraper.getName(), Math.round(confidence * 100));
+            log.info("[healer] {} below confidence threshold ({}%) → saved to approval queue", scraper.getName(), Math.round(confidence * 100));
 
         } else {
             updateScraperFailed(scraper);
-            log.info("[healer] {} 치유 불가 — {}", scraper.getName(), result.get("reason"));
+            log.info("[healer] {} cannot heal — {}", scraper.getName(), result.get("reason"));
         }
     }
 
     /**
-     * 보조 필드 1개를 독립적으로 치유한다. primary 필드의 status/score/lastValue,
-     * ScrapeResult.score는 절대 건드리지 않는다 — 보조 필드 실패가 정상 스크래퍼를
-     * "failed"로 만들거나, 여러 필드가 순차 치유되며 서로의 confidence로 score를
-     * 덮어쓰는 걸 막기 위함. 쓰기 직전에 스크래퍼를 다시 조회해서 race window를
-     * 필드 1개(LLM 호출 1회) 분량으로 제한한다.
+     * Heals a single extra field independently. Never touches the primary field's
+     * status/score/lastValue or ScrapeResult.score — this prevents an extra-field
+     * failure from marking a healthy scraper as "failed," and prevents multiple
+     * fields healing sequentially from overwriting each other's score with their
+     * own confidence. The scraper is re-fetched right before writing, limiting the
+     * race window to a single field (one LLM call).
      */
     @SuppressWarnings("unchecked")
     private void healExtraField(String scraperId, String label, String v1Html, String v2Html) {
@@ -165,7 +167,7 @@ public class HealService {
             .filter(f -> label.equals(f.get("label")))
             .findFirst().orElse(null);
         if (field == null) {
-            log.info("[healer] {} — 보조 필드 '{}' 이미 삭제/변경됨, 치유 건너뜀", scraper.getName(), label);
+            log.info("[healer] {} — extra field '{}' already deleted/changed, skipping heal", scraper.getName(), label);
             return;
         }
         String selector = String.valueOf(field.get("selector"));
@@ -174,7 +176,7 @@ public class HealService {
             "v1_html",      v1Html,
             "v2_html",      v2Html,
             "css_selector", selector,
-            "user_intent",  scraper.getUserIntent() + " (보조 필드: " + label + ")",
+            "user_intent",  scraper.getUserIntent() + " (extra field: " + label + ")",
             "target_name",  label
         );
 
@@ -182,7 +184,7 @@ public class HealService {
         try {
             result = restTemplate.postForObject(pythonApiUrl + "/heal", healReq, Map.class);
         } catch (Exception e) {
-            log.error("[healer] {} — 보조 필드 '{}' Python API 오류: {}", scraper.getName(), label, e.getMessage());
+            log.error("[healer] {} — extra field '{}' Python API error: {}", scraper.getName(), label, e.getMessage());
             return;
         }
         if (result == null) return;
@@ -200,7 +202,7 @@ public class HealService {
             String now = LocalDateTime.now().format(FMT);
             saveHistoryEntry(scraper, label, selector, result, confidence, now, "auto_approved", v1Html, v2Html);
             sendHealSlackAlert(scraper, label, selector, result, confidence, "auto_approved", now);
-            log.info("[healer] {} 보조 필드 '{}' 자동 복구 완료 (신뢰도 {}%)", scraper.getName(), label, Math.round(confidence * 100));
+            log.info("[healer] {} extra field '{}' auto-recovery complete (confidence {}%)", scraper.getName(), label, Math.round(confidence * 100));
 
         } else if ("healed".equals(status)) {
             HealProposal proposal = new HealProposal();
@@ -216,17 +218,19 @@ public class HealService {
             proposal.setV2Html(v2Html);
             healProposalRepository.save(proposal);
             sendHealSlackAlert(scraper, label, selector, result, confidence, "pending", LocalDateTime.now().format(FMT));
-            log.info("[healer] {} 보조 필드 '{}' 신뢰도 미달 ({}%) → 승인 큐 저장", scraper.getName(), label, Math.round(confidence * 100));
+            log.info("[healer] {} extra field '{}' below confidence threshold ({}%) → saved to approval queue", scraper.getName(), label, Math.round(confidence * 100));
 
         } else {
-            log.info("[healer] {} 보조 필드 '{}' 치유 불가 — {}", scraper.getName(), label, result.get("reason"));
+            log.info("[healer] {} extra field '{}' cannot heal — {}", scraper.getName(), label, result.get("reason"));
         }
     }
 
     /**
-     * 승인 큐(HealProposal)는 원래 "대기 중인 제안"만 표현하도록 설계돼서, 자동 복구된
-     * 건은 레코드 자체가 안 남았다 — 자가치유 이력 화면에서 자동 복구까지 함께 보려면
-     * 이 경로도 같은 테이블에 (이미 처리 완료 상태로) 남겨야 한다.
+     * The approval queue (HealProposal) was originally designed to represent only
+     * "pending proposals," so auto-recovered records never left one behind — to
+     * show auto-recoveries alongside pending ones on the self-heal history screen,
+     * this path also needs to leave a record in the same table (already marked as
+     * processed).
      */
     private void saveHistoryEntry(Scraper scraper, String fieldLabel, String oldSelector,
                                    Map<String, Object> result, double confidence, String now, String status,
@@ -248,10 +252,12 @@ public class HealService {
     }
 
     /**
-     * 자가치유(자동복구/승인대기) 발생 시 스크래퍼에 설정된 Slack webhook으로 알린다.
-     * ScraperService의 데이터 알람(buildSlackPayload)과는 별도 경로 — HealService가
-     * ScraperService를 의존하면 순환 의존성이 생기므로 치유 알림은 여기서 독립적으로 처리한다.
-     * webhook 발송 실패가 치유 흐름에 영향을 주면 안 되므로 예외는 로그만 남기고 삼킨다.
+     * Notifies the scraper's configured Slack webhook when a self-heal
+     * (auto-recovery/pending-approval) occurs. This is a separate path from
+     * ScraperService's data alerts (buildSlackPayload) — if HealService depended
+     * on ScraperService, it would create a circular dependency, so heal
+     * notifications are handled independently here. Webhook send failures must
+     * not affect the heal flow, so exceptions are only logged and swallowed.
      */
     private void sendHealSlackAlert(Scraper scraper, String fieldLabel, String oldSelector,
                                      Map<String, Object> result, double confidence, String status, String now) {
@@ -259,16 +265,16 @@ public class HealService {
         String webhookUrl = scraper.getWebhookUrl();
         if (webhookUrl == null || webhookUrl.isBlank()) return;
 
-        String statusLabel = "auto_approved".equals(status) ? "자동복구 완료" : "승인 대기";
+        String statusLabel = "auto_approved".equals(status) ? "Auto-recovery complete" : "Pending approval";
         String newSelector = (String) result.getOrDefault("robust_selector", "");
 
         StringBuilder sb = new StringBuilder();
-        sb.append("🩹 *DOMA 자가치유* — *").append(scraper.getName()).append("*\n");
-        sb.append("*상태:* `").append(statusLabel).append("`\n");
-        sb.append("*필드:* ").append(fieldLabel != null ? fieldLabel : "기본값").append("\n");
-        sb.append("*셀렉터:* `").append(oldSelector).append("` → `").append(newSelector).append("`\n");
-        sb.append("*신뢰도:* ").append(Math.round(confidence * 100)).append("%\n");
-        sb.append("*시각:* ").append(now).append("\n");
+        sb.append("🩹 *DOMA self-heal* — *").append(scraper.getName()).append("*\n");
+        sb.append("*Status:* `").append(statusLabel).append("`\n");
+        sb.append("*Field:* ").append(fieldLabel != null ? fieldLabel : "Default").append("\n");
+        sb.append("*Selector:* `").append(oldSelector).append("` → `").append(newSelector).append("`\n");
+        sb.append("*Confidence:* ").append(Math.round(confidence * 100)).append("%\n");
+        sb.append("*Time:* ").append(now).append("\n");
         sb.append("*URL:* ").append(scraper.getUrl());
 
         Map<String, Object> textObj = new LinkedHashMap<>();
@@ -280,16 +286,16 @@ public class HealService {
         section.put("text", textObj);
 
         Map<String, Object> slack = new LinkedHashMap<>();
-        slack.put("text", "🩹 DOMA 자가치유 — " + scraper.getName());
+        slack.put("text", "🩹 DOMA self-heal — " + scraper.getName());
         slack.put("blocks", List.of(section));
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         try {
             restTemplate.postForEntity(webhookUrl, new HttpEntity<>(slack, headers), String.class);
-            log.info("[healer] Slack 알림 발송 — {} ({})", scraper.getName(), statusLabel);
+            log.info("[healer] Slack alert sent — {} ({})", scraper.getName(), statusLabel);
         } catch (Exception e) {
-            log.warn("[healer] Slack 알림 발송 실패 {}: {}", webhookUrl, e.getMessage());
+            log.warn("[healer] Slack alert failed {}: {}", webhookUrl, e.getMessage());
         }
     }
 

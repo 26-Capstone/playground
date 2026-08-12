@@ -1,8 +1,10 @@
-// Chromium 인스턴스 동시 실행 개수를 제한한다.
-// 스케줄 실행이 겹치면서 여러 개가 동시에 떠 EC2(RAM 2GB) 인스턴스에서
-// OOM killer가 chrome-headless를 강제 종료한 사고가 있어 추가한 안전장치.
-// runScraper(스케줄/수동 실행), /internal/fetch-html, 실시간 셀렉터 피커(WS)가
-// 전부 이 세마포어를 공유해서 프로세스 전체 기준으로 동시 실행 수를 제한한다.
+// Limits the number of concurrent Chromium instances.
+// This is a safeguard added after an incident where overlapping scheduled runs
+// spun up multiple instances at once and the OOM killer force-killed
+// chrome-headless on an EC2 instance (2GB RAM).
+// runScraper (scheduled/manual runs), /internal/fetch-html, and the live
+// selector picker (WS) all share this semaphore, so concurrency is capped
+// process-wide.
 class Semaphore {
   constructor(max) {
     this.max = max;

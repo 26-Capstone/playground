@@ -52,14 +52,16 @@ public class SchedulerService {
     @PostConstruct
     public void init() {
         scraperRepository.findAllByOrderByCreatedAtDesc().forEach(this::addJob);
-        log.info("[scheduler] {}개 job 등록 완료", jobs.size());
+        log.info("[scheduler] {} job(s) registered", jobs.size());
     }
 
-    // 기본 스케줄(예: daily-9)로 여러 스크래퍼를 만들면 전부 같은 틱에 몰려서 동시에
-    // /internal/run을 호출한다 — 브라우저 세마포어(2개)/스레드풀(4개)이 감당 못 하면
-    // 뒤로 갈수록 대기가 쌓이다 타임아웃까지 번진다. 스크래퍼 ID로 결정적 지터를 줘서
-    // 몰림을 분산시킨다(같은 스크래퍼는 재시작해도 항상 같은 오프셋 → 스케줄이 들쭉날쭉해지지 않음).
-    private static final long JITTER_MAX_MS = 3 * 60 * 1000; // 최대 3분
+    // If multiple scrapers use the default schedule (e.g. daily-9), they all pile
+    // up on the same tick and call /internal/run at once — if the browser
+    // semaphore (2 slots)/thread pool (4 threads) can't keep up, the backlog
+    // grows until it spills into timeouts. We apply deterministic jitter based on
+    // the scraper ID to spread out the pile-up (the same scraper always gets the
+    // same offset even after a restart, so the schedule doesn't become erratic).
+    private static final long JITTER_MAX_MS = 3 * 60 * 1000; // Max 3 minutes
 
     public void addJob(Scraper scraper) {
         if (scraper.getCssSelector() == null || scraper.getCssSelector().isBlank()) return;
@@ -71,36 +73,40 @@ public class SchedulerService {
 
         long jitterMs = Math.floorMod(scraper.getId().hashCode(), JITTER_MAX_MS);
 
-        // 트리거가 울리면 스레드를 붙잡고 sleep하는 대신, jitterMs 뒤로 실제 실행을
-        // 한 번 더 예약만 하고 즉시 반환한다 — 지터 대기 중에도 풀 스레드가 묶이지 않는다.
+        // Instead of holding a thread and sleeping when the trigger fires, we just
+        // schedule the actual run jitterMs later and return immediately — the pool
+        // thread isn't tied up while waiting out the jitter.
         ScheduledFuture<?> future = taskScheduler.schedule(
             () -> taskScheduler.schedule(() -> runScraperJob(scraper), java.time.Instant.now().plusMillis(jitterMs)),
             trigger
         );
         jobs.put(scraper.getId(), future);
-        log.info("[scheduler] {} → \"{}\" (+{}ms 지터) 등록", scraper.getName(), scraper.getSchedule(), jitterMs);
+        log.info("[scheduler] {} → \"{}\" (+{}ms jitter) registered", scraper.getName(), scraper.getSchedule(), jitterMs);
 
-        // 캐치업: cron 스케줄(daily-9 등)은 앱이 꺼져있던 동안 정규 틱을 놓쳐도 스스로
-        // 알아채지 못하고 다음 정식 스케줄(최대 하루)까지 기다린다. lastRunAt 기준으로
-        // 이미 지나간 실행 시각이 있으면 지금 한 번 보충 실행한다. run()의 중복 실행 가드가
-        // 이미 있어 다른 경로로 마침 실행 중이어도 안전하게 스킵된다.
+        // Catch-up: a cron schedule (e.g. daily-9) doesn't notice on its own if it
+        // missed a regular tick while the app was down, and will wait until the next
+        // scheduled tick (up to a day). If there's an already-passed scheduled run
+        // time based on lastRunAt, run a catch-up execution now. run()'s duplicate-run
+        // guard is already in place, so it's safely skipped if another path happens
+        // to be running at the same time.
         if (missedCronRun(scraper.getSchedule(), scraper.getLastRunAt())) {
-            log.info("[scheduler] {} — 놓친 실행 감지, 캐치업 실행 예약", scraper.getName());
+            log.info("[scheduler] {} — missed run detected, scheduling catch-up run", scraper.getName());
             taskScheduler.schedule(() -> runScraperJob(scraper), java.time.Instant.now().plusMillis(jitterMs));
         }
     }
 
     private void runScraperJob(Scraper scraper) {
-        log.info("[scheduler] {} 실행 시작", scraper.getName());
+        log.info("[scheduler] {} run starting", scraper.getName());
         try {
             scraperService.run(scraper.getId());
         } catch (Exception e) {
-            log.error("[scheduler] {} 실행 오류: {}", scraper.getName(), e.getMessage());
+            log.error("[scheduler] {} run error: {}", scraper.getName(), e.getMessage());
         }
     }
 
-    /** 15m/hourly는 PeriodicTrigger의 smartInitialDelay가 이미 밀린 시간을 보정해준다.
-     * cron 스케줄만 대상으로, 마지막 실행 이후 이미 지나간 예정 실행 시각이 있는지 확인한다. */
+    /** For 15m/hourly, PeriodicTrigger's smartInitialDelay already compensates for
+     * elapsed time. For cron schedules only, checks whether there's a scheduled
+     * run time that has already passed since the last run. */
     private boolean missedCronRun(String schedule, String lastRunAt) {
         if ("15m".equals(schedule) || "hourly".equals(schedule)) return false;
         if (lastRunAt == null || lastRunAt.isBlank()) return false;
@@ -135,7 +141,7 @@ public class SchedulerService {
                 try {
                     return new CronTrigger(expr);
                 } catch (IllegalArgumentException e) {
-                    log.warn("[scheduler] 유효하지 않은 스케줄: \"{}\" (건너뜀)", schedule);
+                    log.warn("[scheduler] Invalid schedule: \"{}\" (skipping)", schedule);
                     return null;
                 }
             }

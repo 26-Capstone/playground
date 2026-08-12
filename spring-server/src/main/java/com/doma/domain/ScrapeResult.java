@@ -26,8 +26,8 @@ public class ScrapeResult {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String value = "";
 
-    // 보조 필드 N개 스냅샷 — JSON 배열: [{"label":"...", "value":"..."}]
-    // (구) extra_value 단일 컬럼은 DB에 남아있지만 더 이상 참조하지 않음 — 이력 데이터는 마이그레이션 대상 아님
+    // Snapshot of N extra fields — JSON array: [{"label":"...", "value":"..."}]
+    // The (old) single extra_value column still exists in the DB but is no longer referenced — historical data is not migrated
     @Column(name = "extra_values", columnDefinition = "TEXT")
     private String extraValues;
 

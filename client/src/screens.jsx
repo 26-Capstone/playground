@@ -1,7 +1,7 @@
 // screens.jsx — All the screens for DOMA.
 
 import React from 'react';
-import { Icon, SectionTitle, Stat, StatusChip, TEMPLATES, nextRunLabel, scheduleLabel, ScoreRing, Spark } from './data.jsx';
+import { Icon, SectionTitle, Stat, StatusChip, TEMPLATES, nextRunLabel, ScoreRing, Spark } from './data.jsx';
 
 // If a request is rejected at the nginx/proxy layer (413/502/504, etc.), the
 // response body can come back as an HTML error page instead of JSON. Calling
@@ -540,7 +540,7 @@ function OverviewScreen({
               <div
                 className="muted"
                 style={{ fontSize: 12 }}>
-                {scheduleLabel(c.schedule)}
+                {c.schedule}
               </div>
               <div
                 className="dim mono"
@@ -1262,7 +1262,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                 {c.url}
               </span>
               <span className="dim">·</span>
-              <span>{scheduleLabel(c.schedule)}</span>
+              <span>{c.schedule}</span>
               <span
                 className="chip"
                 style={{ fontSize: 10, padding: '1px 7px' }}>

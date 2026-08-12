@@ -217,19 +217,8 @@ function nextRunLabel(scheduleKey, lastRun) {
   return m2 > 0 ? `in ${h}h ${m2}m` : `in ${h}h`;
 }
 
-// Some pre-rendered schedule strings still arrive from the server in Korean
-// (e.g. "매일 09:00"); this maps the known set to English for display.
-const SCHEDULE_DISPLAY = {
-  '매일 09:00': 'Daily at 09:00',
-  '매시간': 'Hourly',
-  '15분마다': 'Every 15 min',
-};
-function scheduleLabel(schedule) {
-  return SCHEDULE_DISPLAY[schedule] || schedule;
-}
-
 export {
   Icon, ScoreRing, Spark, StatusChip, STATUS_LABEL,
   TEMPLATES,
-  SectionTitle, Stat, nextRunLabel, scheduleLabel,
+  SectionTitle, Stat, nextRunLabel,
 };

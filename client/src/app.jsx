@@ -20,7 +20,7 @@ function App(){
   const [approvalCount, setApprovalCount] = React.useState(0);
   const [stats, setStats] = React.useState(null);
 
-  // 서버 DB에서 스크래퍼 목록 + 승인 큐 카운트 + 통계 로드, 30초마다 자동 갱신
+  // Load scraper list + approval queue count + stats from the server DB, auto-refresh every 30s
   const refreshScrapers = React.useCallback(() => {
     fetch('/api/scrapers')
       .then(r => r.json())
@@ -141,28 +141,28 @@ function App(){
         {route.name==='detail' && <DetailScreen scraper={route.payload} onBack={()=>go('overview')} onScraperUpdate={handleScraperUpdate} onDelete={handleDeleteScraper}/>}
         {route.name==='new' && <NewScraperScreen scrapers={scraperList} onClose={()=>go('overview')} onRegister={handleRegister}/>}
         {route.name==='delivery' && <DeliveryScreen/>}
-        {route.name==='settings' && <BlankScreen title="Settings" subtitle="조직 · 멤버 · API 토큰 · 알림"/>}
+        {route.name==='settings' && <BlankScreen title="Settings" subtitle="Organization · Members · API tokens · Notifications"/>}
         {route.name==='activity' && <ActivityScreen/>}
         {route.name==='templates' && <TemplatesScreen onUse={()=>go('new')}/>}
       </main>
 
       <TweaksPanel>
-        <TweakSection label="외관" />
-        <TweakRadio label="테마" value={t.theme}
+        <TweakSection label="Appearance" />
+        <TweakRadio label="Theme" value={t.theme}
           options={['light','dark']}
           onChange={(v)=>setTweak('theme', v)}/>
-        <TweakRadio label="밀도" value={t.density}
+        <TweakRadio label="Density" value={t.density}
           options={['compact','regular','comfy']}
           onChange={(v)=>setTweak('density', v)}/>
         <TweakColor label="Accent" value={t.accent}
           options={['#3182F6','#7C5BFF','#00BD83','#E08400','#E04A4A']}
           onChange={(v)=>setTweak('accent', v)}/>
-        <TweakSection label="시뮬레이션" />
-        <TweakSelect label="스크래퍼 상태" value={t.simState}
+        <TweakSection label="Simulation" />
+        <TweakSelect label="Scraper state" value={t.simState}
           options={[
-            {value:'live',     label:'실시간 운영'},
-            {value:'healing',  label:'자가치유 진행 중'},
-            {value:'incident', label:'장애 발생'},
+            {value:'live',     label:'Live'},
+            {value:'healing',  label:'Self-healing in progress'},
+            {value:'incident', label:'Incident'},
           ]}
           onChange={(v)=>setTweak('simState', v)}/>
       </TweaksPanel>
@@ -182,7 +182,7 @@ function BlankScreen({title, subtitle}){
       <SectionTitle title={title}>{subtitle}</SectionTitle>
       <div className="card" style={{padding:'var(--s-11)', textAlign:'center'}}>
         <Icon name="cube" className="icon icon-lg" style={{margin:'0 auto var(--s-3)', display:'block', color:'var(--text-dim)'}}/>
-        <div className="muted">이 화면은 데모에서 생략되었습니다.</div>
+        <div className="muted">This screen is omitted from the demo.</div>
       </div>
     </div>
   );
@@ -191,17 +191,17 @@ function BlankScreen({title, subtitle}){
 // ─── Sidebar ───────────────────────────────────────────────────────────────
 function Sidebar({route, onGo, currentOrg, approvalCount}){
   const sections = [
-    { hdr:'워크스페이스', items:[
-      {id:'overview',  label:'스크래퍼',     icon:'scraper'},
-      {id:'approvals', label:'승인 큐',    icon:'inbox',   count:approvalCount||null, accent:'warn'},
-      {id:'templates', label:'템플릿',     icon:'sparkles'},
-      {id:'activity',  label:'활동',       icon:'history'},
+    { hdr:'Workspace', items:[
+      {id:'overview',  label:'Scrapers',     icon:'scraper'},
+      {id:'approvals', label:'Approval queue',    icon:'inbox',   count:approvalCount||null, accent:'warn'},
+      {id:'templates', label:'Templates',     icon:'sparkles'},
+      {id:'activity',  label:'Activity',       icon:'history'},
     ]},
-    { hdr:'데이터 출력', items:[
-      {id:'delivery',  label:'전송 채널',  icon:'rocket'},
+    { hdr:'Data output', items:[
+      {id:'delivery',  label:'Delivery channels',  icon:'rocket'},
     ]},
-    { hdr:'관리', items:[
-      {id:'settings',  label:'설정',       icon:'settings'},
+    { hdr:'Admin', items:[
+      {id:'settings',  label:'Settings',       icon:'settings'},
     ]},
   ];
 
@@ -267,7 +267,7 @@ function Sidebar({route, onGo, currentOrg, approvalCount}){
         <div className="card" style={{padding:'var(--s-3)'}}>
           <div style={{display:'flex', alignItems:'center', gap:'var(--s-2)', marginBottom:'var(--s-2)'}}>
             <span className="live-dot"/>
-            <span style={{fontSize:12, fontWeight:500}}>전체 정상 운영 중</span>
+            <span style={{fontSize:12, fontWeight:500}}>All systems healthy</span>
           </div>
           <div className="dim mono" style={{fontSize:11, lineHeight:1.6}}>
             uptime 99.98% · 168h<br/>
@@ -282,8 +282,8 @@ function Sidebar({route, onGo, currentOrg, approvalCount}){
             fontSize:11, fontWeight:600, color:'#fff'
           }}>MK</div>
           <div style={{flex:1, minWidth:0}}>
-            <div style={{fontSize:12.5, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>김민지</div>
-            <div className="dim" style={{fontSize:11}}>admin · 핀치 리서치</div>
+            <div style={{fontSize:12.5, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>Minji Kim</div>
+            <div className="dim" style={{fontSize:11}}>admin · Finch Research</div>
           </div>
           <button className="btn ghost xs" style={{padding:5}}>
             <Icon name="settings" className="icon icon-sm"/>
@@ -294,8 +294,8 @@ function Sidebar({route, onGo, currentOrg, approvalCount}){
   );
 }
 
-// 오니기리(주먹밥) 실루엣 — 삼각형 쌀 모양 + 김 띠. 브랜드 아이콘(favicon)과 같은 모티프를
-// 단순한 기하학적 형태로 축소해서 배지 안에 넣었다(캐릭터화하지 않고 미니멀하게).
+// Onigiri (rice ball) silhouette — triangular rice shape + nori strip. Same motif as the
+// brand icon (favicon), reduced to a simple geometric form for the badge (minimal, not a mascot).
 function Logo(){
   return (
     <svg width="24" height="24" viewBox="0 0 24 24">
@@ -309,8 +309,8 @@ function Logo(){
 // ─── Top bar ───────────────────────────────────────────────────────────────
 function TopBar({route, onGo, currentOrg, theme, onToggleTheme}){
   const titleMap = {
-    overview:'스크래퍼', approvals:'승인 큐', detail:'스크래퍼 상세', new:'새 스크래퍼',
-    delivery:'전송 채널', settings:'설정', activity:'활동', templates:'템플릿'
+    overview:'Scrapers', approvals:'Approval queue', detail:'Scraper detail', new:'New scraper',
+    delivery:'Delivery channels', settings:'Settings', activity:'Activity', templates:'Templates'
   };
   return (
     <div style={{
@@ -330,10 +330,10 @@ function TopBar({route, onGo, currentOrg, theme, onToggleTheme}){
       <div style={{flex:1}}/>
       <button className="btn ghost sm" style={{padding:'5px 10px'}}>
         <Icon name="search" className="icon icon-sm"/>
-        <span style={{fontSize:12}}>빠른 이동…</span>
+        <span style={{fontSize:12}}>Quick jump…</span>
         <span className="kbd" style={{fontSize:10}}>⌘K</span>
       </button>
-      <button className="btn ghost sm" onClick={onToggleTheme} title="테마 전환">
+      <button className="btn ghost sm" onClick={onToggleTheme} title="Toggle theme">
         <Icon name={theme==='light' ? 'moon' : 'sun'} className="icon icon-sm"/>
       </button>
       <button className="btn ghost sm" style={{padding:6, position:'relative'}}>
@@ -345,7 +345,7 @@ function TopBar({route, onGo, currentOrg, theme, onToggleTheme}){
       </button>
       <div style={{width:1, height:18, background:'var(--border)'}}/>
       <button className="btn primary sm" onClick={()=>onGo('new')}>
-        <Icon name="plus" className="icon icon-sm"/>새 스크래퍼
+        <Icon name="plus" className="icon icon-sm"/>New scraper
       </button>
     </div>
   );

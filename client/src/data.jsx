@@ -115,11 +115,11 @@ const Spark = ({ data, w = 80, h = 24, color = "var(--accent)", fill = true }) =
 
 // ─── Status chip ───────────────────────────────────────────────────────────
 const STATUS_LABEL = {
-  healthy: { label: '정상', cls: 'ok' },
-  healing: { label: '자가치유 중', cls: 'healing' },
-  pending: { label: '승인 대기', cls: 'warn' },
-  failed:  { label: '실패', cls: 'danger' },
-  paused:  { label: '일시중지', cls: '' },
+  healthy: { label: 'Healthy', cls: 'ok' },
+  healing: { label: 'Self-healing', cls: 'healing' },
+  pending: { label: 'Pending approval', cls: 'warn' },
+  failed:  { label: 'Failed', cls: 'danger' },
+  paused:  { label: 'Paused', cls: '' },
 };
 const StatusChip = ({ status }) => {
   const s = STATUS_LABEL[status] || STATUS_LABEL.healthy;
@@ -128,30 +128,30 @@ const StatusChip = ({ status }) => {
 
 // ─── Alt-data templates (used by new-scraper wizard) ───────────────────────
 const TEMPLATES = [
-  { id:'tpl_coupang_rank', cat:'소비 수요', title:'쿠팡 카테고리 1위 추적',
-    desc:'카테고리 베스트 페이지의 1위 상품명을 1분 단위로 추적',
-    intent:'쿠팡 카테고리 베스트 페이지의 실시간 1위 상품명',
-    icon:'cube', interval:'1분', users:128 },
-  { id:'tpl_dart',         cat:'규제·공시', title:'DART 신규 공시 모니터',
-    desc:'코스피200 종목의 신규/정정 공시를 즉시 감지',
-    intent:'DART 공시 목록의 최신 공시 제목과 발행 시각',
-    icon:'cube', interval:'1분', users:94 },
-  { id:'tpl_naverland',    cat:'부동산',    title:'네이버 부동산 호가 평균',
-    desc:'특정 단지·평형의 매매 호가 평균값',
-    intent:'단지·평형 페이지의 매매 호가들의 평균값(만원 단위 숫자)',
-    icon:'cube', interval:'30분', users:46 },
-  { id:'tpl_saramin_jobs', cat:'노동 시장', title:'채용공고 신규 수',
-    desc:'사람인·잡코리아의 일별 신규 채용공고 집계',
-    intent:'카테고리별 신규 채용공고 수 (오늘 등록된 건수)',
-    icon:'cube', interval:'1시간', users:31 },
-  { id:'tpl_eleven_best',  cat:'소비 수요', title:'카테고리 베스트 Top N',
-    desc:'베스트셀러 페이지의 상위 N개 상품명·랭킹·가격',
-    intent:'베스트셀러 페이지 상위 20개의 상품명·랭킹·표시 가격',
-    icon:'cube', interval:'15분', users:73 },
-  { id:'tpl_melon_chart',  cat:'미디어',    title:'멜론 차트 1위',
-    desc:'음원 차트의 실시간 1위 곡 제목',
-    intent:'멜론 실시간 차트의 1위 곡 제목과 가수명',
-    icon:'cube', interval:'5분', users:22 },
+  { id:'tpl_coupang_rank', cat:'Consumer demand', title:'Coupang category #1 tracker',
+    desc:'Tracks the #1 product name on the category best-seller page every minute',
+    intent:'The real-time #1 product name on the Coupang category best-seller page',
+    icon:'cube', interval:'1 min', users:128 },
+  { id:'tpl_dart',         cat:'Regulatory & disclosure', title:'DART new disclosure monitor',
+    desc:'Instantly detects new/amended disclosures for KOSPI200 constituents',
+    intent:'Latest disclosure title and publish time from the DART disclosure list',
+    icon:'cube', interval:'1 min', users:94 },
+  { id:'tpl_naverland',    cat:'Real estate',    title:'Naver Real Estate average asking price',
+    desc:'Average sale asking price for a specific complex and unit size',
+    intent:'Average of the sale asking prices on a complex/unit-size page (number, in 10k KRW units)',
+    icon:'cube', interval:'30 min', users:46 },
+  { id:'tpl_saramin_jobs', cat:'Labor market', title:'New job postings count',
+    desc:'Daily tally of new job postings on Saramin and JobKorea',
+    intent:'Count of new job postings per category (posted today)',
+    icon:'cube', interval:'1 hour', users:31 },
+  { id:'tpl_eleven_best',  cat:'Consumer demand', title:'Category best-sellers Top N',
+    desc:'Top N product names, rankings, and prices from the best-seller page',
+    intent:'Product name, ranking, and listed price for the top 20 on the best-seller page',
+    icon:'cube', interval:'15 min', users:73 },
+  { id:'tpl_melon_chart',  cat:'Media',    title:'Melon chart #1',
+    desc:'Real-time #1 track title on the music chart',
+    intent:'The #1 track title and artist name on the Melon real-time chart',
+    icon:'cube', interval:'5 min', users:22 },
 ];
 
 // ─── Tiny components shared across screens ────────────────────────────────
@@ -181,20 +181,22 @@ const Stat = ({ label, value, sub, accent, icon, onClick }) => (
   </div>
 );
 
-// ── 다음 실행 시각 계산 ────────────────────────────────────────────────────────
+// ── Next run time calculation ──────────────────────────────────────────────
 function nextRunLabel(scheduleKey, lastRun) {
   const now  = new Date();
   const next = new Date(now);
 
+  // Korean keys are kept alongside the English ones as a fallback match for
+  // schedule strings the server may still return pre-rendered in Korean.
   const INTERVALS = { '15m': 15, '15분마다': 15, 'hourly': 60, '매시간': 60 };
   const intervalMin = INTERVALS[scheduleKey];
 
   if (intervalMin) {
-    // 인터벌 기반: lastRun + interval 기준
+    // Interval-based: computed from lastRun + interval
     const base = lastRun && lastRun !== '—' ? new Date(lastRun.replace(' ', 'T')) : null;
     if (base && !isNaN(base)) {
       const candidate = new Date(base.getTime() + intervalMin * 60000);
-      // 이미 지났으면 다음 주기로
+      // If already passed, advance to the next cycle
       while (candidate <= now) candidate.setMinutes(candidate.getMinutes() + intervalMin);
       next.setTime(candidate.getTime());
     } else {
@@ -204,19 +206,30 @@ function nextRunLabel(scheduleKey, lastRun) {
     next.setHours(9, 0, 0, 0);
     if (next <= now) next.setDate(next.getDate() + 1);
   } else {
-    return 'Cron 일정';
+    return 'Custom schedule';
   }
 
   const diffMs  = next - now;
   const diffMin = Math.round(diffMs / 60000);
-  if (diffMin < 1)   return '곧 실행';
-  if (diffMin < 60)  return `${diffMin}분 후`;
+  if (diffMin < 1)   return 'Running soon';
+  if (diffMin < 60)  return `in ${diffMin}m`;
   const h = Math.floor(diffMin / 60), m2 = diffMin % 60;
-  return m2 > 0 ? `${h}시간 ${m2}분 후` : `${h}시간 후`;
+  return m2 > 0 ? `in ${h}h ${m2}m` : `in ${h}h`;
+}
+
+// Some pre-rendered schedule strings still arrive from the server in Korean
+// (e.g. "매일 09:00"); this maps the known set to English for display.
+const SCHEDULE_DISPLAY = {
+  '매일 09:00': 'Daily at 09:00',
+  '매시간': 'Hourly',
+  '15분마다': 'Every 15 min',
+};
+function scheduleLabel(schedule) {
+  return SCHEDULE_DISPLAY[schedule] || schedule;
 }
 
 export {
   Icon, ScoreRing, Spark, StatusChip, STATUS_LABEL,
   TEMPLATES,
-  SectionTitle, Stat, nextRunLabel,
+  SectionTitle, Stat, nextRunLabel, scheduleLabel,
 };

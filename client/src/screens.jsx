@@ -1,21 +1,22 @@
 // screens.jsx — All the screens for DOMA.
 
 import React from 'react';
-import { Icon, SectionTitle, Stat, StatusChip, TEMPLATES, nextRunLabel, ScoreRing, Spark } from './data.jsx';
+import { Icon, SectionTitle, Stat, StatusChip, TEMPLATES, nextRunLabel, scheduleLabel, ScoreRing, Spark } from './data.jsx';
 
-// nginx/프록시 단계에서 요청이 거부되면(413/502/504 등) 응답 바디가 JSON이 아니라
-// HTML 에러 페이지로 오는 경우가 있다. r.json()을 바로 호출하면 "Unexpected token '<'"
-// 같은 의미 없는 에러가 뜨므로, content-type과 상태코드를 먼저 확인해 알아볼 수 있는
-// 메시지로 바꿔준다.
+// If a request is rejected at the nginx/proxy layer (413/502/504, etc.), the
+// response body can come back as an HTML error page instead of JSON. Calling
+// r.json() directly on that would throw a meaningless "Unexpected token '<'"
+// error, so we check the content-type and status code first and turn it into
+// a readable message.
 async function parseJsonResponse(resp) {
   const contentType = resp.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
-    if (resp.status === 413) throw new Error('요청 데이터가 너무 큽니다 (413)');
-    if (resp.status === 504) throw new Error('서버 응답 시간이 초과되었습니다 (504)');
-    throw new Error(`서버 오류 (${resp.status})`);
+    if (resp.status === 413) throw new Error('Request payload too large (413)');
+    if (resp.status === 504) throw new Error('Server response timed out (504)');
+    throw new Error(`Server error (${resp.status})`);
   }
   const data = await resp.json();
-  if (!resp.ok) throw new Error(data.error || `서버 오류 (${resp.status})`);
+  if (!resp.ok) throw new Error(data.error || `Server error (${resp.status})`);
   return data;
 }
 
@@ -36,7 +37,7 @@ function OverviewScreen({
   const [refreshing, setRefreshing] = React.useState(false);
   const [menu, setMenu] = React.useState(null); // { id, name, x, y }
 
-  // 메뉴 외부 클릭 시 닫기
+  // Close the menu on outside click
   React.useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
@@ -52,25 +53,25 @@ function OverviewScreen({
   };
 
   const tabs = [
-    { id: 'all', label: '전체', count: scrapers.length },
+    { id: 'all', label: 'All', count: scrapers.length },
     {
       id: 'pending',
-      label: '승인 대기',
+      label: 'Pending approval',
       count: scrapers.filter((c) => c.status === 'pending').length,
     },
     {
       id: 'healing',
-      label: '자가치유 중',
+      label: 'Self-healing',
       count: scrapers.filter((c) => c.status === 'healing').length,
     },
     {
       id: 'failed',
-      label: '실패',
+      label: 'Failed',
       count: scrapers.filter((c) => c.status === 'failed').length,
     },
     {
       id: 'paused',
-      label: '일시중지',
+      label: 'Paused',
       count: scrapers.filter((c) => c.status === 'paused').length,
     },
   ];
@@ -81,7 +82,7 @@ function OverviewScreen({
       (!query || c.name.includes(query) || c.url.includes(query)),
   );
 
-  // stats 포맷 헬퍼
+  // Stat formatting helpers
   const fmtMs = (ms) => {
     if (ms == null) return '—';
     return ms >= 1000 ? (ms / 1000).toFixed(2) + 's' : ms + 'ms';
@@ -111,7 +112,7 @@ function OverviewScreen({
       style={{ padding: '28px 32px 80px', maxWidth: 1480, margin: '0 auto' }}>
       <SectionTitle
         eyebrow="ALTERNATIVE DATA — REAL-TIME PIPELINES"
-        title="대안 데이터 운영 현황"
+        title="Alternative data operations overview"
         action={
           <div style={{ display: 'flex', gap: 8 }}>
             <button
@@ -126,7 +127,7 @@ function OverviewScreen({
                   transform: refreshing ? 'rotate(360deg)' : 'none',
                 }}
               />
-              새로고침
+              Refresh
             </button>
             <button
               className="btn primary"
@@ -135,13 +136,13 @@ function OverviewScreen({
                 name="plus"
                 className="icon icon-sm"
               />
-              새 스크래퍼
+              New scraper
             </button>
           </div>
         }>
-        API로 얻을 수 없는 데이터를, 사이트 구조가 바뀌어도 끊기지 않게{' '}
-        <strong style={{ color: 'var(--text)' }}>분 단위</strong>로.{' '}
-        <span className="kbd">⌘K</span> 로 빠르게 찾기.
+        Data you can't get from an API, kept flowing even when the site's structure changes{' '}
+        <strong style={{ color: 'var(--text)' }}>minute by minute</strong>.{' '}
+        <span className="kbd">⌘K</span> to search fast.
       </SectionTitle>
 
       {/* Top stats */}
@@ -154,20 +155,20 @@ function OverviewScreen({
           value={String(activeFeeds)}
           sub={
             <>
-              <span className="mono">{scrapers.length}</span>개 중 활성
+              <span className="mono">{scrapers.length}</span> total active
             </>
           }
         />
         <Stat
           icon="activity"
-          label="7D 수집 성공률"
+          label="7D SUCCESS RATE"
           value={noData ? '—' : successRate}
           sub={
             noData ? (
-              '아직 실행 기록 없음'
+              'No run history yet'
             ) : (
               <>
-                SLA 임계값 <span className="mono">95.00%</span> 기준
+                Against SLA threshold <span className="mono">95.00%</span>
               </>
             )
           }
@@ -175,30 +176,30 @@ function OverviewScreen({
         />
         <Stat
           icon="bolt"
-          label="누적 자가치유"
+          label="TOTAL SELF-HEALS"
           value={String(totalHealed)}
           onClick={onGoActivity}
           sub={
             approvalCount > 0 ? (
               <>
                 <span style={{ color: 'var(--warn)' }}>
-                  승인 대기 {approvalCount}건
+                  {approvalCount} pending approval
                 </span>
               </>
             ) : (
-              '모두 자동 복구됨'
+              'All recovered automatically'
             )
           }
         />
         <Stat
           icon="inbox"
-          label="평균 응답시간"
+          label="AVG RESPONSE TIME"
           value={noData ? '—' : avgDur}
-          sub={noData ? '아직 실행 기록 없음' : `P95 ${p95Dur}`}
+          sub={noData ? 'No run history yet' : `P95 ${p95Dur}`}
         />
       </div>
 
-      {/* Banner: pending approvals — 0건이면 숨김 */}
+      {/* Banner: pending approvals — hidden when count is 0 */}
       {approvalCount > 0 && (
         <div
           className="card"
@@ -230,18 +231,18 @@ function OverviewScreen({
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600 }}>
-              {approvalCount}건의 자가치유 결과가 승인을 기다리고 있습니다
+              {approvalCount} self-healing result(s) awaiting your approval
             </div>
             <div
               className="muted"
               style={{ fontSize: 12, marginTop: 2 }}>
-              AI 확신도가 임계값 미달 — 대시보드에서 확인 후 승인해 주세요.
+              AI confidence fell below the threshold — please review and approve from the dashboard.
             </div>
           </div>
           <button
             className="btn"
             onClick={onGoApprovals}>
-            승인 큐로 이동
+            Go to approval queue
             <Icon
               name="arrow_r"
               className="icon icon-sm"
@@ -315,7 +316,7 @@ function OverviewScreen({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="이름, URL, 태그로 검색…"
+            placeholder="Search by name, URL, or tag…"
             style={{
               flex: 1,
               background: 'transparent',
@@ -337,14 +338,14 @@ function OverviewScreen({
             name="filter"
             className="icon icon-sm"
           />
-          필터
+          Filter
         </button>
         <button className="btn ghost">
           <Icon
             name="download"
             className="icon icon-sm"
           />
-          내보내기
+          Export
         </button>
       </div>
 
@@ -365,12 +366,12 @@ function OverviewScreen({
             fontFamily: 'var(--mono)',
             borderBottom: '1px solid var(--border)',
           }}>
-          <div>스크래퍼</div>
-          <div>상태</div>
-          <div>최근 값</div>
+          <div>Scraper</div>
+          <div>Status</div>
+          <div>Latest value</div>
           <div style={{ textAlign: 'right' }}>Score</div>
-          <div style={{ textAlign: 'right' }}>7d 추이</div>
-          <div>스케줄</div>
+          <div style={{ textAlign: 'right' }}>7d trend</div>
+          <div>Schedule</div>
           <div />
         </div>
         {rows.map((c, i) => (
@@ -539,7 +540,7 @@ function OverviewScreen({
               <div
                 className="muted"
                 style={{ fontSize: 12 }}>
-                {c.schedule}
+                {scheduleLabel(c.schedule)}
               </div>
               <div
                 className="dim mono"
@@ -569,7 +570,7 @@ function OverviewScreen({
         ))}
       </div>
 
-      {/* 플로팅 컨텍스트 메뉴 */}
+      {/* Floating context menu */}
       {menu && (
         <div
           onClick={(e) => e.stopPropagation()}
@@ -598,7 +599,7 @@ function OverviewScreen({
               if (
                 onDeleteScraper &&
                 window.confirm(
-                  `"${menu.name}" 스크래퍼를 삭제하시겠습니까?\n\n실행 이력과 자가치유 기록도 함께 삭제됩니다.`,
+                  `Delete the scraper "${menu.name}"?\n\nRun history and self-healing records will be deleted as well.`,
                 )
               ) {
                 onDeleteScraper(menu.id);
@@ -609,7 +610,7 @@ function OverviewScreen({
               name="x"
               className="icon icon-sm"
             />
-            삭제
+            Delete
           </button>
         </div>
       )}
@@ -622,7 +623,7 @@ function OverviewScreen({
           display: 'flex',
           justifyContent: 'space-between',
         }}>
-        <span>{rows.length}개 · 행을 클릭해 상세를 보세요</span>
+        <span>{rows.length} total · click a row to see details</span>
         <span className="mono">v1.0.0-beta · region: ap-northeast-2</span>
       </div>
     </div>
@@ -670,7 +671,7 @@ function ApprovalsScreen({ onBack, onAction }) {
     if (onAction) onAction();
   };
 
-  // ── 상세 뷰 ─────────────────────────────────────────────────────────────────
+  // ── Detail view ─────────────────────────────────────────────────────────────
   if (selected) {
     const p = selected;
     const scoreVal = Math.round(p.confidence * 1000) / 10;
@@ -702,7 +703,7 @@ function ApprovalsScreen({ onBack, onAction }) {
             onClick={() => setSelected(null)}
             style={{ cursor: 'default' }}
             className="muted">
-            목록
+            List
           </a>
           <Icon
             name="chevron_r"
@@ -716,16 +717,16 @@ function ApprovalsScreen({ onBack, onAction }) {
             className="chip warn"
             style={{ marginLeft: 8 }}>
             <span className="dot" />
-            수동 승인 대기
+            Pending manual approval
           </span>
           <span className="chip" style={{ fontSize: 11 }}>
-            {p.fieldLabel || '메인 값'}
+            {p.fieldLabel || 'Main value'}
           </span>
         </div>
 
         <SectionTitle
           eyebrow="HUMAN-IN-THE-LOOP"
-          title="자가치유 결과 검토"
+          title="Review self-healing result"
           action={
             <div style={{ display: 'flex', gap: 8 }}>
               <button
@@ -736,7 +737,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                   name="x"
                   className="icon icon-sm"
                 />
-                거부 · 다시 시도
+                Reject · retry
               </button>
               <button
                 className="btn primary"
@@ -746,13 +747,14 @@ function ApprovalsScreen({ onBack, onAction }) {
                   name="check"
                   className="icon icon-sm"
                 />
-                승인 후 자동 복구
+                Approve and auto-recover
               </button>
             </div>
           }>
-          AI가 찾은 후보의 확신도가 임계값에 미달했습니다.{' '}
+          The AI's candidate confidence fell below the threshold.{' '}
+          Please review the{' '}
           <strong style={{ color: 'var(--text)' }}>{p.scraper_name}</strong>{' '}
-          스크래퍼를 검토해 주세요.
+          scraper.
         </SectionTitle>
 
         <div
@@ -778,7 +780,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                 name="code"
                 className="icon"
               />
-              <div style={{ fontWeight: 600 }}>Selector 변경</div>
+              <div style={{ fontWeight: 600 }}>Selector change</div>
               <span
                 className="dim mono"
                 style={{ fontSize: 11, marginLeft: 'auto' }}>
@@ -803,7 +805,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                   }}>
                   <span className="chip danger">
                     <span className="dot" />
-                    이전 (장애 발생)
+                    Previous (broken)
                   </span>
                 </div>
                 <pre
@@ -831,7 +833,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                 <span
                   className="dim mono"
                   style={{ fontSize: 11 }}>
-                  AI 제안 셀렉터
+                  AI-suggested selector
                 </span>
                 <div
                   style={{ flex: 1, height: 1, background: 'var(--border)' }}
@@ -847,7 +849,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                     marginBottom: 6,
                   }}>
                   <span className="chip ok">
-                    <span className="dot" />새 후보
+                    <span className="dot" />New candidate
                   </span>
                 </div>
                 <pre
@@ -857,7 +859,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                     wordBreak: 'break-all',
                     whiteSpace: 'pre-wrap',
                   }}>
-                  {p.proposed_selector || '(제안 없음)'}
+                  {p.proposed_selector || '(no suggestion)'}
                 </pre>
               </div>
 
@@ -872,7 +874,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                   <div
                     className="dim mono"
                     style={{ fontSize: 10.5, marginBottom: 4 }}>
-                    추출된 텍스트
+                    Extracted text
                   </div>
                   <div style={{ fontSize: 13 }}>{p.extracted_text}</div>
                 </div>
@@ -889,7 +891,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                   <div
                     className="dim mono"
                     style={{ fontSize: 10.5, marginBottom: 4 }}>
-                    AI 추론 근거
+                    AI reasoning
                   </div>
                   <div
                     style={{
@@ -925,7 +927,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                 name="target"
                 className="icon"
               />
-              <div style={{ fontWeight: 600 }}>확신도 (Confidence)</div>
+              <div style={{ fontWeight: 600 }}>Confidence</div>
             </div>
 
             <div
@@ -998,7 +1000,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                     name="triangle_dn"
                     className="icon icon-sm"
                   />
-                  수동 검토 필요
+                  Manual review required
                 </div>
               </div>
             </div>
@@ -1008,22 +1010,22 @@ function ApprovalsScreen({ onBack, onAction }) {
     );
   }
 
-  // ── 목록 뷰 ──────────────────────────────────────────────────────────────────
+  // ── List view ───────────────────────────────────────────────────────────────
   return (
     <div
       className="fadein"
       style={{ padding: '28px 32px 80px', maxWidth: 1480, margin: '0 auto' }}>
       <SectionTitle
         eyebrow="HUMAN-IN-THE-LOOP"
-        title="승인 큐">
-        자가치유 신뢰도가 임계값에 미달한 제안을 검토하고 승인하세요.
+        title="Approval queue">
+        Review and approve self-healing proposals whose confidence fell below the threshold.
       </SectionTitle>
 
       {list === null && (
         <div
           className="card"
           style={{ padding: 'var(--s-11)', textAlign: 'center' }}>
-          <div className="muted">로딩 중…</div>
+          <div className="muted">Loading…</div>
         </div>
       )}
 
@@ -1041,12 +1043,12 @@ function ApprovalsScreen({ onBack, onAction }) {
             }}
           />
           <div style={{ fontWeight: 600, marginBottom: 6 }}>
-            검토 대기 중인 항목이 없습니다
+            Nothing waiting for review
           </div>
           <div
             className="muted"
             style={{ fontSize: 13 }}>
-            자가치유 신뢰도가 임계값을 충족하면 자동으로 복구됩니다.
+            Results are recovered automatically once self-healing confidence meets the threshold.
           </div>
         </div>
       )}
@@ -1067,11 +1069,11 @@ function ApprovalsScreen({ onBack, onAction }) {
               letterSpacing: '0.04em',
               textTransform: 'uppercase',
             }}>
-            <div>스크래퍼</div>
-            <div>이전 셀렉터</div>
-            <div>제안 셀렉터</div>
-            <div>확신도</div>
-            <div>요청 시각</div>
+            <div>Scraper</div>
+            <div>Previous selector</div>
+            <div>Proposed selector</div>
+            <div>Confidence</div>
+            <div>Requested at</div>
             <div />
           </div>
           {list.map((p, i) => (
@@ -1099,7 +1101,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                   <span
                     className="chip"
                     style={{ fontSize: 10 }}>
-                    {p.fieldLabel || '메인 값'}
+                    {p.fieldLabel || 'Main value'}
                   </span>
                 </div>
                 <div
@@ -1155,13 +1157,13 @@ function ApprovalsScreen({ onBack, onAction }) {
                 <button
                   className="btn ghost sm"
                   onClick={() => setSelected(p)}>
-                  검토
+                  Review
                 </button>
                 <button
                   className="btn primary sm"
                   onClick={() => handleApprove(p)}
                   disabled={acting}>
-                  승인
+                  Approve
                 </button>
               </div>
             </div>
@@ -1212,7 +1214,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
         <span>{c.id}</span>
       </div>
 
-      {/* 헤더: 좌(이름/메타) + 우(버튼) */}
+      {/* Header: left (name/meta) + right (buttons) */}
       <div
         style={{
           display: 'flex',
@@ -1220,7 +1222,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
           gap: 16,
           marginBottom: 24,
         }}>
-        {/* 좌 */}
+        {/* Left */}
         <div
           style={{
             display: 'flex',
@@ -1260,7 +1262,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                 {c.url}
               </span>
               <span className="dim">·</span>
-              <span>{c.schedule}</span>
+              <span>{scheduleLabel(c.schedule)}</span>
               <span
                 className="chip"
                 style={{ fontSize: 10, padding: '1px 7px' }}>
@@ -1274,7 +1276,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
           </div>
         </div>
 
-        {/* 우: 버튼 묶음 */}
+        {/* Right: button group */}
         <div
           style={{
             display: 'flex',
@@ -1296,7 +1298,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                 name="pause"
                 className="icon icon-sm"
               />
-              일시중지
+              Pause
             </button>
             <button
               className="btn ghost sm"
@@ -1318,7 +1320,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                   if (!resp.ok)
                     throw new Error(
                       data.error ||
-                        `실행 실패 (${resp.status}): ${text.slice(0, 120)}`,
+                        `Run failed (${resp.status}): ${text.slice(0, 120)}`,
                     );
                   setC((prev) => ({
                     ...prev,
@@ -1329,18 +1331,18 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                   const r = data.result;
                   setRunMsg(
                     r.status === 'healthy'
-                      ? `✓ 수집 완료 — "${r.value}"`
+                      ? `✓ Collection complete — "${r.value}"`
                       : r.heal?.status === 'healed'
-                        ? `⚡ 자가치유 성공`
+                        ? `⚡ Self-healing succeeded`
                         : r.heal?.status === 'pending'
-                          ? `⏳ 신뢰도 미달 — 승인 대기`
+                          ? `⏳ Confidence below threshold — pending approval`
                           : r.heal?.status === 'skipped'
-                            ? `✗ 셀렉터 불일치 — '셀렉터 재선택'을 사용하세요`
-                            : `✗ 셀렉터 불일치 — ${r.heal?.reason || '요소를 찾지 못했습니다'}`,
+                            ? `✗ Selector mismatch — use 'Reselect selector'`
+                            : `✗ Selector mismatch — ${r.heal?.reason || 'element not found'}`,
                   );
                   setRunState('done');
                 } catch (e) {
-                  setRunMsg(`오류: ${e.message}`);
+                  setRunMsg(`Error: ${e.message}`);
                   setRunState('error');
                 }
               }}>
@@ -1356,7 +1358,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                       borderTopColor: 'var(--accent)',
                     }}
                   />{' '}
-                  실행 중…
+                  Running…
                 </>
               ) : (
                 <>
@@ -1364,7 +1366,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                     name="play"
                     className="icon icon-sm"
                   />
-                  지금 실행
+                  Run now
                 </>
               )}
             </button>
@@ -1375,7 +1377,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                 name="target"
                 className="icon icon-sm"
               />
-              셀렉터 재선택
+              Reselect selector
             </button>
             {(c.status === 'failed' || c.status === 'pending') && (
               <button
@@ -1390,7 +1392,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                   name="bolt"
                   className="icon icon-sm"
                 />
-                자가치유
+                Self-heal
               </button>
             )}
             <div
@@ -1406,12 +1408,12 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                     background: 'var(--danger-soft)',
                   }}
                   onClick={() => onDelete && onDelete(c.id)}>
-                  확인
+                  Confirm
                 </button>
                 <button
                   className="btn ghost sm"
                   onClick={() => setDeleteConfirm(false)}>
-                  취소
+                  Cancel
                 </button>
               </>
             ) : (
@@ -1422,11 +1424,11 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                   name="x"
                   className="icon icon-sm"
                 />
-                삭제
+                Delete
               </button>
             )}
           </div>
-          {/* 실행 결과 메시지 — 버튼 아래 별도 줄 */}
+          {/* Run result message — shown on its own line below the buttons */}
           {runMsg && (
             <div
               style={{
@@ -1541,7 +1543,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
             <div
               className="dim"
               style={{ fontSize: 12 }}>
-              이 탭은 데모에서 생략되었습니다.
+              This tab is omitted from the demo.
             </div>
           </div>
         )}
@@ -1550,7 +1552,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
 }
 
 function DetailOverview({ scraper, scores }) {
-  const [results, setResults] = React.useState(null); // null = 로딩 중
+  const [results, setResults] = React.useState(null); // null = loading
 
   React.useEffect(() => {
     fetch(`/api/scrapers/${scraper.id}/results`)
@@ -1559,7 +1561,7 @@ function DetailOverview({ scraper, scores }) {
       .catch(() => setResults([]));
   }, [scraper.id]);
 
-  // ── 실행 이력 기반 통계 계산 ──────────────────────────────────────────────
+  // ── Stats computed from run history ────────────────────────────────────────
   const hasResults = results && results.length > 0;
   const latest = hasResults ? results[0] : null;
 
@@ -1578,7 +1580,7 @@ function DetailOverview({ scraper, scores }) {
         : Math.round(avgMs) + 'ms'
       : null;
 
-  // ── Score 차트 ───────────────────────────────────────────────────────────
+  // ── Score chart ─────────────────────────────────────────────────────────
   const isRealSpark = scores.length > 0;
   const safeScores = scores.length >= 2 ? scores : [0, 0];
   const w = 760,
@@ -1601,7 +1603,7 @@ function DetailOverview({ scraper, scores }) {
         ? 'var(--warn)'
         : 'var(--danger)';
 
-  // ── 최근 수집 결과 JSON ───────────────────────────────────────────────────
+  // ── Latest collected result JSON ───────────────────────────────────────────
   const jsonPayload = latest
     ? JSON.stringify(
         {
@@ -1615,7 +1617,7 @@ function DetailOverview({ scraper, scores }) {
           duration_ms: latest.durationMs,
           self_healing: {
             applied: latest.note
-              ? latest.note.includes('자가치유') ||
+              ? latest.note.includes('self-heal') ||
                 latest.note.includes('healed')
               : false,
             score: latest.score,
@@ -1633,7 +1635,7 @@ function DetailOverview({ scraper, scores }) {
           collected_at: null,
           value: null,
           status: 'no_data',
-          note: '아직 실행 기록이 없습니다. "지금 실행"을 눌러 첫 수집을 시작하세요.',
+          note: 'No run history yet. Click "Run now" to start your first collection.',
         },
         null,
         2,
@@ -1660,15 +1662,15 @@ function DetailOverview({ scraper, scores }) {
               marginBottom: 14,
             }}>
             <div>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>Score 추이</div>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>Score trend</div>
               <div
                 className="dim"
                 style={{ fontSize: 11.5 }}>
                 {isRealSpark
-                  ? `최근 ${scores.length}회 실행 기록`
+                  ? `Last ${scores.length} runs`
                   : hasResults === null
-                    ? '로딩 중…'
-                    : '실행 기록 없음'}
+                    ? 'Loading…'
+                    : 'No run history'}
               </div>
             </div>
           </div>
@@ -1683,7 +1685,7 @@ function DetailOverview({ scraper, scores }) {
               <div
                 className="muted"
                 style={{ fontSize: 13 }}>
-                첫 실행 후 차트가 표시됩니다.
+                The chart will appear after the first run.
               </div>
             </div>
           ) : (
@@ -1757,18 +1759,18 @@ function DetailOverview({ scraper, scores }) {
                   borderRadius: 4,
                   border: '1px solid var(--warn-line)',
                 }}>
-                임계값 {scraper.threshold}
+                Threshold {scraper.threshold}
               </div>
             </div>
           )}
           <div
             className="ticks"
             style={{ marginTop: 6 }}>
-            <span>이전</span>
+            <span>Oldest</span>
             <span />
             <span />
             <span />
-            <span>최신</span>
+            <span>Latest</span>
           </div>
         </div>
 
@@ -1780,7 +1782,7 @@ function DetailOverview({ scraper, scores }) {
           />
         )}
 
-        {/* 최근 수집 결과 JSON */}
+        {/* Latest collected result JSON */}
         <div
           className="card"
           style={{ padding: 18 }}>
@@ -1791,7 +1793,7 @@ function DetailOverview({ scraper, scores }) {
               justifyContent: 'space-between',
               marginBottom: 10,
             }}>
-            <div style={{ fontWeight: 600 }}>최근 수집 결과 (JSON)</div>
+            <div style={{ fontWeight: 600 }}>Latest collected result (JSON)</div>
             {latest && (
               <span
                 className="dim mono"
@@ -1804,7 +1806,7 @@ function DetailOverview({ scraper, scores }) {
             <div
               className="muted"
               style={{ fontSize: 12, padding: '16px 0' }}>
-              로딩 중…
+              Loading…
             </div>
           ) : (
             <pre
@@ -1823,11 +1825,11 @@ function DetailOverview({ scraper, scores }) {
           gap: 16,
           minWidth: 0,
         }}>
-        {/* 현재 셀렉터 */}
+        {/* Current selector */}
         <div
           className="card"
           style={{ padding: 18 }}>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>현재 셀렉터</div>
+          <div style={{ fontWeight: 600, marginBottom: 12 }}>Current selector</div>
           <pre
             className="code"
             style={{
@@ -1836,7 +1838,7 @@ function DetailOverview({ scraper, scores }) {
               wordBreak: 'break-all',
               whiteSpace: 'pre-wrap',
             }}>
-            {scraper.css_selector || '셀렉터가 등록되지 않았습니다.'}
+            {scraper.css_selector || 'No selector has been registered.'}
           </pre>
           <div
             style={{
@@ -1857,7 +1859,7 @@ function DetailOverview({ scraper, scores }) {
                     fontFamily: 'var(--mono)',
                     marginBottom: 3,
                   }}>
-                  수집 의도
+                  Collection intent
                 </div>
                 <div style={{ color: 'var(--text-mute)', lineHeight: 1.5 }}>
                   {scraper.user_intent}
@@ -1875,7 +1877,7 @@ function DetailOverview({ scraper, scores }) {
                     fontFamily: 'var(--mono)',
                     marginBottom: 3,
                   }}>
-                  보조 필드 — {f.label}
+                  Secondary field — {f.label}
                 </div>
                 <pre
                   className="code"
@@ -1888,7 +1890,7 @@ function DetailOverview({ scraper, scores }) {
                   {f.selector}
                 </pre>
                 <div className="mono" style={{ fontSize: 12 }}>
-                  현재 값: {f.lastValue}
+                  Current value: {f.lastValue}
                 </div>
               </div>
             ))}
@@ -1907,7 +1909,7 @@ function DetailOverview({ scraper, scores }) {
                     textTransform: 'uppercase',
                     fontFamily: 'var(--mono)',
                   }}>
-                  임계값
+                  Threshold
                 </div>
                 <div
                   className="mono"
@@ -1924,7 +1926,7 @@ function DetailOverview({ scraper, scores }) {
                     textTransform: 'uppercase',
                     fontFamily: 'var(--mono)',
                   }}>
-                  도메인
+                  Domain
                 </div>
                 <div style={{ marginTop: 3 }}>
                   {scraper.altCategory || scraper.type || '—'}
@@ -1934,17 +1936,17 @@ function DetailOverview({ scraper, scores }) {
           </div>
         </div>
 
-        {/* 운영 통계 */}
+        {/* Operating stats */}
         <div
           className="card"
           style={{ padding: 18 }}>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>운영 통계</div>
+          <div style={{ fontWeight: 600, marginBottom: 12 }}>Operating stats</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
-              ['최근 7일 실행', runs7d != null ? runs7d + '회' : '—', 'spark'],
-              ['최근 신뢰도', avgConfidence || '—', 'check'],
-              ['자가치유 발동', (scraper.healed || 0) + '회', 'bolt'],
-              ['평균 응답', avgDur || '—', 'activity'],
+              ['Runs (last 7d)', runs7d != null ? runs7d + '' : '—', 'spark'],
+              ['Latest confidence', avgConfidence || '—', 'check'],
+              ['Self-heal triggers', (scraper.healed || 0) + '', 'bolt'],
+              ['Avg response', avgDur || '—', 'activity'],
             ].map(([k, v, ic]) => (
               <div
                 key={k}
@@ -1979,17 +1981,17 @@ function DetailOverview({ scraper, scores }) {
               <div
                 className="dim"
                 style={{ fontSize: 11, marginTop: 4 }}>
-                "지금 실행"을 눌러 첫 수집을 시작하면 통계가 집계됩니다.
+                Stats will populate once you click "Run now" to start your first collection.
               </div>
             )}
           </div>
         </div>
 
-        {/* 전송 채널 */}
+        {/* Delivery channels */}
         <div
           className="card"
           style={{ padding: 18 }}>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>전송 채널</div>
+          <div style={{ fontWeight: 600, marginBottom: 12 }}>Delivery channels</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {(scraper.delivery || []).map((d) => (
               <div
@@ -2033,7 +2035,7 @@ function DetailOverview({ scraper, scores }) {
                 </div>
                 <span className="chip ok">
                   <span className="dot" />
-                  활성
+                  Active
                 </span>
               </div>
             ))}
@@ -2089,7 +2091,7 @@ function CurlBlock({ url, params, token, copyId, onCopy, copied }) {
         className="btn xs ghost"
         onClick={() => onCopy(rawCmd, copyId)}
         style={{ position: 'absolute', top: 8, right: 8, fontSize: 11 }}>
-        {copied === copyId ? '✓ 복사됨' : '복사'}
+        {copied === copyId ? '✓ Copied' : 'Copy'}
       </button>
     </div>
   );
@@ -2097,10 +2099,10 @@ function CurlBlock({ url, params, token, copyId, onCopy, copied }) {
 
 function DetailSettings({ scraper, onScraperUpdate }) {
   const SCHEDULE_OPTIONS = [
-    { key: 'daily-9', label: '매일 09:00' },
-    { key: 'hourly', label: '매시간 (등록 시점 기준)' },
-    { key: '15m', label: '15분마다 (등록 시점 기준)' },
-    { key: 'custom', label: '커스텀 Cron' },
+    { key: 'daily-9', label: 'Daily at 09:00' },
+    { key: 'hourly', label: 'Hourly (from registration time)' },
+    { key: '15m', label: 'Every 15 min (from registration time)' },
+    { key: 'custom', label: 'Custom cron' },
   ];
   const CHANNEL_LABEL = {
     api: 'REST API',
@@ -2150,7 +2152,7 @@ function DetailSettings({ scraper, onScraperUpdate }) {
     if (scheduleKey === 'custom' && !isValidCron(customCron)) {
       setMsg({
         ok: false,
-        text: '유효한 Cron 표현식을 입력하세요 (예: 0 */30 * * * *)',
+        text: 'Please enter a valid cron expression (e.g. 0 */30 * * * *)',
       });
       return;
     }
@@ -2180,16 +2182,16 @@ function DetailSettings({ scraper, onScraperUpdate }) {
         /* empty / non-JSON body */
       }
       if (!resp.ok) {
-        setMsg({ ok: false, text: data.error || `저장 실패 (${resp.status})` });
+        setMsg({ ok: false, text: data.error || `Save failed (${resp.status})` });
         return;
       }
       setMsg({
         ok: true,
-        text: '저장되었습니다. 스케줄러가 즉시 재등록됩니다.',
+        text: 'Saved. The scheduler will re-register immediately.',
       });
       if (onScraperUpdate) onScraperUpdate(data);
     } catch (e) {
-      setMsg({ ok: false, text: '오류: ' + e.message });
+      setMsg({ ok: false, text: 'Error: ' + e.message });
     } finally {
       setSaving(false);
     }
@@ -2204,7 +2206,7 @@ function DetailSettings({ scraper, onScraperUpdate }) {
     if (!webhookUrl.trim()) return;
     setTesting(true);
     try {
-      // 먼저 현재 webhookUrl 저장 후 서버에서 발송 (CORS 우회)
+      // Save the current webhookUrl first, then send from the server (avoids CORS)
       await fetch(`/api/scrapers/${scraper.id}/settings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -2222,12 +2224,12 @@ function DetailSettings({ scraper, onScraperUpdate }) {
         data = JSON.parse(text);
       } catch {}
       if (!resp.ok) {
-        setMsg({ ok: false, text: data.error || '전송 실패' });
+        setMsg({ ok: false, text: data.error || 'Send failed' });
         return;
       }
-      setMsg({ ok: true, text: '테스트 전송 완료' });
+      setMsg({ ok: true, text: 'Test sent successfully' });
     } catch (e) {
-      setMsg({ ok: false, text: '오류: ' + e.message });
+      setMsg({ ok: false, text: 'Error: ' + e.message });
     } finally {
       setTesting(false);
     }
@@ -2235,11 +2237,11 @@ function DetailSettings({ scraper, onScraperUpdate }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* 스케줄 */}
+      {/* Schedule */}
       <div
         className="card"
         style={{ padding: 20 }}>
-        <div style={{ fontWeight: 600, marginBottom: 14 }}>실행 스케줄</div>
+        <div style={{ fontWeight: 600, marginBottom: 14 }}>Run schedule</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {SCHEDULE_OPTIONS.map((opt) => (
             <label
@@ -2264,7 +2266,7 @@ function DetailSettings({ scraper, onScraperUpdate }) {
             <input
               value={customCron}
               onChange={(e) => setCustomCron(e.target.value)}
-              placeholder="0 */30 * * * *  (초 분 시 일 월 요일)"
+              placeholder="0 */30 * * * *  (sec min hour day month weekday)"
               style={{
                 marginTop: 4,
                 padding: '8px 12px',
@@ -2282,12 +2284,12 @@ function DetailSettings({ scraper, onScraperUpdate }) {
         <div
           className="dim"
           style={{ fontSize: 11.5, marginTop: 10 }}>
-          '매일 09:00'은 정각 기준 실행. '매시간' / '15분마다'는 저장 시점
-          기준으로 다음 실행이 계산됩니다.
+          'Daily at 09:00' runs on the hour. 'Hourly' / 'Every 15 min' compute
+          the next run from the moment you save.
         </div>
       </div>
 
-      {/* 임계값 */}
+      {/* Threshold */}
       <div
         className="card"
         style={{ padding: 20 }}>
@@ -2298,7 +2300,7 @@ function DetailSettings({ scraper, onScraperUpdate }) {
             justifyContent: 'space-between',
             marginBottom: 10,
           }}>
-          <div style={{ fontWeight: 600 }}>자동 복구 신뢰도 임계값</div>
+          <div style={{ fontWeight: 600 }}>Auto-recovery confidence threshold</div>
           <span
             className="mono"
             style={{ fontSize: 15, fontWeight: 600 }}>
@@ -2316,16 +2318,16 @@ function DetailSettings({ scraper, onScraperUpdate }) {
         <div
           className="dim"
           style={{ fontSize: 11.5, marginTop: 6 }}>
-          AI 신뢰도가 이 값 이상이면 자동 복구, 미만이면 수동 승인 큐로
-          이동합니다.
+          If AI confidence is at or above this value, it recovers automatically;
+          below it, the item goes to the manual approval queue.
         </div>
       </div>
 
-      {/* 출력 채널 */}
+      {/* Output channels */}
       <div
         className="card"
         style={{ padding: 20 }}>
-        <div style={{ fontWeight: 600, marginBottom: 12 }}>출력 채널</div>
+        <div style={{ fontWeight: 600, marginBottom: 12 }}>Output channels</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {CHANNEL_KEYS.map((k) => (
             <button
@@ -2342,7 +2344,7 @@ function DetailSettings({ scraper, onScraperUpdate }) {
       <div
         className="card"
         style={{ padding: 20 }}>
-        <div style={{ fontWeight: 600, marginBottom: 12 }}>Webhook 알람</div>
+        <div style={{ fontWeight: 600, marginBottom: 12 }}>Webhook alerts</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
           <input
             value={webhookUrl}
@@ -2363,7 +2365,7 @@ function DetailSettings({ scraper, onScraperUpdate }) {
             className="btn ghost sm"
             onClick={handleTestWebhook}
             disabled={testing || !webhookUrl.trim()}>
-            {testing ? '전송 중…' : '테스트'}
+            {testing ? 'Sending…' : 'Test'}
           </button>
         </div>
         <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
@@ -2381,9 +2383,9 @@ function DetailSettings({ scraper, onScraperUpdate }) {
           ))}
         </div>
 
-        {/* 알람 조건 */}
+        {/* Alert conditions */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* 텍스트 조건 */}
+          {/* Text condition */}
           <label
             style={{
               display: 'flex',
@@ -2397,16 +2399,16 @@ function DetailSettings({ scraper, onScraperUpdate }) {
               onChange={(e) => setAlertOnChange(e.target.checked)}
             />
             <div>
-              <div style={{ fontSize: 13 }}>값 변화 시 발송</div>
+              <div style={{ fontSize: 13 }}>Send when value changes</div>
               <div
                 className="dim"
                 style={{ fontSize: 11.5 }}>
-                텍스트 수집값이 이전과 달라질 때
+                When the collected text value differs from the previous one
               </div>
             </div>
           </label>
 
-          {/* 숫자 — 변동폭 */}
+          {/* Number — delta exceeded */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <input
               type="checkbox"
@@ -2417,11 +2419,11 @@ function DetailSettings({ scraper, onScraperUpdate }) {
                 )
               }
             />
-            <div style={{ fontSize: 13, minWidth: 80 }}>변동폭 초과</div>
+            <div style={{ fontSize: 13, minWidth: 80 }}>Delta exceeds</div>
             <input
               type="number"
               min="0"
-              placeholder="절대값 (예: 50)"
+              placeholder="Absolute value (e.g. 50)"
               value={alertDelta}
               onChange={(e) => setAlertDelta(e.target.value)}
               style={{
@@ -2437,11 +2439,11 @@ function DetailSettings({ scraper, onScraperUpdate }) {
             <span
               className="dim"
               style={{ fontSize: 12 }}>
-              │현재 − 이전│ 초과 시
+              When │current − previous│ exceeds this
             </span>
           </div>
 
-          {/* 숫자 — 범위 이탈 */}
+          {/* Number — out of range */}
           <div
             style={{
               display: 'flex',
@@ -2459,10 +2461,10 @@ function DetailSettings({ scraper, onScraperUpdate }) {
                 }
               }}
             />
-            <div style={{ fontSize: 13, minWidth: 80 }}>범위 이탈</div>
+            <div style={{ fontSize: 13, minWidth: 80 }}>Out of range</div>
             <input
               type="number"
-              placeholder="최솟값"
+              placeholder="Min value"
               value={alertMin}
               onChange={(e) => setAlertMin(e.target.value)}
               style={{
@@ -2482,7 +2484,7 @@ function DetailSettings({ scraper, onScraperUpdate }) {
             </span>
             <input
               type="number"
-              placeholder="최댓값"
+              placeholder="Max value"
               value={alertMax}
               onChange={(e) => setAlertMax(e.target.value)}
               style={{
@@ -2498,19 +2500,19 @@ function DetailSettings({ scraper, onScraperUpdate }) {
             <span
               className="dim"
               style={{ fontSize: 12 }}>
-              범위 벗어날 때
+              When the value falls outside this range
             </span>
           </div>
         </div>
       </div>
 
-      {/* 저장 */}
+      {/* Save */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <button
           className="btn primary"
           onClick={handleSave}
           disabled={saving}>
-          {saving ? '저장 중…' : '설정 저장'}
+          {saving ? 'Saving…' : 'Save settings'}
         </button>
         {msg && (
           <span
@@ -2564,7 +2566,7 @@ function DetailApi({ scraper }) {
       className="btn xs ghost"
       onClick={() => copy(text, id)}
       style={{ fontSize: 11 }}>
-      {copied === id ? '✓ 복사됨' : '복사'}
+      {copied === id ? '✓ Copied' : 'Copy'}
     </button>
   );
 
@@ -2588,7 +2590,7 @@ function DetailApi({ scraper }) {
         gap: 16,
         maxWidth: 780,
       }}>
-      {/* 엔드포인트 */}
+      {/* Endpoint */}
       <div
         className="card"
         style={{ padding: '18px 20px' }}>
@@ -2641,7 +2643,7 @@ function DetailApi({ scraper }) {
         </div>
       </div>
 
-      {/* 인증 토큰 */}
+      {/* Auth token */}
       <div
         className="card"
         style={{ padding: '18px 20px' }}>
@@ -2660,11 +2662,10 @@ function DetailApi({ scraper }) {
           <div
             className="muted"
             style={{ fontSize: 13 }}>
-            서버에{' '}
             <code style={{ fontFamily: 'var(--mono)', color: 'var(--accent)' }}>
               DOMA_API_TOKEN
-            </code>
-            이 설정되지 않았습니다.
+            </code>{' '}
+            is not set on the server.
           </div>
         ) : (
           <div
@@ -2694,7 +2695,7 @@ function DetailApi({ scraper }) {
               className="btn xs ghost"
               onClick={() => setTokenVisible((v) => !v)}
               style={{ fontSize: 11, flexShrink: 0 }}>
-              {tokenVisible ? '숨기기' : '표시'}
+              {tokenVisible ? 'Hide' : 'Show'}
             </button>
             <CopyBtn
               text={token}
@@ -2704,7 +2705,7 @@ function DetailApi({ scraper }) {
         )}
       </div>
 
-      {/* 파라미터 빌더 + curl 프리뷰 */}
+      {/* Parameter builder + curl preview */}
       <div
         className="card"
         style={{ padding: '18px 20px' }}>
@@ -2717,7 +2718,7 @@ function DetailApi({ scraper }) {
             textTransform: 'uppercase',
             marginBottom: 14,
           }}>
-          파라미터 설정
+          Parameter settings
         </div>
 
         <div
@@ -2735,7 +2736,7 @@ function DetailApi({ scraper }) {
                 color: 'var(--text-mute)',
                 fontWeight: 500,
               }}>
-              시작일{' '}
+              Start date{' '}
               <code
                 style={{
                   fontFamily: 'var(--mono)',
@@ -2762,7 +2763,7 @@ function DetailApi({ scraper }) {
                 color: 'var(--text-mute)',
                 fontWeight: 500,
               }}>
-              종료일{' '}
+              End date{' '}
               <code
                 style={{
                   fontFamily: 'var(--mono)',
@@ -2787,7 +2788,7 @@ function DetailApi({ scraper }) {
                 color: 'var(--text-mute)',
                 fontWeight: 500,
               }}>
-              상태{' '}
+              Status{' '}
               <code
                 style={{
                   fontFamily: 'var(--mono)',
@@ -2803,7 +2804,7 @@ function DetailApi({ scraper }) {
               onChange={(e) =>
                 setParams((p) => ({ ...p, status: e.target.value }))
               }>
-              <option value="">전체</option>
+              <option value="">All</option>
               <option value="healthy">healthy</option>
               <option value="failed">failed</option>
               <option value="pending">pending</option>
@@ -2817,7 +2818,7 @@ function DetailApi({ scraper }) {
                 color: 'var(--text-mute)',
                 fontWeight: 500,
               }}>
-              건수{' '}
+              Count{' '}
               <code
                 style={{
                   fontFamily: 'var(--mono)',
@@ -2829,7 +2830,7 @@ function DetailApi({ scraper }) {
               <span
                 className="dim"
                 style={{ fontSize: 10.5, marginLeft: 4 }}>
-                기본 100 / 최대 1000
+                default 100 / max 1000
               </span>
             </span>
             <input
@@ -2846,7 +2847,7 @@ function DetailApi({ scraper }) {
           </label>
         </div>
 
-        {/* 리셋 버튼 */}
+        {/* Reset button */}
         {Object.values(params).some((v) => v !== '') && (
           <button
             className="btn xs ghost"
@@ -2854,7 +2855,7 @@ function DetailApi({ scraper }) {
             onClick={() =>
               setParams({ from: '', to: '', status: '', limit: '' })
             }>
-            초기화
+            Reset
           </button>
         )}
 
@@ -2915,7 +2916,7 @@ function DetailRuns({ scraperId, extraLabels = [] }) {
             margin: '0 auto 10px',
           }}
         />
-        <div style={{ fontSize: 12 }}>실행 이력 로드 중…</div>
+        <div style={{ fontSize: 12 }}>Loading run history…</div>
       </div>
     );
   }
@@ -2958,7 +2959,7 @@ function DetailRuns({ scraperId, extraLabels = [] }) {
             name="download"
             className="icon icon-sm"
           />
-          CSV 내보내기
+          Export CSV
         </a>
       </div>
       <div
@@ -2976,15 +2977,15 @@ function DetailRuns({ scraperId, extraLabels = [] }) {
             textTransform: 'uppercase',
             fontFamily: 'var(--mono)',
           }}>
-          <div>수집 시각</div>
-          <div>상태</div>
-          <div>추출값</div>
+          <div>Collected at</div>
+          <div>Status</div>
+          <div>Extracted value</div>
           {extraLabels.map((label, i) => (
             <div key={i}>{label}</div>
           ))}
-          <div>신뢰도</div>
-          <div>응답시간</div>
-          <div>로그</div>
+          <div>Confidence</div>
+          <div>Response time</div>
+          <div>Log</div>
         </div>
         {rows.map((r, i) => (
           <div
@@ -3037,7 +3038,7 @@ function DetailRuns({ scraperId, extraLabels = [] }) {
                     fontFamily: 'var(--mono)',
                     fontWeight: 600,
                   }}>
-                  변경
+                  Changed
                 </span>
               )}
             </div>
@@ -3079,7 +3080,7 @@ function DetailRuns({ scraperId, extraLabels = [] }) {
               color: 'var(--text-dim)',
               fontSize: 12,
             }}>
-            아직 실행 이력이 없습니다. "지금 실행"을 눌러 첫 수집을 시작하세요.
+            No run history yet. Click "Run now" to start your first collection.
           </div>
         )}
       </div>
@@ -3088,13 +3089,13 @@ function DetailRuns({ scraperId, extraLabels = [] }) {
 }
 
 const HEAL_STATUS_LABEL = {
-  auto_approved: { label: '자동 복구', cls: 'ok' },
-  approved:      { label: '수동 승인', cls: 'ok' },
-  rejected:      { label: '거절됨', cls: 'danger' },
-  pending:       { label: '승인 대기', cls: 'warn' },
+  auto_approved: { label: 'Auto-recovered', cls: 'ok' },
+  approved:      { label: 'Manually approved', cls: 'ok' },
+  rejected:      { label: 'Rejected', cls: 'danger' },
+  pending:       { label: 'Pending approval', cls: 'warn' },
 };
 
-// ─── Activity (조직 단위 자가치유 이벤트) ──────────────────────────────────────
+// ─── Activity (org-wide self-healing events) ───────────────────────────────
 function ActivityScreen() {
   const [list, setList] = React.useState(null); // null = loading
   const [expandedId, setExpandedId] = React.useState(null);
@@ -3114,7 +3115,7 @@ function ActivityScreen() {
   const handleReport = async (h) => {
     if (
       !window.confirm(
-        `"${h.scraperName || h.scraperId}"의 이 자가치유 결과를 신고하시겠습니까?\n\n적용된 셀렉터를 신고 이전 값으로 되돌리고, 오탐 사례로 기록해 이후 모델 개선에 활용합니다.`,
+        `Report this self-healing result for "${h.scraperName || h.scraperId}"?\n\nThe applied selector will be reverted to its pre-report value and logged as a false positive to improve the model going forward.`,
       )
     )
       return;
@@ -3132,15 +3133,15 @@ function ActivityScreen() {
       style={{ padding: '28px 32px 80px', maxWidth: 1480, margin: '0 auto' }}>
       <SectionTitle
         eyebrow="ORG-WIDE"
-        title="자가치유 활동">
-        조직 내 모든 스크래퍼의 자가치유 이벤트 이력입니다. 항목을 클릭하면 셀렉터 변경 내역을 볼 수 있습니다.
+        title="Self-healing activity">
+        Self-healing event history for every scraper in the organization. Click an item to see the selector change details.
       </SectionTitle>
 
       {list === null && (
         <div
           className="card"
           style={{ padding: 'var(--s-11)', textAlign: 'center' }}>
-          <div className="muted">로딩 중…</div>
+          <div className="muted">Loading…</div>
         </div>
       )}
 
@@ -3153,11 +3154,11 @@ function ActivityScreen() {
             className="icon icon-lg"
             style={{ margin: '0 auto var(--s-3)', display: 'block', color: 'var(--text-dim)' }}
           />
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>아직 자가치유 이벤트가 없습니다</div>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>No self-healing events yet</div>
           <div
             className="muted"
             style={{ fontSize: 13 }}>
-            스크래퍼의 셀렉터가 깨지고 AI가 복구를 시도하면 여기에 기록됩니다.
+            Events are logged here when a scraper's selector breaks and the AI attempts recovery.
           </div>
         </div>
       )}
@@ -3178,11 +3179,11 @@ function ActivityScreen() {
               letterSpacing: '0.04em',
               textTransform: 'uppercase',
             }}>
-            <div>스크래퍼</div>
-            <div>필드</div>
-            <div>확신도</div>
-            <div>상태</div>
-            <div>시각</div>
+            <div>Scraper</div>
+            <div>Field</div>
+            <div>Confidence</div>
+            <div>Status</div>
+            <div>Time</div>
             <div />
           </div>
           {list.map((h, i) => {
@@ -3203,7 +3204,7 @@ function ActivityScreen() {
                     borderBottom: open || isLast ? 'none' : '1px solid var(--border)',
                   }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{h.scraperName || '(이름 없음)'}</div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{h.scraperName || '(no name)'}</div>
                     <div
                       className="dim mono"
                       style={{ fontSize: 11 }}>
@@ -3214,7 +3215,7 @@ function ActivityScreen() {
                     <span
                       className="chip"
                       style={{ fontSize: 10 }}>
-                      {h.fieldLabel || '메인 값'}
+                      {h.fieldLabel || 'Main value'}
                     </span>
                   </div>
                   <div
@@ -3239,7 +3240,7 @@ function ActivityScreen() {
                     {h.reported && (
                       <span className="chip danger" style={{ marginLeft: 6 }}>
                         <span className="dot" />
-                        신고됨
+                        Reported
                       </span>
                     )}
                   </div>
@@ -3273,7 +3274,7 @@ function ActivityScreen() {
                         marginBottom: h.reasoning ? 10 : 0,
                       }}>
                       <div style={{ color: 'var(--danger)' }}>− {h.oldSelector}</div>
-                      <div style={{ color: 'var(--ok)' }}>+ {h.proposedSelector || '(제안 없음)'}</div>
+                      <div style={{ color: 'var(--ok)' }}>+ {h.proposedSelector || '(no suggestion)'}</div>
                     </div>
                     {h.reasoning && (
                       <div
@@ -3286,7 +3287,7 @@ function ActivityScreen() {
                       <div>
                         {h.reported ? (
                           <span className="dim" style={{ fontSize: 11.5 }}>
-                            신고 접수됨 · {h.reportedAt}
+                            Report received · {h.reportedAt}
                           </span>
                         ) : (
                           <button
@@ -3298,7 +3299,7 @@ function ActivityScreen() {
                               handleReport(h);
                             }}>
                             <Icon name="flag" className="icon icon-sm" />
-                            {reportingId === h.id ? '신고 처리 중…' : '이 결과 신고'}
+                            {reportingId === h.id ? 'Reporting…' : 'Report this result'}
                           </button>
                         )}
                       </div>
@@ -3337,7 +3338,7 @@ function DetailHealHistory({ scraperId, onScraperReverted }) {
   const handleReport = async (h) => {
     if (
       !window.confirm(
-        '이 자가치유 결과를 신고하시겠습니까?\n\n적용된 셀렉터를 신고 이전 값으로 되돌리고, 오탐 사례로 기록해 이후 모델 개선에 활용합니다.',
+        'Report this self-healing result?\n\nThe applied selector will be reverted to its pre-report value and logged as a false positive to improve the model going forward.',
       )
     )
       return;
@@ -3370,7 +3371,7 @@ function DetailHealHistory({ scraperId, onScraperReverted }) {
             margin: '0 auto 10px',
           }}
         />
-        <div style={{ fontSize: 12 }}>치유 이력 로드 중…</div>
+        <div style={{ fontSize: 12 }}>Loading healing history…</div>
       </div>
     );
   }
@@ -3385,7 +3386,7 @@ function DetailHealHistory({ scraperId, onScraperReverted }) {
           className="icon icon-lg"
           style={{ margin: '0 auto 12px', display: 'block', opacity: 0.35 }}
         />
-        <div style={{ fontSize: 13 }}>아직 자가치유가 발동된 적이 없습니다.</div>
+        <div style={{ fontSize: 13 }}>Self-healing hasn't been triggered yet.</div>
       </div>
     );
   }
@@ -3405,7 +3406,7 @@ function DetailHealHistory({ scraperId, onScraperReverted }) {
                 {h.createdAt}
               </span>
               <span className="chip" style={{ fontSize: 10.5 }}>
-                {h.fieldLabel || '메인 값'}
+                {h.fieldLabel || 'Main value'}
               </span>
               <span className={`chip ${st.cls}`} style={{ fontSize: 10.5 }}>
                 <span className="dot" />
@@ -3414,11 +3415,11 @@ function DetailHealHistory({ scraperId, onScraperReverted }) {
               {h.reported && (
                 <span className="chip danger" style={{ fontSize: 10.5 }}>
                   <span className="dot" />
-                  신고됨
+                  Reported
                 </span>
               )}
               <span className="dim mono" style={{ fontSize: 11 }}>
-                신뢰도 {scorePct}%
+                Confidence {scorePct}%
               </span>
             </div>
 
@@ -3447,7 +3448,7 @@ function DetailHealHistory({ scraperId, onScraperReverted }) {
               <div>
                 {h.reported ? (
                   <span className="dim" style={{ fontSize: 11.5 }}>
-                    신고 접수됨 · {h.reportedAt}
+                    Report received · {h.reportedAt}
                   </span>
                 ) : (
                   <button
@@ -3456,7 +3457,7 @@ function DetailHealHistory({ scraperId, onScraperReverted }) {
                     disabled={reportingId === h.id}
                     onClick={() => handleReport(h)}>
                     <Icon name="flag" className="icon icon-sm" />
-                    {reportingId === h.id ? '신고 처리 중…' : '이 결과 신고'}
+                    {reportingId === h.id ? 'Reporting…' : 'Report this result'}
                   </button>
                 )}
               </div>
@@ -3763,10 +3764,12 @@ function ValueTrendCard({ results, scraperId, extraLabels = [] }) {
   const changeCount = annotated.filter((r) => r.changed).length;
 
   const parseNum = (v) => parseFloat(String(v || '').replace(/[^0-9.-]/g, ''));
-  // "값에 숫자가 섞여 있는가"가 아니라 "값이 숫자로 시작하는가"로 판단한다 — 안 그러면
-  // "통밤파이만주9입" 같은 상품명이 끝에 붙은 수량 표기 때문에 숫자 데이터로 오판돼서
-  // 차트가 뜬다. 반대로 숫자로 시작하고 뒤에 짧은 단위/설명이
-  // 붙는 진짜 수치 지표는 계속 차트 대상으로 인정돼야 한다.
+  // Judge by "does the value START with a number" rather than "does the value
+  // CONTAIN a number" — otherwise product names like "Chestnut Pie Manju 9pk"
+  // get misclassified as numeric data because of a trailing quantity suffix,
+  // and a chart gets rendered for them. Conversely, real numeric metrics that
+  // start with a number and are followed by a short unit/description must
+  // still be recognized as chart-eligible.
   const isNumericStr = (v) =>
     /^[+-]?[$₩¥€]?\s*[\d,]+(\.\d+)?\s*[a-zA-Z가-힣%°]{0,2}(\s|$)/.test(String(v || '').trim());
   const numericRuns = [...results]
@@ -3810,7 +3813,7 @@ function ValueTrendCard({ results, scraperId, extraLabels = [] }) {
               gap: 8,
               marginBottom: 2,
             }}>
-            <div style={{ fontWeight: 600 }}>값 추이</div>
+            <div style={{ fontWeight: 600 }}>Value trend</div>
             {pctChange !== null && (
               <span
                 style={{
@@ -3830,8 +3833,8 @@ function ValueTrendCard({ results, scraperId, extraLabels = [] }) {
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--text-dim)' }}>
             {changeCount > 0
-              ? `${changeCount}회 값 변경 감지됨`
-              : '수집 간 값 변화 이력'}
+              ? `${changeCount} value change(s) detected`
+              : 'Value change history across collections'}
           </div>
         </div>
         <a
@@ -3915,7 +3918,7 @@ function ValueTrendCard({ results, scraperId, extraLabels = [] }) {
                       fontFamily: 'var(--mono)',
                       fontWeight: 600,
                     }}>
-                    변경
+                    Changed
                   </span>
                 )}
               </div>
@@ -3960,7 +3963,7 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
   const [step, setStep] = React.useState(0);
   const [url, setUrl] = React.useState('coupang.com/np/categories/178794');
   const [intent, setIntent] = React.useState(
-    '쿠팡 노트북 카테고리 베스트 페이지의 실시간 1위 상품명',
+    'Real-time #1 product name on the Coupang laptop category bestseller page',
   );
   const [domain, setDomain] = React.useState('commerce');
   const [threshold, setThreshold] = React.useState(85);
@@ -3986,10 +3989,10 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
   }, [scrapers]);
 
   const steps = [
-    { id: 0, label: '대상 페이지', sub: 'URL 입력 및 렌더링' },
-    { id: 1, label: '추출 의도', sub: '무엇을 가져올지 자연어로' },
-    { id: 2, label: '요소 선택', sub: '클릭으로 수집 대상 지정' },
-    { id: 3, label: '운영 정책', sub: '임계값 · 스케줄 · 출력' },
+    { id: 0, label: 'Target page', sub: 'Enter URL and render' },
+    { id: 1, label: 'Extraction intent', sub: 'Describe what to collect in plain language' },
+    { id: 2, label: 'Element selection', sub: 'Click to specify the collection target' },
+    { id: 3, label: 'Operating policy', sub: 'Threshold · schedule · output' },
   ];
 
   const isValidCron = (expr) =>
@@ -4007,17 +4010,17 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
   const SCHEDULE_LABEL = {
-    'daily-9': '매일 09:00',
-    hourly: '매시간',
-    '15m': '15분마다',
+    'daily-9': 'Daily at 09:00',
+    hourly: 'Hourly',
+    '15m': 'Every 15 min',
   };
   const DOMAIN_ALTS = {
-    commerce: '소비 수요',
-    labor: '노동 시장',
-    realestate: '부동산',
-    regulatory: '규제·공시',
-    media: '미디어',
-    finance: '금융',
+    commerce: 'Consumer demand',
+    labor: 'Labor market',
+    realestate: 'Real estate',
+    regulatory: 'Regulatory & disclosure',
+    media: 'Media',
+    finance: 'Finance',
   };
   const CHANNEL_LABEL = {
     api: 'REST API',
@@ -4031,15 +4034,15 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
       .map((f) => ({ ...f, label: f.label.trim() }))
       .filter((f) => f.label || f.selector);
     if (trimmedFields.some((f) => !f.label)) {
-      setCreateError('보조 필드 라벨을 모두 입력해 주세요.');
+      setCreateError('Please enter a label for every secondary field.');
       return;
     }
     if (new Set(trimmedFields.map((f) => f.label)).size !== trimmedFields.length) {
-      setCreateError('보조 필드 라벨이 중복되었습니다.');
+      setCreateError('Secondary field labels must be unique.');
       return;
     }
     if (trimmedFields.some((f) => !f.selector)) {
-      setCreateError('모든 보조 필드에 대해 요소를 선택해 주세요.');
+      setCreateError('Please select an element for every secondary field.');
       return;
     }
 
@@ -4077,7 +4080,7 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
     if (ok) {
       onClose();
     } else {
-      setCreateError('스크래퍼 등록에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      setCreateError('Failed to register the scraper. Please try again in a moment.');
     }
   };
 
@@ -4102,14 +4105,14 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
           onClick={onClose}
           className="muted"
           style={{ cursor: 'default' }}>
-          스크래퍼
+          Scrapers
         </a>
         <Icon
           name="chevron_r"
           className="icon icon-sm"
           style={{ color: 'var(--text-dim)' }}
         />
-        <span>새 스크래퍼</span>
+        <span>New scraper</span>
       </div>
 
       <SectionTitle
@@ -4274,7 +4277,7 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
         <button
           className="btn ghost"
           onClick={onClose}>
-          취소
+          Cancel
         </button>
         <div style={{ display: 'flex', gap: 'var(--s-2)' }}>
           {step > 0 && (
@@ -4285,7 +4288,7 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
                 name="arrow_l"
                 className="icon icon-sm"
               />
-              이전
+              Back
             </button>
           )}
           {step < steps.length - 1 && (
@@ -4294,7 +4297,7 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
               onClick={next}
               disabled={!canNext()}
               style={{ opacity: canNext() ? 1 : 0.5 }}>
-              다음
+              Next
               <Icon
                 name="arrow_r"
                 className="icon icon-sm"
@@ -4311,7 +4314,7 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
                 name="check"
                 className="icon icon-sm"
               />
-              {submitting ? '등록 중…' : '스크래퍼 생성'}
+              {submitting ? 'Registering…' : 'Create scraper'}
             </button>
           )}
         </div>
@@ -4351,11 +4354,12 @@ function WizardStep1({ url, setUrl, recentUrls }) {
         gridTemplateColumns: '1fr 1.1fr',
         gap: 'var(--s-6)',
       }}>
-      {/* minWidth:0 없으면 최근 사용한 URL처럼 공백 없는 긴 문자열이 그리드 트랙
-          자동 최소폭 계산에 그대로 반영돼 왼쪽 컬럼이 폭주하고, 오른쪽 미리보기
-          패널이 몇십 px로 짜부라진다 — 자손의 minWidth:0/overflow는 여기엔 영향 없음. */}
+      {/* Without minWidth:0, a long unbroken string like a recent URL feeds
+          straight into the grid track's auto min-width calculation, blowing
+          up the left column and squeezing the right preview panel down to a
+          few dozen px — descendant minWidth:0/overflow has no effect here. */}
       <div style={{ minWidth: 0 }}>
-        <FieldLabel>대상 URL</FieldLabel>
+        <FieldLabel>Target URL</FieldLabel>
         <div
           style={{
             display: 'flex',
@@ -4394,9 +4398,10 @@ function WizardStep1({ url, setUrl, recentUrls }) {
         <div
           className="muted"
           style={{ fontSize: 12.5, marginTop: 'var(--s-3)', lineHeight: 1.6 }}>
-          공개 페이지는 즉시 분석됩니다. 로그인이 필요하면{' '}
-          <a style={{ color: 'var(--accent)' }}>인증 프로파일</a>을 먼저
-          등록하세요.
+          Public pages are analyzed instantly. If login is required, register
+          an{' '}
+          <a style={{ color: 'var(--accent)' }}>authentication profile</a>{' '}
+          first.
         </div>
 
         <div
@@ -4416,21 +4421,21 @@ function WizardStep1({ url, setUrl, recentUrls }) {
             style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }}
           />
           <div style={{ fontSize: 12.5, lineHeight: 1.55 }}>
-            DOMA는{' '}
+            DOMA fetches the page via{' '}
             <strong style={{ color: 'var(--text)' }}>
-              Playwright headless 렌더
+              Playwright headless rendering
             </strong>
-            로 페이지를 가져온 뒤
+            , then uses
             <strong style={{ color: 'var(--text)' }}>
               {' '}
-              모든 DOM 노드를 후보 풀
+              every DOM node as a candidate pool
             </strong>
-            로 사용합니다. JS로 그려지는 콘텐츠도 안전합니다.
+            . Content rendered by JS is handled safely too.
           </div>
         </div>
 
         <div style={{ marginTop: 'var(--s-5)' }}>
-          <FieldLabel small>기술 가용성 자동 체크</FieldLabel>
+          <FieldLabel small>Automatic feasibility checks</FieldLabel>
           <div
             style={{
               display: 'flex',
@@ -4440,33 +4445,33 @@ function WizardStep1({ url, setUrl, recentUrls }) {
             <CapRow
               ic="check"
               tone="ok"
-              title="JS 렌더링 콘텐츠"
-              sub="동적 DOM도 headless 브라우저로 안전하게 수집"
+              title="JS-rendered content"
+              sub="Dynamic DOM is collected safely via a headless browser"
             />
             <CapRow
               ic="check"
               tone="ok"
-              title="DOM 구조 변경"
-              sub="자가치유로 자동 복구 — 본 서비스의 핵심"
+              title="DOM structure changes"
+              sub="Recovered automatically via self-healing — the core of this service"
             />
             <CapRow
               ic="info"
               tone="warn"
-              title="로그인이 필요한 페이지"
-              sub="별도 인증 프로파일 등록 후 사용 가능"
+              title="Pages requiring login"
+              sub="Available after registering a separate authentication profile"
             />
             <CapRow
               ic="x"
               tone="danger"
               title="CAPTCHA · Anti-bot"
-              sub="현재 PoC 범위 밖 — 별도 솔루션 필요"
+              sub="Currently out of PoC scope — requires a separate solution"
             />
           </div>
         </div>
 
         {recentUrls.length > 0 && (
           <div style={{ marginTop: 'var(--s-4)' }}>
-            <FieldLabel small>최근 사용한 URL</FieldLabel>
+            <FieldLabel small>Recently used URLs</FieldLabel>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {recentUrls.map((u) => (
                 <button
@@ -4501,7 +4506,7 @@ function WizardStep1({ url, setUrl, recentUrls }) {
         )}
       </div>
 
-      {/* ── 실제 페이지 미리보기 패널 ── */}
+      {/* ── Live page preview panel ── */}
       <div
         style={{
           position: 'relative',
@@ -4513,7 +4518,7 @@ function WizardStep1({ url, setUrl, recentUrls }) {
           display: 'flex',
           flexDirection: 'column',
         }}>
-        {/* 브라우저 크롬 헤더 */}
+        {/* Browser chrome header */}
         <div
           style={{
             display: 'flex',
@@ -4588,7 +4593,7 @@ function WizardStep1({ url, setUrl, recentUrls }) {
           </span>
         </div>
 
-        {/* 콘텐츠 영역 */}
+        {/* Content area */}
         <div
           style={{
             flex: 1,
@@ -4616,9 +4621,9 @@ function WizardStep1({ url, setUrl, recentUrls }) {
                 style={{ opacity: 0.35 }}
               />
               <div style={{ fontSize: 12, lineHeight: 1.6 }}>
-                URL을 입력하면
+                Enter a URL
                 <br />
-                실제 페이지 미리보기가 표시됩니다
+                and a live page preview will appear here
               </div>
             </div>
           )}
@@ -4645,11 +4650,11 @@ function WizardStep1({ url, setUrl, recentUrls }) {
                   borderTopColor: 'var(--accent)',
                 }}
               />
-              <div style={{ fontSize: 12 }}>페이지 렌더링 중…</div>
+              <div style={{ fontSize: 12 }}>Rendering page…</div>
             </div>
           )}
 
-          {/* 스크린샷 이미지 */}
+          {/* Screenshot image */}
           {previewSrc && (
             <img
               key={previewSrc}
@@ -4685,19 +4690,19 @@ function WizardStep1({ url, setUrl, recentUrls }) {
                 style={{ opacity: 0.45 }}
               />
               <div style={{ fontSize: 12, lineHeight: 1.6 }}>
-                미리보기를 불러올 수 없습니다
+                Couldn't load the preview
                 <br />
                 <span
                   className="mono"
                   style={{ fontSize: 10.5 }}>
-                  URL을 다시 확인해 주세요
+                  Please double-check the URL
                 </span>
               </div>
             </div>
           )}
         </div>
 
-        {/* 하단 상태 바 */}
+        {/* Bottom status bar */}
         <div
           style={{
             display: 'flex',
@@ -4718,14 +4723,14 @@ function WizardStep1({ url, setUrl, recentUrls }) {
               <div
                 className="dim mono"
                 style={{ fontSize: 11 }}>
-                렌더 완료 · 4,872개 DOM 노드 수집
+                Render complete · 4,872 DOM nodes collected
               </div>
             </>
           ) : imgState === 'loading' ? (
             <div
               className="dim mono"
               style={{ fontSize: 11 }}>
-              렌더 중…
+              Rendering…
             </div>
           ) : imgState === 'err' ? (
             <>
@@ -4737,14 +4742,14 @@ function WizardStep1({ url, setUrl, recentUrls }) {
               <div
                 className="dim mono"
                 style={{ fontSize: 11 }}>
-                렌더 실패
+                Render failed
               </div>
             </>
           ) : (
             <div
               className="dim mono"
               style={{ fontSize: 11 }}>
-              URL 입력 대기
+              Waiting for URL
             </div>
           )}
         </div>
@@ -4831,21 +4836,21 @@ function CapRow({ ic, tone, title, sub }) {
 }
 
 const INTENT_PRESETS = [
-  { d: 'finance', text: 'USD 매매기준율 (원/달러 환율)' },
-  { d: 'finance', text: 'KOSPI 지수 종가' },
-  { d: 'commerce', text: '쿠팡 노트북 카테고리 베스트 1위 상품명' },
-  { d: 'commerce', text: '특정 상품의 현재 판매가 (원 단위 숫자)' },
-  { d: 'media', text: '멜론 차트 실시간 1위 곡 제목' },
-  { d: 'public', text: '서울 종로구 오늘 최고 기온 (섭씨)' },
+  { d: 'finance', text: 'USD reference exchange rate (KRW/USD)' },
+  { d: 'finance', text: 'KOSPI index closing price' },
+  { d: 'commerce', text: 'Coupang laptop category bestseller #1 product name' },
+  { d: 'commerce', text: "A specific product's current sale price (KRW, numeric)" },
+  { d: 'media', text: 'Melon chart #1 song title, real-time' },
+  { d: 'public', text: "Today's high temperature in Jongno-gu, Seoul (Celsius)" },
 ];
 
 const DOMAINS = [
-  { id: 'commerce', label: '이커머스', hint: '가격 · 랭킹 · 재고' },
-  { id: 'labor', label: '노동 시장', hint: '채용공고 · 임금' },
-  { id: 'regulatory', label: '규제·공시', hint: 'DART · 공정위 · 입찰' },
-  { id: 'realestate', label: '부동산', hint: '호가 · 거래량' },
-  { id: 'media', label: '미디어', hint: '차트 · 조회수 · 트렌드' },
-  { id: 'finance', label: '금융', hint: '환율 · 지수 · 금리' },
+  { id: 'commerce', label: 'E-commerce', hint: 'Price · rank · stock' },
+  { id: 'labor', label: 'Labor market', hint: 'Job postings · wages' },
+  { id: 'regulatory', label: 'Regulatory & disclosure', hint: 'DART · FTC · tenders' },
+  { id: 'realestate', label: 'Real estate', hint: 'Asking price · transaction volume' },
+  { id: 'media', label: 'Media', hint: 'Charts · views · trends' },
+  { id: 'finance', label: 'Finance', hint: 'FX rate · index · interest rate' },
 ];
 
 function WizardStep2({ intent, setIntent, domain, setDomain }) {
@@ -4860,11 +4865,11 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
     setIntent(t.intent);
     // map cat → domain
     const map = {
-      '소비 수요': 'commerce',
-      '노동 시장': 'labor',
-      '규제·공시': 'regulatory',
-      부동산: 'realestate',
-      미디어: 'media',
+      'Consumer demand': 'commerce',
+      'Labor market': 'labor',
+      'Regulatory & disclosure': 'regulatory',
+      'Real estate': 'realestate',
+      Media: 'media',
     };
     setDomain(map[t.cat] || 'commerce');
   };
@@ -4877,7 +4882,7 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
         gap: 'var(--s-6)',
       }}>
       <div>
-        <FieldLabel>대안 데이터 템플릿</FieldLabel>
+        <FieldLabel>Alternative data templates</FieldLabel>
         <div
           className="muted"
           style={{
@@ -4885,8 +4890,8 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
             marginBottom: 'var(--s-3)',
             lineHeight: 1.55,
           }}>
-          금융·매크로 리서치에서 자주 쓰는 데이터를 골라 시작하세요. 사이트별
-          하드코딩 없이 일반화된 파이프라인으로 동작합니다.
+          Start from data commonly used in financial/macro research. It runs on
+          a generalized pipeline with no site-specific hardcoding.
         </div>
 
         <div
@@ -4897,7 +4902,7 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
               key={c}
               className={tplFilter === c ? 'active' : ''}
               onClick={() => setTplFilter(c)}>
-              {c === 'all' ? '전체' : c}
+              {c === 'all' ? 'All' : c}
             </button>
           ))}
         </div>
@@ -4945,7 +4950,7 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
                   <span
                     className="dim mono"
                     style={{ fontSize: 10.5, marginLeft: 'auto' }}>
-                    {t.interval} 단위
+                    every {t.interval}
                   </span>
                 </div>
                 <div
@@ -4965,7 +4970,7 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
                 <div
                   className="dim mono"
                   style={{ fontSize: 10.5 }}>
-                  {t.users}팀 사용 중
+                  Used by {t.users} teams
                 </div>
               </button>
             );
@@ -4991,15 +4996,15 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
           <div
             className="muted"
             style={{ fontSize: 11.5, lineHeight: 1.5 }}>
-            템플릿은 <strong style={{ color: 'var(--text)' }}>출발점</strong>일
-            뿐입니다. 새 사이트나 예외 케이스에서도 같은 파이프라인으로 동작 —
-            사이트별 프롬프트 튜닝은 없습니다.
+            Templates are only a <strong style={{ color: 'var(--text)' }}>starting point</strong>.
+            The same pipeline handles new sites and edge cases just as well —
+            there's no per-site prompt tuning.
           </div>
         </div>
       </div>
 
       <div>
-        <FieldLabel>또는, 자연어로 직접 입력</FieldLabel>
+        <FieldLabel>Or, write it in plain language</FieldLabel>
         <div
           className="muted"
           style={{
@@ -5007,17 +5012,18 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
             marginBottom: 'var(--s-3)',
             lineHeight: 1.55,
           }}>
-          시각적 위치나 모양이 아니라{' '}
-          <strong style={{ color: 'var(--text)' }}>'역할'</strong>을 적어주세요.
-          이 문장이 그대로 LLM 추론 기준(
-          <span className="mono dim">user_intent</span>)이 됩니다.
+          Describe the{' '}
+          <strong style={{ color: 'var(--text)' }}>'role'</strong> of the value,
+          not its visual position or appearance. This sentence becomes the LLM's
+          reasoning basis (
+          <span className="mono dim">user_intent</span>) as-is.
         </div>
 
         <div style={{ position: 'relative' }}>
           <textarea
             value={intent}
             onChange={(e) => setIntent(e.target.value)}
-            placeholder="예) 카테고리 베스트 페이지의 실시간 1위 상품명"
+            placeholder="e.g. Real-time #1 product name on the category bestseller page"
             style={{
               width: '100%',
               minHeight: 110,
@@ -5041,20 +5047,20 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
               right: 10,
               fontSize: 10.5,
             }}>
-            {intent.length}자
+            {intent.length} chars
           </div>
         </div>
 
         <FieldLabel
           small
           style={{ marginTop: 'var(--s-4)' }}>
-          도메인
+          Domain
         </FieldLabel>
         <div
           className="muted"
           style={{ fontSize: 11.5, marginTop: -2, marginBottom: 'var(--s-2)' }}>
-          도메인 정보는 LLM에 힌트로 전달됩니다. 같은 파이프라인을 사용하므로
-          사이트별 코드 변경은 없습니다.
+          Domain information is passed to the LLM as a hint. Since the same
+          pipeline is used, there's no per-site code change.
         </div>
         <div
           style={{
@@ -5138,7 +5144,7 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
               textTransform: 'uppercase',
               marginBottom: 'var(--s-2)',
             }}>
-            LLM에 전달될 프롬프트
+            Prompt sent to the LLM
           </div>
           <pre
             className="code"
@@ -5149,12 +5155,12 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
               border: 0,
               padding: 0,
             }}>{`domain: ${domain}
-user_intent: """${intent || '(여기에 입력하신 문장)'}"""
+user_intent: """${intent || '(the sentence you enter here)'}"""
 
-규칙
-- 텍스트 내용이 아니라 '역할'을 찾을 것
-- 과거 정답과 다를 가능성을 가정하되,
-  실제로 같은 값일 가능성도 배제하지 말 것`}</pre>
+Rules
+- Find the 'role', not the literal text content
+- Assume the value may differ from the past answer,
+  but don't rule out the possibility that it's actually the same`}</pre>
         </div>
       </div>
     </div>
@@ -5189,7 +5195,7 @@ function WizardStep3({
     pickTargetRef.current = pickTarget;
   }, [pickTarget]);
 
-  // 서버(server.js)의 VIEWPORT/Page.startScreencast 설정과 반드시 같이 맞춰야 함
+  // Must always match the server's (server.js) VIEWPORT/Page.startScreencast settings
   const REMOTE_W = 960,
     REMOTE_H = 600;
 
@@ -5253,7 +5259,7 @@ function WizardStep3({
     return () => ws.close();
   }, []);
 
-  // non-passive wheel listener (React onWheel은 passive라 preventDefault 불가)
+  // non-passive wheel listener (React's onWheel is passive, so preventDefault won't work)
   React.useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -5304,13 +5310,13 @@ function WizardStep3({
 
   const stateLabel =
     {
-      connecting: '서버 연결 중…',
-      connected: '페이지 로딩 중…',
-      navigating: '페이지 로딩 중…',
+      connecting: 'Connecting to server…',
+      connected: 'Loading page…',
+      navigating: 'Loading page…',
       ready: nodeCount
-        ? `${nodeCount.toLocaleString()}개 노드 수집됨`
-        : '준비됨',
-      error: '연결 실패',
+        ? `${nodeCount.toLocaleString()} nodes collected`
+        : 'Ready',
+      error: 'Connection failed',
     }[connState] || connState;
 
   const isReady = connState === 'ready';
@@ -5322,21 +5328,21 @@ function WizardStep3({
         gridTemplateColumns: '1fr 1.6fr',
         gap: 'var(--s-6)',
       }}>
-      {/* ── 왼쪽: 안내 + 선택 결과 ── */}
+      {/* ── Left: instructions + selection result ── */}
       <div
         style={{ display: 'flex', flexDirection: 'column', gap: 'var(--s-4)' }}>
         <div>
-          <FieldLabel>수집 요소 선택</FieldLabel>
+          <FieldLabel>Select collection element</FieldLabel>
           <div
             className="muted"
             style={{ fontSize: 12.5, lineHeight: 1.65 }}>
-            오른쪽 브라우저에서 수집할 요소를{' '}
-            <strong style={{ color: 'var(--text)' }}>클릭</strong>하세요.
-            마우스를 올리면 파란 테두리로 미리 확인할 수 있습니다.
+            <strong style={{ color: 'var(--text)' }}>Click</strong> the element
+            you want to collect in the browser on the right. Hover to preview
+            it with a blue outline.
           </div>
         </div>
 
-        {/* 연결 상태 */}
+        {/* Connection status */}
         <div
           style={{
             display: 'flex',
@@ -5355,7 +5361,7 @@ function WizardStep3({
           ) : connState === 'error' ? (
             <span className="chip danger">
               <span className="dot" />
-              오류
+              Error
             </span>
           ) : (
             <div
@@ -5399,7 +5405,7 @@ function WizardStep3({
           </div>
         )}
 
-        {/* 선택된 요소 */}
+        {/* Selected element */}
         {selected ? (
           <div
             style={{
@@ -5422,7 +5428,7 @@ function WizardStep3({
                 className="icon icon-sm"
                 style={{ color: 'var(--ok)' }}
               />
-              <span style={{ fontSize: 13, fontWeight: 600 }}>요소 선택됨</span>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Element selected</span>
               <button
                 className="btn ghost sm"
                 style={{ marginLeft: 'auto' }}
@@ -5431,7 +5437,7 @@ function WizardStep3({
                   name="x"
                   className="icon icon-sm"
                 />
-                다시 선택
+                Reselect
               </button>
             </div>
             <div>
@@ -5466,7 +5472,7 @@ function WizardStep3({
                     textTransform: 'uppercase',
                     marginBottom: 4,
                   }}>
-                  현재 값
+                  Current value
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 500 }}>
                   {selected.text}
@@ -5491,7 +5497,7 @@ function WizardStep3({
                   name="check"
                   className="icon icon-sm"
                 />
-                셀렉터 확정
+                Selector confirmed
               </span>
             </div>
           </div>
@@ -5514,7 +5520,7 @@ function WizardStep3({
               className="icon icon-lg"
               style={{ opacity: 0.35 }}
             />
-            <div style={{ fontSize: 12 }}>아직 선택된 요소가 없습니다</div>
+            <div style={{ fontSize: 12 }}>No element selected yet</div>
           </div>
         )}
 
@@ -5542,13 +5548,13 @@ function WizardStep3({
             style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }}
           />
           <div style={{ fontSize: 12, lineHeight: 1.6 }}>
-            스크롤로 페이지 아래쪽도 탐색 가능합니다. 팝업·배너는 실제 DOM
-            수집에 영향 없습니다.
+            You can scroll to explore further down the page too. Popups and
+            banners don't affect actual DOM collection.
           </div>
         </div>
       </div>
 
-      {/* ── 오른쪽: 실시간 브라우저 스트림 ── */}
+      {/* ── Right: live browser stream ── */}
       <div
         style={{
           border: '1px solid var(--border)',
@@ -5558,7 +5564,7 @@ function WizardStep3({
           flexDirection: 'column',
           background: 'var(--bg-3)',
         }}>
-        {/* 브라우저 크롬 */}
+        {/* Browser chrome */}
         <div
           style={{
             display: 'flex',
@@ -5637,18 +5643,18 @@ function WizardStep3({
             <span
               className="chip danger"
               style={{ fontSize: 10, flexShrink: 0 }}>
-              오류
+              Error
             </span>
           ) : (
             <span
               className="chip"
               style={{ fontSize: 10, flexShrink: 0 }}>
-              로딩 중
+              Loading
             </span>
           )}
         </div>
 
-        {/* 팝업 제거 툴바 */}
+        {/* Popup removal toolbar */}
         <div
           style={{
             display: 'flex',
@@ -5663,11 +5669,11 @@ function WizardStep3({
           <span
             className="dim"
             style={{ fontSize: 11, marginRight: 'var(--s-1)' }}>
-            팝업 제거:
+            Remove popups:
           </span>
           <button
             className="btn ghost sm"
-            title="ESC 키 전송 (팝업 닫기)"
+            title="Send ESC key (closes popups)"
             disabled={!isReady}
             onClick={sendEsc}
             style={{ padding: '3px 8px', fontSize: 11.5 }}>
@@ -5685,19 +5691,19 @@ function WizardStep3({
           </button>
           <button
             className="btn ghost sm"
-            title="페이지 내 팝업·오버레이 자동 제거"
+            title="Automatically remove popups/overlays on the page"
             disabled={!isReady}
             onClick={removeOverlays}
             style={{ padding: '3px 8px', fontSize: 11.5 }}>
-            자동 제거
+            Auto-remove
           </button>
           <button
             className={`btn sm${removeMode ? ' primary' : ' ghost'}`}
-            title="클릭한 요소를 DOM에서 제거하는 모드"
+            title="Mode for removing clicked elements from the DOM"
             disabled={!isReady}
             onClick={() => setRemoveMode((m) => !m)}
             style={{ padding: '3px 8px', fontSize: 11.5 }}>
-            {removeMode ? '요소 지우기 ON' : '요소 지우기'}
+            {removeMode ? 'Element removal ON' : 'Remove element'}
           </button>
           {removeMode && (
             <span
@@ -5707,12 +5713,12 @@ function WizardStep3({
                 marginLeft: 'var(--s-1)',
                 fontWeight: 500,
               }}>
-              클릭하면 요소가 삭제됩니다
+              Clicking will delete the element
             </span>
           )}
         </div>
 
-        {/* 캔버스 + 로딩 오버레이 */}
+        {/* Canvas + loading overlay */}
         <div style={{ position: 'relative', flex: 1 }}>
           {!isReady && (
             <div
@@ -5741,13 +5747,13 @@ function WizardStep3({
                       textAlign: 'center',
                       lineHeight: 1.65,
                     }}>
-                    서버에 연결할 수 없습니다
+                    Can't connect to the server
                     <br />
                     <span
                       className="mono dim"
                       style={{ fontSize: 10.5 }}>
-                      터미널에서 <strong>npm start</strong> 를 먼저 실행해
-                      주세요
+                      Please run <strong>npm start</strong> in the terminal
+                      first
                     </span>
                   </div>
                 </>
@@ -5969,12 +5975,12 @@ function WizardStep4({
 
   const action =
     threshold >= 95
-      ? '금융 등급 — 매우 보수적'
+      ? 'Financial-grade — very conservative'
       : threshold >= 85
-        ? '엄격 — 일반적인 운영 데이터'
+        ? 'Strict — typical operating data'
         : threshold >= 70
-          ? '균형 — 빠른 변동에 대응'
-          : '관대 — 실험용 / 일반 컨텐츠';
+          ? 'Balanced — responsive to fast-moving changes'
+          : 'Lenient — experimental / general content';
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 32 }}>
@@ -5988,14 +5994,15 @@ function WizardStep4({
             fontFamily: 'var(--mono)',
             marginBottom: 10,
           }}>
-          자가치유 임계값
+          Self-healing threshold
         </div>
         <div
           className="muted"
           style={{ fontSize: 13, marginBottom: 20, lineHeight: 1.55 }}>
-          AI가 찾은 후보 셀렉터의 확신도가 이 값{' '}
-          <strong style={{ color: 'var(--text)' }}>이상</strong>이면 자동
-          복구하고, 그 미만이면 승인 큐로 보냅니다.
+          If the AI's candidate selector confidence is{' '}
+          <strong style={{ color: 'var(--text)' }}>at or above</strong> this
+          value, it recovers automatically; below it, the item goes to the
+          approval queue.
         </div>
 
         <div
@@ -6055,28 +6062,28 @@ function WizardStep4({
               textTransform: 'uppercase',
               marginBottom: 10,
             }}>
-            정책 미리보기
+            Policy preview
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <PolicyRow
               color="var(--ok)"
               lo={threshold}
               hi={100}
-              label="자동 복구"
+              label="Auto-recover"
               icon="check"
             />
             <PolicyRow
               color="var(--warn)"
               lo={40}
               hi={threshold}
-              label="수동 승인 대기"
+              label="Pending manual approval"
               icon="bell"
             />
             <PolicyRow
               color="var(--danger)"
               lo={0}
               hi={40}
-              label="실패 알림 (Slack)"
+              label="Failure alert (Slack)"
               icon="x"
             />
           </div>
@@ -6093,7 +6100,7 @@ function WizardStep4({
             fontFamily: 'var(--mono)',
             marginBottom: 10,
           }}>
-          수집 주기
+          Collection interval
         </div>
         <div
           style={{
@@ -6103,10 +6110,10 @@ function WizardStep4({
             marginBottom: schedule === 'custom' ? 12 : 24,
           }}>
           {[
-            ['daily-9', '매일 09:00'],
-            ['hourly', '매시간'],
-            ['15m', '15분마다'],
-            ['custom', 'Cron 직접 입력'],
+            ['daily-9', 'Daily at 09:00'],
+            ['hourly', 'Hourly'],
+            ['15m', 'Every 15 min'],
+            ['custom', 'Custom cron'],
           ].map(([id, l]) => (
             <button
               key={id}
@@ -6131,7 +6138,7 @@ function WizardStep4({
             <input
               type="text"
               className="input mono"
-              placeholder="0 9 * * 1-5  (분 시 일 월 요일)"
+              placeholder="0 9 * * 1-5  (min hour day month weekday)"
               value={customCron}
               onChange={(e) => setCustomCron(e.target.value)}
               style={{
@@ -6152,7 +6159,7 @@ function WizardStep4({
               }}>
               {customCron && !isValidCron(customCron) && (
                 <div style={{ fontSize: 11, color: 'var(--danger)' }}>
-                  올바른 cron 표현식을 입력하세요 (5개 필드: 분 시 일 월 요일)
+                  Please enter a valid cron expression (5 fields: min hour day month weekday)
                 </div>
               )}
               <div
@@ -6161,11 +6168,11 @@ function WizardStep4({
                   color: 'var(--text-dim)',
                   lineHeight: 1.7,
                 }}>
-                예시&nbsp;&nbsp;
+                Examples&nbsp;&nbsp;
                 {[
-                  ['0 9 * * 1-5', '평일 09:00'],
-                  ['0 */6 * * *', '6시간마다'],
-                  ['30 8 * * 1', '매주 월요일 08:30'],
+                  ['0 9 * * 1-5', 'Weekdays at 09:00'],
+                  ['0 */6 * * *', 'Every 6 hours'],
+                  ['30 8 * * 1', 'Every Monday at 08:30'],
                 ].map(([expr, label]) => (
                   <span
                     key={expr}
@@ -6196,14 +6203,14 @@ function WizardStep4({
             fontFamily: 'var(--mono)',
             marginBottom: 10,
           }}>
-          전송 채널
+          Delivery channels
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
             ['api', 'REST API', 'link', 'GET /api/v1/data/{id}'],
-            ['webhook', 'Webhook', 'rocket', '초 단위 실시간 푸시'],
+            ['webhook', 'Webhook', 'rocket', 'Real-time push, second-level'],
             ['slack', 'Slack', 'slack', '#scraper-alerts'],
-            ['csv', 'CSV / Excel', 'csv', '대시보드에서 다운로드'],
+            ['csv', 'CSV / Excel', 'csv', 'Download from the dashboard'],
           ].map(([id, l, ic, sub]) => (
             <label
               key={id}
@@ -6312,8 +6319,8 @@ function DeliveryScreen() {
       style={{ padding: '28px 32px 80px', maxWidth: 1480, margin: '0 auto' }}>
       <SectionTitle
         eyebrow="DATA OUT"
-        title="산출물 · 전송">
-        수집한 데이터를 외부 시스템으로 내보내는 채널을 관리합니다.
+        title="Delivery · output">
+        Manage the channels that export collected data to external systems.
       </SectionTitle>
 
       <div
@@ -6328,21 +6335,21 @@ function DeliveryScreen() {
             icon: 'link',
             label: 'REST API',
             n: '42',
-            sub: '엔드포인트',
+            sub: 'Endpoints',
             tone: 'ok',
           },
           {
             icon: 'rocket',
             label: 'Webhook',
             n: '18',
-            sub: '활성',
+            sub: 'Active',
             tone: 'ok',
           },
           {
             icon: 'csv',
             label: 'CSV / Excel',
             n: '7.4k',
-            sub: '다운로드 (30d)',
+            sub: 'Downloads (30d)',
             tone: '',
           },
         ].map((c) => (
@@ -6390,7 +6397,7 @@ function DeliveryScreen() {
               display: 'flex',
               alignItems: 'center',
             }}>
-            <div style={{ fontWeight: 600 }}>API Endpoint 미리보기</div>
+            <div style={{ fontWeight: 600 }}>API Endpoint preview</div>
             <span
               className="chip ok"
               style={{ marginLeft: 'auto' }}>
@@ -6400,7 +6407,7 @@ function DeliveryScreen() {
           <div style={{ padding: 18 }}>
             <pre
               className="code"
-              style={{ margin: 0 }}>{`# 인증 토큰: env.DOMA_TOKEN
+              style={{ margin: 0 }}>{`# Auth token: env.DOMA_TOKEN
 curl https://api.doma.io/v1/data/cr_8x2k \\
   -H "Authorization: Bearer $DOMA_TOKEN"
 
@@ -6421,7 +6428,7 @@ curl https://api.doma.io/v1/data/cr_8x2k \\
               padding: '14px 18px',
               borderBottom: '1px solid var(--border)',
             }}>
-            <div style={{ fontWeight: 600 }}>Webhook 등록</div>
+            <div style={{ fontWeight: 600 }}>Webhook registration</div>
           </div>
           <div
             style={{
@@ -6470,7 +6477,7 @@ curl https://api.doma.io/v1/data/cr_8x2k \\
                 </div>
                 <span className={`chip ${t}`}>
                   <span className="dot" />
-                  {t === 'ok' ? '활성' : '미인증'}
+                  {t === 'ok' ? 'Active' : 'Unverified'}
                 </span>
               </div>
             ))}
@@ -6481,7 +6488,7 @@ curl https://api.doma.io/v1/data/cr_8x2k \\
                 name="plus"
                 className="icon icon-sm"
               />
-              새 Webhook 추가
+              Add new webhook
             </button>
           </div>
         </div>
@@ -6507,10 +6514,10 @@ function TemplatesScreen({ onUse }) {
       }}>
       <SectionTitle
         eyebrow="ALT-DATA TEMPLATES"
-        title="대안 데이터 템플릿">
-        리서치팀이 자주 쓰는 데이터를 한 번에 시작하세요. 사이트별 코드가 아니라{' '}
-        <strong style={{ color: 'var(--text)' }}>일반화된 파이프라인</strong>
-        으로 동작합니다.
+        title="Alternative data templates">
+        Get started instantly with data research teams use often. It runs on a{' '}
+        <strong style={{ color: 'var(--text)' }}>generalized pipeline</strong>{' '}
+        rather than site-specific code.
       </SectionTitle>
 
       <div
@@ -6521,7 +6528,7 @@ function TemplatesScreen({ onUse }) {
             key={c}
             className={tab === c ? 'active' : ''}
             onClick={() => setTab(c)}>
-            {c === 'all' ? '전체' : c}
+            {c === 'all' ? 'All' : c}
           </button>
         ))}
       </div>
@@ -6554,7 +6561,7 @@ function TemplatesScreen({ onUse }) {
               <span
                 className="dim mono"
                 style={{ fontSize: 10.5, marginLeft: 'auto' }}>
-                {t.interval} 단위
+                every {t.interval}
               </span>
             </div>
             <div style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.3 }}>
@@ -6587,7 +6594,7 @@ function TemplatesScreen({ onUse }) {
               <span
                 className="dim mono"
                 style={{ fontSize: 11 }}>
-                {t.users}팀 사용 중
+                Used by {t.users} teams
               </span>
               <button
                 className="btn primary sm"
@@ -6597,7 +6604,7 @@ function TemplatesScreen({ onUse }) {
                   name="plus"
                   className="icon icon-sm"
                 />
-                이 템플릿으로 시작
+                Start with this template
               </button>
             </div>
           </div>
@@ -6609,10 +6616,11 @@ function TemplatesScreen({ onUse }) {
 
 // ─── SelectorRepickPanel ──────────────────────────────────────────────────
 // ─── ExtraFieldsEditor ─────────────────────────────────────────────────────
-// SelectorRepickPanel(기존 스크래퍼 편집)과 WizardStep3(생성 위저드)가 공유하는
-// "보조 필드 N개" 편집 UI. 실제 클릭 결과 라우팅(ws.onmessage)은 각 부모가
-// pickTarget('primary' | 'extra:<index>')을 보고 처리하고, 이 컴포넌트는
-// 필드 배열 자체(추가/삭제/라벨 입력/선택 모드 전환)만 담당한다.
+// The "N secondary fields" editing UI shared by SelectorRepickPanel (editing
+// an existing scraper) and WizardStep3 (the creation wizard). Each parent
+// handles the actual click-result routing (ws.onmessage) by inspecting
+// pickTarget ('primary' | 'extra:<index>'); this component only owns the
+// field array itself (add/remove/label input/toggling selection mode).
 const MAX_EXTRA_FIELDS = 8;
 
 function ExtraFieldsEditor({ fields, onFieldsChange, pickTarget, onPickTarget, isReady }) {
@@ -6645,20 +6653,20 @@ function ExtraFieldsEditor({ fields, onFieldsChange, pickTarget, onPickTarget, i
           justifyContent: 'space-between',
         }}>
         <div style={{ fontSize: 12, fontWeight: 600 }}>
-          보조 필드{fields.length > 0 ? ` (${fields.length})` : ''}
+          Secondary fields{fields.length > 0 ? ` (${fields.length})` : ''}
         </div>
         <button
           className="btn ghost sm"
           disabled={fields.length >= MAX_EXTRA_FIELDS}
           style={{ fontSize: 11, padding: '4px 8px' }}
           onClick={addField}>
-          + 필드 추가
+          + Add field
         </button>
       </div>
 
       {fields.length === 0 && (
         <div style={{ fontSize: 11, color: 'var(--text-mute)' }}>
-          같은 페이지에서 같이 추적할 값이 있으면 추가하세요 (예: 곡명, 재고 상태).
+          Add a field if there's another value to track on the same page (e.g. song title, stock status).
         </div>
       )}
 
@@ -6681,7 +6689,7 @@ function ExtraFieldsEditor({ fields, onFieldsChange, pickTarget, onPickTarget, i
               <input
                 type="text"
                 className="input sm"
-                placeholder="라벨 (예: 1위 곡명)"
+                placeholder="Label (e.g. #1 song title)"
                 value={f.label}
                 onChange={(e) => updateField(i, { label: e.target.value })}
                 style={{ fontSize: 12, flex: 1 }}
@@ -6690,7 +6698,7 @@ function ExtraFieldsEditor({ fields, onFieldsChange, pickTarget, onPickTarget, i
                 className="btn ghost sm"
                 style={{ fontSize: 11, padding: '4px 8px' }}
                 onClick={() => removeField(i)}>
-                삭제
+                Delete
               </button>
             </div>
             <button
@@ -6698,7 +6706,7 @@ function ExtraFieldsEditor({ fields, onFieldsChange, pickTarget, onPickTarget, i
               disabled={!isReady}
               style={{ fontSize: 11, padding: '4px 8px' }}
               onClick={() => onPickTarget(target)}>
-              {active ? '선택 중… 오른쪽에서 요소 클릭' : f.selector ? '다시 선택' : '요소 선택'}
+              {active ? 'Selecting… click an element on the right' : f.selector ? 'Reselect' : 'Select element'}
             </button>
             {f.selector && (
               <>
@@ -6739,8 +6747,8 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
   const [removeMode, setRemoveMode] = React.useState(false);
   const [blockedMsg, setBlockedMsg] = React.useState(null);
 
-  // 보조 필드 N개 — 반드시 scraper.extra_fields로 초기화해야 함(전체교체 저장이라
-  // 건드리지 않은 필드까지 echo해서 다시 보내야 데이터가 안 날아감).
+  // N secondary fields — must always be initialized from scraper.extra_fields
+  // (save is full-replace semantics, so untouched fields must be echoed back too, or the data is lost).
   const pickTargetRef = React.useRef('primary'); // 'primary' | 'extra:<index>'
   const [pickTarget, _setPickTarget] = React.useState('primary');
   const [extraFields, setExtraFields] = React.useState(
@@ -6759,7 +6767,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
     pickTargetRef.current = t;
     _setPickTarget(t);
   };
-  // 서버(server.js)의 VIEWPORT/Page.startScreencast 설정과 반드시 같이 맞춰야 함
+  // Must always match the server's (server.js) VIEWPORT/Page.startScreencast settings
   const REMOTE_W = 960,
     REMOTE_H = 600;
   const isReady = connState === 'ready';
@@ -6858,7 +6866,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
       );
       setTimeout(() => {
         if (testResolveRef.current) {
-          testResolveRef.current({ found: false, error: '응답 시간 초과' });
+          testResolveRef.current({ found: false, error: 'Response timed out' });
           testResolveRef.current = null;
         }
       }, 12000);
@@ -6869,31 +6877,32 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
     setSaving(true);
     setSaveErr('');
     try {
-      // 1) 메인 필드 검증
+      // 1) Validate the main field
       const testResult = await testSelector(selected.selector);
       if (!testResult.found) {
         setSaveErr(
-          `셀렉터가 현재 페이지에서 매칭되지 않습니다${testResult.error ? ': ' + testResult.error : ' — 다른 요소를 선택해 주세요'}`,
+          `The selector doesn't match anything on the current page${testResult.error ? ': ' + testResult.error : ' — please select a different element'}`,
         );
         setSaving(false);
         return;
       }
 
-      // 1-1) 보조 필드 검증 — 라벨 공백/중복 체크 후, 셀렉터가 있는 필드만 라이브 재검증.
-      // extra_fields는 전체교체 시맨틱이라 건드리지 않은 필드도 항상 같이 보낸다.
+      // 1-1) Validate secondary fields — check for empty/duplicate labels, then
+      // live-revalidate only fields that have a selector.
+      // extra_fields uses full-replace semantics, so untouched fields are always sent along too.
       const trimmedFields = extraFields.map((f) => ({ ...f, label: f.label.trim() }));
       if (trimmedFields.some((f) => !f.label)) {
-        setSaveErr('보조 필드 라벨을 모두 입력해 주세요.');
+        setSaveErr('Please enter a label for every secondary field.');
         setSaving(false);
         return;
       }
       if (new Set(trimmedFields.map((f) => f.label)).size !== trimmedFields.length) {
-        setSaveErr('보조 필드 라벨이 중복되었습니다.');
+        setSaveErr('Secondary field labels must be unique.');
         setSaving(false);
         return;
       }
       if (trimmedFields.some((f) => !f.selector)) {
-        setSaveErr('모든 보조 필드에 대해 요소를 선택해 주세요.');
+        setSaveErr('Please select an element for every secondary field.');
         setSaving(false);
         return;
       }
@@ -6901,14 +6910,14 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
         const t = await testSelector(f.selector);
         if (!t.found) {
           setSaveErr(
-            `보조 필드 "${f.label}"의 셀렉터가 현재 페이지에서 매칭되지 않습니다${t.error ? ': ' + t.error : ''}`,
+            `The selector for secondary field "${f.label}" doesn't match anything on the current page${t.error ? ': ' + t.error : ''}`,
           );
           setSaving(false);
           return;
         }
       }
 
-      // 2) DB 저장
+      // 2) Save to DB
       const resp = await fetch(`/api/scrapers/${scraper.id}/selector`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -6920,12 +6929,12 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
       });
       const updated = await resp.json();
       if (!resp.ok) {
-        setSaveErr(updated.error || '저장 실패');
+        setSaveErr(updated.error || 'Save failed');
         return;
       }
       onSaved(updated);
     } catch (e) {
-      setSaveErr('저장 중 오류: ' + e.message);
+      setSaveErr('Error while saving: ' + e.message);
     } finally {
       setSaving(false);
     }
@@ -6933,13 +6942,13 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
 
   const stateLabel =
     {
-      connecting: '서버 연결 중…',
-      connected: '페이지 로딩 중…',
-      navigating: '페이지 로딩 중…',
+      connecting: 'Connecting to server…',
+      connected: 'Loading page…',
+      navigating: 'Loading page…',
       ready: nodeCount
-        ? `${nodeCount.toLocaleString()}개 노드 수집됨`
-        : '준비됨',
-      error: '연결 실패',
+        ? `${nodeCount.toLocaleString()} nodes collected`
+        : 'Ready',
+      error: 'Connection failed',
     }[connState] || connState;
 
   return (
@@ -6968,7 +6977,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
           display: 'flex',
           flexDirection: 'column',
         }}>
-        {/* 헤더 */}
+        {/* Header */}
         <div
           style={{
             padding: '14px 20px',
@@ -6995,7 +7004,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
             />
           </div>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>셀렉터 재선택</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Reselect selector</div>
             <div
               className="dim mono"
               style={{ fontSize: 11 }}>
@@ -7013,7 +7022,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
           </button>
         </div>
 
-        {/* 본문: 좌(결과) + 우(브라우저) */}
+        {/* Body: left (results) + right (browser) */}
         <div
           style={{
             display: 'grid',
@@ -7021,7 +7030,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
             flex: 1,
             overflow: 'hidden',
           }}>
-          {/* 좌: 상태 + 선택 결과 + 저장 */}
+          {/* Left: status + selection result + save */}
           <div
             style={{
               padding: 18,
@@ -7049,7 +7058,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
               ) : connState === 'error' ? (
                 <span className="chip danger">
                   <span className="dot" />
-                  오류
+                  Error
                 </span>
               ) : (
                 <div
@@ -7099,13 +7108,13 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                 color: 'var(--text-mute)',
                 lineHeight: 1.6,
               }}>
-              오른쪽 브라우저에서 수집할 요소를{' '}
-              <strong style={{ color: 'var(--text)' }}>클릭</strong>하세요.
-              <span style={{ color: 'var(--danger)' }}> 빨간 테두리</span>는
-              선택 불가 요소입니다.
+              <strong style={{ color: 'var(--text)' }}>Click</strong> the
+              element you want to collect in the browser on the right.
+              <span style={{ color: 'var(--danger)' }}> A red outline</span>{' '}
+              means the element can't be selected.
             </div>
 
-            {/* 팝업 제거 */}
+            {/* Popup removal */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <button
                 className="btn ghost sm"
@@ -7127,18 +7136,18 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                     JSON.stringify({ type: 'remove_overlays' }),
                   )
                 }>
-                팝업 제거
+                Remove popups
               </button>
               <button
                 className={`btn sm${removeMode ? ' primary' : ' ghost'}`}
                 disabled={!isReady}
                 style={{ fontSize: 11, padding: '4px 8px' }}
                 onClick={() => setRemoveMode((m) => !m)}>
-                요소 지우기
+                Remove element
               </button>
             </div>
 
-            {/* 기존 셀렉터 */}
+            {/* Existing selector */}
             <div>
               <div
                 className="dim mono"
@@ -7148,7 +7157,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                   textTransform: 'uppercase',
                   marginBottom: 4,
                 }}>
-                현재 셀렉터
+                Current selector
               </div>
               <pre
                 className="code"
@@ -7159,11 +7168,11 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                   wordBreak: 'break-all',
                   opacity: 0.6,
                 }}>
-                {scraper.css_selector || '(없음)'}
+                {scraper.css_selector || '(none)'}
               </pre>
             </div>
 
-            {/* 선택 결과 */}
+            {/* Selection result */}
             {selected ? (
               <div
                 style={{
@@ -7182,13 +7191,13 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                     style={{ color: 'var(--ok)' }}
                   />
                   <span style={{ fontSize: 13, fontWeight: 600 }}>
-                    요소 선택됨
+                    Element selected
                   </span>
                   <button
                     className="btn ghost sm"
                     style={{ marginLeft: 'auto', fontSize: 11 }}
                     onClick={() => setSelected(null)}>
-                    다시 선택
+                    Reselect
                   </button>
                 </div>
                 <div>
@@ -7200,7 +7209,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                       textTransform: 'uppercase',
                       marginBottom: 4,
                     }}>
-                    새 셀렉터
+                    New selector
                   </div>
                   <pre
                     className="code"
@@ -7223,7 +7232,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                         textTransform: 'uppercase',
                         marginBottom: 4,
                       }}>
-                      현재 값
+                      Current value
                     </div>
                     <div style={{ fontSize: 13, fontWeight: 500 }}>
                       {selected.text}
@@ -7250,7 +7259,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                   className="icon icon-lg"
                   style={{ opacity: 0.35 }}
                 />
-                <div style={{ fontSize: 12 }}>아직 선택된 요소 없음</div>
+                <div style={{ fontSize: 12 }}>No element selected yet</div>
               </div>
             )}
 
@@ -7297,7 +7306,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                       borderTopColor: '#fff',
                     }}
                   />
-                  검증 중…
+                  Validating…
                 </>
               ) : (
                 <>
@@ -7305,13 +7314,13 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                     name="check"
                     className="icon icon-sm"
                   />
-                  셀렉터 저장
+                  Save selector
                 </>
               )}
             </button>
           </div>
 
-          {/* 우: 실시간 브라우저 */}
+          {/* Right: live browser */}
           <div
             style={{
               display: 'flex',
@@ -7347,12 +7356,12 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                           textAlign: 'center',
                           lineHeight: 1.65,
                         }}>
-                        서버에 연결할 수 없습니다
+                        Can't connect to the server
                         <br />
                         <span
                           className="mono dim"
                           style={{ fontSize: 10.5 }}>
-                          npm start 를 먼저 실행해 주세요
+                          Please run npm start first
                         </span>
                       </div>
                     </>
@@ -7440,20 +7449,20 @@ function HealPanel({ scraper, onClose }) {
   const [result, setResult] = React.useState(null);
   const [errMsg, setErrMsg] = React.useState('');
 
-  // 마운트 시 V1(스냅샷) + V2(현재 페이지) 자동 수집
+  // Automatically collect V1 (snapshot) + V2 (current page) on mount
   React.useEffect(() => {
-    // V1: 서버에 저장된 스냅샷
+    // V1: the snapshot saved on the server
     fetch(`/api/scrapers/${scraper.id}/snapshot`)
       .then(parseJsonResponse)
       .then((data) => {
         if (data.html) {
           setV1Html(data.html);
           setV1State('ok');
-        } else throw new Error(data.error || '스냅샷 없음');
+        } else throw new Error(data.error || 'No snapshot');
       })
       .catch((e) => setV1State('error'));
 
-    // V2: Playwright로 현재 페이지 수집
+    // V2: collect the current page via Playwright
     const fullUrl = /^https?:\/\//i.test(scraper.url)
       ? scraper.url
       : 'https://' + scraper.url;
@@ -7467,7 +7476,7 @@ function HealPanel({ scraper, onClose }) {
         if (data.html) {
           setV2Html(data.html);
           setV2State('ok');
-        } else throw new Error(data.error || '수집 실패');
+        } else throw new Error(data.error || 'Collection failed');
       })
       .catch(() => setV2State('error'));
   }, []);
@@ -7493,7 +7502,7 @@ function HealPanel({ scraper, onClose }) {
       setResult(data);
       setPhase('done');
     } catch (e) {
-      setErrMsg(`치유 실패: ${e.message}`);
+      setErrMsg(`Healing failed: ${e.message}`);
       setPhase('error');
     }
   };
@@ -7553,10 +7562,10 @@ function HealPanel({ scraper, onClose }) {
         )}
         <span style={{ fontSize: 12.5, color }}>
           {state === 'loading'
-            ? `${label} 수집 중…`
+            ? `Collecting ${label}…`
             : state === 'ok'
-              ? `${label} 수집 완료`
-              : `${label} 수집 실패`}
+              ? `${label} collected`
+              : `${label} collection failed`}
         </span>
       </div>
     );
@@ -7564,7 +7573,7 @@ function HealPanel({ scraper, onClose }) {
 
   return (
     <>
-      {/* 딤드 배경 */}
+      {/* Dimmed backdrop */}
       <div
         onClick={onClose}
         style={{
@@ -7576,7 +7585,7 @@ function HealPanel({ scraper, onClose }) {
         }}
       />
 
-      {/* 패널 */}
+      {/* Panel */}
       <div
         style={{
           position: 'fixed',
@@ -7592,7 +7601,7 @@ function HealPanel({ scraper, onClose }) {
           flexDirection: 'column',
           overflowY: 'auto',
         }}>
-        {/* 헤더 */}
+        {/* Header */}
         <div
           style={{
             padding: '16px 20px',
@@ -7622,11 +7631,11 @@ function HealPanel({ scraper, onClose }) {
             />
           </div>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>자가치유 실행</div>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Run self-healing</div>
             <div
               className="dim"
               style={{ fontSize: 11 }}>
-              ML + Claude 하이브리드
+              ML + Claude hybrid
             </div>
           </div>
           <button
@@ -7640,7 +7649,7 @@ function HealPanel({ scraper, onClose }) {
           </button>
         </div>
 
-        {/* 폼 */}
+        {/* Form */}
         <div
           style={{
             padding: 20,
@@ -7649,17 +7658,17 @@ function HealPanel({ scraper, onClose }) {
             gap: 16,
             flex: 1,
           }}>
-          {/* HTML 수집 상태 */}
+          {/* HTML collection status */}
           <div>
-            <FieldLabel>HTML 수집 상태</FieldLabel>
+            <FieldLabel>HTML collection status</FieldLabel>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <HtmlStatus
                 state={v1State}
-                label="V1 (첫 실행 스냅샷)"
+                label="V1 (first-run snapshot)"
               />
               <HtmlStatus
                 state={v2State}
-                label="V2 (현재 페이지)"
+                label="V2 (current page)"
               />
             </div>
             {(v1State === 'error' || v2State === 'error') && (
@@ -7676,23 +7685,23 @@ function HealPanel({ scraper, onClose }) {
                 }}>
                 {v1State === 'error' && (
                   <div>
-                    V1 스냅샷 없음 — "지금 실행" 버튼으로 스크래퍼를 한 번 이상
-                    실행해야 생성됩니다.
+                    No V1 snapshot — the scraper must be run at least once via
+                    the "Run now" button to generate one.
                   </div>
                 )}
                 {v2State === 'error' && (
                   <div>
-                    현재 페이지 수집 실패 — URL을 확인하거나 네트워크 상태를
-                    점검하세요.
+                    Failed to collect the current page — check the URL or your
+                    network connection.
                   </div>
                 )}
               </div>
             )}
           </div>
 
-          {/* 셀렉터 */}
+          {/* Selector */}
           <div>
-            <FieldLabel>기존 CSS 셀렉터 (깨진 것)</FieldLabel>
+            <FieldLabel>Existing CSS selector (the broken one)</FieldLabel>
             <input
               value={selector}
               onChange={(e) => setSelector(e.target.value)}
@@ -7711,9 +7720,9 @@ function HealPanel({ scraper, onClose }) {
             />
           </div>
 
-          {/* 의도 */}
+          {/* Intent */}
           <div>
-            <FieldLabel>수집 의도 (User Intent)</FieldLabel>
+            <FieldLabel>Collection intent (User Intent)</FieldLabel>
             <textarea
               value={intent}
               onChange={(e) => setIntent(e.target.value)}
@@ -7734,7 +7743,7 @@ function HealPanel({ scraper, onClose }) {
             />
           </div>
 
-          {/* 에러 */}
+          {/* Error */}
           {errMsg && (
             <div
               style={{
@@ -7749,7 +7758,7 @@ function HealPanel({ scraper, onClose }) {
             </div>
           )}
 
-          {/* 실행 버튼 */}
+          {/* Run button */}
           <button
             className="btn primary"
             onClick={runHeal}
@@ -7771,7 +7780,7 @@ function HealPanel({ scraper, onClose }) {
                     borderTopColor: '#fff',
                   }}
                 />
-                ML 필터링 + Claude 추론 중…
+                ML filtering + Claude reasoning…
               </>
             ) : (
               <>
@@ -7779,12 +7788,12 @@ function HealPanel({ scraper, onClose }) {
                   name="bolt"
                   className="icon icon-sm"
                 />
-                자가치유 실행
+                Run self-healing
               </>
             )}
           </button>
 
-          {/* 결과 */}
+          {/* Result */}
           {result && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ height: 1, background: 'var(--border)' }} />
@@ -7799,23 +7808,23 @@ function HealPanel({ scraper, onClose }) {
                   }`}>
                   <span className="dot" />
                   {result.status === 'healed'
-                    ? '치유 성공'
+                    ? 'Healing succeeded'
                     : result.status === 'no_change_needed'
-                      ? '셀렉터 유효'
-                      : '치유 실패'}
+                      ? 'Selector still valid'
+                      : 'Healing failed'}
                 </span>
                 {result.confidence > 0 && (
                   <span
                     className="mono dim"
                     style={{ fontSize: 12, marginLeft: 'auto' }}>
-                    신뢰도 {Math.round(result.confidence * 100)}%
+                    Confidence {Math.round(result.confidence * 100)}%
                   </span>
                 )}
               </div>
 
               {result.extracted_text && (
                 <div>
-                  <FieldLabel small>복구된 값</FieldLabel>
+                  <FieldLabel small>Recovered value</FieldLabel>
                   <div
                     style={{
                       padding: '10px 14px',
@@ -7832,7 +7841,7 @@ function HealPanel({ scraper, onClose }) {
 
               {result.robust_selector && (
                 <div>
-                  <FieldLabel small>새 CSS 셀렉터</FieldLabel>
+                  <FieldLabel small>New CSS selector</FieldLabel>
                   <pre
                     style={{
                       margin: 0,
@@ -7852,7 +7861,7 @@ function HealPanel({ scraper, onClose }) {
 
               {result.reasoning && (
                 <div>
-                  <FieldLabel small>AI 추론 근거</FieldLabel>
+                  <FieldLabel small>AI reasoning</FieldLabel>
                   <div
                     style={{
                       padding: '10px 12px',

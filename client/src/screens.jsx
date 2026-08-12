@@ -4009,11 +4009,6 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
     canNext() && setStep((s) => Math.min(s + 1, steps.length - 1));
   const prev = () => setStep((s) => Math.max(s - 1, 0));
 
-  const SCHEDULE_LABEL = {
-    'daily-9': 'Daily at 09:00',
-    hourly: 'Hourly',
-    '15m': 'Every 15 min',
-  };
   const DOMAIN_ALTS = {
     commerce: 'Consumer demand',
     labor: 'Labor market',

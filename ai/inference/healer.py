@@ -192,7 +192,26 @@ def _extract_delta_features(v1_node, v2_cand, v1_pos_info, v2_pos_info):
 # ─── 셀렉터 생성 ─────────────────────────────────────────────────────────────
 
 def generate_full_selector(element):
+    # Find the repeating "list item" boundary using the same heuristic as
+    # _rank_override_node (a run of >=3 same-tag siblings, or a li/tr) — nth-child
+    # stays meaningful from the target up through that level, since it's what
+    # encodes the item's rank/position. But pinning nth-child on every ancestor
+    # ABOVE the list container makes the whole selector brittle: an unrelated
+    # layout shift up there (an ad slot, a conditional banner) changes sibling
+    # counts and breaks the entire chain even though the ranked item itself never
+    # moved. So ancestors above the list item are matched by tag+class only.
+    list_item = None
+    cur = element
+    while cur is not None and cur.name is not None:
+        if cur.parent:
+            sibs = [s for s in cur.parent.children if s.name == cur.name]
+            if len(sibs) >= 3 or cur.name in ['li', 'tr']:
+                list_item = cur
+                break
+        cur = cur.parent
+
     path, cur = [], element
+    past_list_item = False
     while cur is not None and cur.name is not None:
         sel = cur.name
         if cur.get('id'):
@@ -201,11 +220,13 @@ def generate_full_selector(element):
             break
         if cur.get('class'):
             sel += "." + ".".join(cur.get('class'))
-        if cur.parent:
+        if not past_list_item and cur.parent:
             sibs = [s for s in cur.parent.children if s.name is not None]
             if len(sibs) > 1:
                 sel += f":nth-child({sibs.index(cur) + 1})"
         path.insert(0, sel)
+        if cur is list_item:
+            past_list_item = True
         cur = cur.parent
     return " > ".join(path)
 

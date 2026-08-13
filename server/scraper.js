@@ -91,6 +91,21 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
       extractError = e.message;
     }
 
+    // Capture the snapshot right here, immediately after the primary extraction,
+    // instead of after the extra_fields loop below. On pages that keep
+    // re-rendering live (e.g. real-time rankings), waiting through extra_fields
+    // (up to 15s each) before calling page.content() let the DOM drift out from
+    // under the selector that had just matched — so the "successful" V1 snapshot
+    // saved below sometimes no longer contained that selector by the time it was
+    // serialized, making the very next self-heal attempt fail immediately with
+    // "couldn't find the selector in V1" before it even got to propose a fix.
+    html = await page.content();
+
+    // Refresh the V1 snapshot on selector success (Spring uses this as v1_html on heal calls)
+    if (value && !extractError) {
+      fs.writeFileSync(path.join(SNAPSHOTS_DIR, `${id}_v1.html`), html, 'utf-8');
+    }
+
     for (const field of extra_fields || []) {
       let fieldValue = '';
       let fieldError = null;
@@ -103,13 +118,6 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
         fieldError = e.message;
       }
       extraValues.push({ label: field.label, value: fieldValue || '', error: fieldError });
-    }
-
-    html = await page.content();
-
-    // Refresh the V1 snapshot on selector success (Spring uses this as v1_html on heal calls)
-    if (value && !extractError) {
-      fs.writeFileSync(path.join(SNAPSHOTS_DIR, `${id}_v1.html`), html, 'utf-8');
     }
   } finally {
     await browser?.close().catch(() => {});

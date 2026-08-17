@@ -191,7 +191,35 @@ def _extract_delta_features(v1_node, v2_cand, v1_pos_info, v2_pos_info):
 
 # ─── 셀렉터 생성 ─────────────────────────────────────────────────────────────
 
+# Same priority order as stableAttr() in server.js's picker (buildSelector) —
+# keeping the two aligned means a self-healed selector is no more fragile than
+# one a human would get from the picker. Without this, generate_full_selector
+# ignored attributes like data-testid entirely and fell straight to raw
+# class + nth-child chains, even on sites (e.g. Spotify's web player) that
+# expose stable test IDs on exactly the nodes that matter.
+_STABLE_ATTRS = ['data-testid', 'data-test', 'data-id', 'data-name', 'aria-label', 'name']
+
+
+def _stable_attr_selector(node):
+    for attr in _STABLE_ATTRS:
+        val = node.get(attr)
+        if val:
+            escaped = str(val).replace('\\', '\\\\').replace('"', '\\"')
+            return f'[{attr}="{escaped}"]'
+    return None
+
+
 def generate_full_selector(element):
+    root = element
+    while root.parent is not None:
+        root = root.parent
+
+    def is_unique(selector):
+        try:
+            return len(root.select(selector)) == 1
+        except Exception:
+            return False
+
     # Find the repeating "list item" boundary using the same heuristic as
     # _rank_override_node (a run of >=3 same-tag siblings, or a li/tr) — nth-child
     # stays meaningful from the target up through that level, since it's what
@@ -218,13 +246,23 @@ def generate_full_selector(element):
             sel += f"#{cur.get('id')}"
             path.insert(0, sel)
             break
-        if cur.get('class'):
+        attr_sel = _stable_attr_selector(cur)
+        if attr_sel:
+            sel += attr_sel
+        elif cur.get('class'):
             sel += "." + ".".join(cur.get('class'))
+        # A stable attribute like data-testid identifies the *kind* of node
+        # (every row in a list shares data-testid="tracklist-row"), not which
+        # one — so it doesn't replace nth-child, it complements it. Add
+        # position whenever there are same-tag siblings, same as the picker's
+        # buildSelector() in server.js, regardless of whether attr_sel is set.
         if not past_list_item and cur.parent:
             sibs = [s for s in cur.parent.children if s.name is not None]
             if len(sibs) > 1:
                 sel += f":nth-child({sibs.index(cur) + 1})"
         path.insert(0, sel)
+        if is_unique(" > ".join(path)):
+            break
         if cur is list_item:
             past_list_item = True
         cur = cur.parent

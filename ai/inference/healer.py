@@ -485,7 +485,13 @@ def heal_target(
 
     final_id = llm_result.get("selected_id")
     if final_id is None or not (0 <= final_id < TOP_K):
-        return {"status": "failed", "reason": "LLM이 적합한 노드를 찾지 못했습니다."}
+        # llm_result["reasoning"] holds either the LLM's own explanation for
+        # declining every candidate, or (on an API-level failure) the
+        # "API 에러: ..." message _call_llm sets in its except clause — surface
+        # whichever we have instead of this generic fallback, since collapsing
+        # both cases into one message makes them impossible to tell apart later.
+        detail = llm_result.get("reasoning") or "선택된 노드 없음"
+        return {"status": "failed", "reason": f"LLM이 적합한 노드를 찾지 못했습니다: {detail}"}
 
     original_idx = top_k_indices[final_id]
     healed_node  = filtered[original_idx]

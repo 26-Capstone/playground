@@ -41,12 +41,53 @@ const WAIT_FOR_CONTENT_FN_SRC = `
 })
 `;
 
-async function waitForContent(page, selector, timeoutMs) {
+// Same "wait until the page's content stops growing" signal the picker's
+// /internal/fetch-html endpoint already uses (see server.js) — selector-agnostic,
+// so it still tells us something useful even when css_selector no longer
+// matches anything on the page.
+async function waitForStableContent(page, maxWaitMs) {
   await page
-    .waitForFunction(new Function('sel', `return (${WAIT_FOR_CONTENT_FN_SRC})(sel)`), selector, {
-      timeout: timeoutMs,
-    })
+    .evaluate(
+      (maxWaitMs) =>
+        new Promise((resolve) => {
+          const start = Date.now();
+          let lastLen = -1;
+          let stableCount = 0;
+          const check = () => {
+            const len = document.body.innerText.trim().length;
+            const closeEnough = lastLen >= 0 && Math.abs(len - lastLen) < 100;
+            stableCount = closeEnough ? stableCount + 1 : 0;
+            lastLen = len;
+            if ((stableCount >= 2 && len > 50) || Date.now() - start > maxWaitMs) {
+              resolve();
+            } else {
+              setTimeout(check, 500);
+            }
+          };
+          check();
+        }),
+      maxWaitMs,
+    )
     .catch(() => {});
+}
+
+async function waitForContent(page, selector, timeoutMs) {
+  // Waiting on the selector alone is a dead wait whenever it no longer
+  // matches anything — exactly the situation self-heal runs in, since it
+  // only fires once the selector is already broken. That dead wait burns
+  // the whole budget while providing zero signal about whether the rest of
+  // the page ever finished rendering, so the V2 snapshot captured right
+  // after can end up being an unrendered skeleton. Racing it against the
+  // selector-agnostic stabilization check means we still notice once the
+  // page itself has settled, even though the target selector never will.
+  await Promise.race([
+    page
+      .waitForFunction(new Function('sel', `return (${WAIT_FOR_CONTENT_FN_SRC})(sel)`), selector, {
+        timeout: timeoutMs,
+      })
+      .catch(() => {}),
+    waitForStableContent(page, timeoutMs),
+  ]);
 }
 
 async function runScraper({ id, name, url, css_selector, user_intent, extra_fields }) {

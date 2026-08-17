@@ -409,22 +409,36 @@ wss.on("connection", (ws) => {
 
       if (msg.type === "test_selector" && ready) {
         try {
-          const result = await page.evaluate(
-            new Function(
-              "sel",
-              `
-              ${extractDisplayText.toString()}
-              try {
-                const el = document.querySelector(sel);
-                if (!el) return { found: false };
-                return { found: true, text: extractDisplayText(el).slice(0, 120) };
-              } catch (e) {
-                return { found: false, error: e.message };
-              }
-              `,
+          // page.evaluate() has no built-in timeout — if the page is mid
+          // re-render or otherwise busy when this fires, the call can hang
+          // indefinitely and we'd never send test_result at all, leaving the
+          // client's own 12s timeout to fire a generic "Response timed out"
+          // with no real explanation. Bounding it here means we still reply
+          // within that window, with a reason the client can actually show.
+          const result = await Promise.race([
+            page.evaluate(
+              new Function(
+                "sel",
+                `
+                ${extractDisplayText.toString()}
+                try {
+                  const el = document.querySelector(sel);
+                  if (!el) return { found: false };
+                  return { found: true, text: extractDisplayText(el).slice(0, 120) };
+                } catch (e) {
+                  return { found: false, error: e.message };
+                }
+                `,
+              ),
+              msg.selector,
             ),
-            msg.selector,
-          );
+            new Promise((_, reject) =>
+              setTimeout(
+                () => reject(new Error("Page was busy or navigating — try again")),
+                8000,
+              ),
+            ),
+          ]);
           send({ type: "test_result", ...result });
         } catch (e) {
           send({ type: "test_result", found: false, error: e.message });

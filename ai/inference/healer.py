@@ -218,6 +218,41 @@ def _stable_attr_selector(node):
     return f'[{attr}="{escaped}"]'
 
 
+def _escape_css_ident(c):
+    """Mirrors what CSS.escape() does for class names in server.js's picker.
+    generate_full_selector concatenates raw class names into a selector
+    string — Tailwind arbitrary-value classes like "text-[12px]" or variant
+    classes like "desktop:text-[16px]" contain CSS-special characters
+    ([, ], :, .) that make the resulting selector syntactically invalid
+    unless escaped. The picker already escapes; this function didn't, which
+    is how a self-heal on a Tailwind site produced a selector that crashed
+    querySelectorAll with a SyntaxError on every subsequent run."""
+    return re.sub(r'([^a-zA-Z0-9_-])', r'\\\1', c)
+
+
+def _is_hash_class(c):
+    """Same heuristic as isHashClass() in server.js's picker: a hyphen alone
+    doesn't make a class "stable" — utility classes (flex-col) and hashed
+    CSS-in-JS classes (tw69-y90cyth) both use hyphens. A low vowel ratio is a
+    better signal of an auto-generated hash than hyphen presence."""
+    if not c:
+        return False
+    letters = re.sub(r'[^a-zA-Z]', '', c)
+    if len(letters) < 3:
+        return False
+    vowels = len(re.findall(r'[aeiouAEIOU]', letters))
+    return vowels / len(letters) < 0.25
+
+
+def _class_selector(node):
+    """Same filtering as the picker's class fallback: drop hash-like classes,
+    keep at most 2, and escape each one so the result is valid CSS."""
+    classes = [c for c in (node.get('class') or []) if not _is_hash_class(c)][:2]
+    if not classes:
+        return ''
+    return '.' + '.'.join(_escape_css_ident(c) for c in classes)
+
+
 def _same_repeating_item(a, b):
     """Whether a and b look like two instances of the same repeating list
     item, not just incidentally-same-tag siblings that play different roles
@@ -296,8 +331,8 @@ def generate_full_selector(element):
                     if s.name == cur.name and s.get(attr_name) == attr_val
                 ]
                 skip_position = len(same_attr_sibs) == 1
-        elif cur.get('class'):
-            sel += "." + ".".join(cur.get('class'))
+        else:
+            sel += _class_selector(cur)
         if not skip_position and not past_list_item and cur.parent:
             sibs = [s for s in cur.parent.children if s.name is not None]
             if len(sibs) > 1:

@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: doma
       POSTGRES_USER: doma
@@ -18,6 +19,7 @@ services:
   python-ai:
     build:
       context: ./ai
+    restart: unless-stopped
     environment:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
@@ -27,6 +29,7 @@ services:
     build:
       context: .
       dockerfile: server/Dockerfile
+    restart: unless-stopped
     ports:
       - '3001:3001'
     environment:
@@ -43,6 +46,7 @@ services:
   spring-server:
     build:
       context: ./spring-server
+    restart: unless-stopped
     ports:
       - '8080:8080'
     environment:

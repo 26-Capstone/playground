@@ -147,6 +147,27 @@ const wss = new WebSocketServer({ server });
 // found" during the actual run.
 const SCREENCAST_QUALITY = 55;
 
+// On a page that keeps re-rendering (ad rotation, carousels, live counters —
+// e.g. Musinsa's ranking page), an unthrottled screencast pushes a new frame
+// almost continuously, and each one round-trips over the same CDP connection
+// as every other command (mouse moves, scroll, test_selector's evaluate).
+// A flood of frame events + ACKs can starve those other commands long enough
+// that test_selector's page.evaluate() misses its own timeout entirely, not
+// just occasionally but on every attempt on a busy-enough page. Only sending
+// every Nth frame trades a bit of stream smoothness for keeping the CDP
+// connection responsive to everything else sharing it.
+const SCREENCAST_EVERY_NTH_FRAME = 3;
+
+// Off by default — every click during picking logs a multi-line selector
+// debug trace unconditionally, and console.log is an async stream write, not
+// a synchronous print. Firing it dozens of times in quick succession (a user
+// re-picking through many near-identical candidates) faster than the
+// container's log driver can drain it lets writes back up in the process's
+// own memory instead of actually reaching the log — a real contributor to a
+// heap-exhaustion crash we hit in production. Set DEBUG_PICKER=1 to opt in
+// locally when actually debugging selector generation.
+const DEBUG_PICKER = process.env.DEBUG_PICKER === "1";
+
 const GET_SELECTOR_FN = `
 (function({ x, y }) {
   const el = document.elementFromPoint(x, y);
@@ -339,6 +360,7 @@ wss.on("connection", (ws) => {
         quality: SCREENCAST_QUALITY,
         maxWidth: VIEWPORT.width,
         maxHeight: VIEWPORT.height,
+        everyNthFrame: SCREENCAST_EVERY_NTH_FRAME,
       });
 
       cdp.on("Page.screencastFrame", async ({ data, sessionId }) => {
@@ -393,7 +415,7 @@ wss.on("connection", (ws) => {
         if (result && result.blocked) {
           send({ type: "blocked", tag: result.tag, reason: result.reason });
         } else if (result) {
-          if (result.debug) {
+          if (result.debug && DEBUG_PICKER) {
             console.log(
               `[picker-debug] selector="${result.selector}" recheckCount=${result.debug.recheckCount} recheckMatchesEl=${result.debug.recheckMatchesEl}\n` +
                 result.debug.trace

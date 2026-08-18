@@ -202,13 +202,37 @@ def _extract_delta_features(v1_node, v2_cand, v1_pos_info, v2_pos_info):
 _STABLE_ATTRS = ['data-testid', 'data-test', 'data-id', 'data-name', 'aria-colindex', 'aria-label', 'name']
 
 
-def _stable_attr_selector(node):
+def _stable_attr_pair(node):
     for attr in _STABLE_ATTRS:
         val = node.get(attr)
         if val:
-            escaped = str(val).replace('\\', '\\\\').replace('"', '\\"')
-            return f'[{attr}="{escaped}"]'
-    return None
+            return attr, val
+    return None, None
+
+
+def _stable_attr_selector(node):
+    attr, val = _stable_attr_pair(node)
+    if attr is None:
+        return None
+    escaped = str(val).replace('\\', '\\\\').replace('"', '\\"')
+    return f'[{attr}="{escaped}"]'
+
+
+def _same_repeating_item(a, b):
+    """Whether a and b look like two instances of the same repeating list
+    item, not just incidentally-same-tag siblings that play different roles
+    (e.g. an icon <div> and a text <div> inside one row are both <div>s but
+    aren't repeating items of each other). Requires an actual shared class or
+    a shared stable-attribute value — tag name alone isn't enough evidence."""
+    if a is b:
+        return True
+    a_classes = set(a.get('class') or [])
+    if a_classes and a_classes & set(b.get('class') or []):
+        return True
+    a_attr, a_val = _stable_attr_pair(a)
+    if a_attr and b.get(a_attr) == a_val:
+        return True
+    return False
 
 
 def generate_full_selector(element):
@@ -234,7 +258,10 @@ def generate_full_selector(element):
     cur = element
     while cur is not None and cur.name is not None:
         if cur.parent:
-            sibs = [s for s in cur.parent.children if s.name == cur.name]
+            sibs = [
+                s for s in cur.parent.children
+                if s.name == cur.name and _same_repeating_item(cur, s)
+            ]
             if len(sibs) >= 3 or cur.name in ['li', 'tr']:
                 list_item = cur
                 break
@@ -249,16 +276,29 @@ def generate_full_selector(element):
             path.insert(0, sel)
             break
         attr_sel = _stable_attr_selector(cur)
+        skip_position = False
         if attr_sel:
             sel += attr_sel
+            # A stable attribute like data-testid identifies the *kind* of
+            # node (every row in a list shares data-testid="tracklist-row"),
+            # not which one — position is still needed there. But an
+            # attribute like aria-colindex="3" is already unique among this
+            # node's same-tag siblings, so nth-child on top is redundant and
+            # fragile: if sibling structure shifts slightly on a later page
+            # load (e.g. a conditionally-rendered column), the DOM-order
+            # count can stop landing on the element the attribute already
+            # uniquely identifies. Only add position when the (attr, value)
+            # pair doesn't already disambiguate on its own.
+            if cur.parent:
+                attr_name, attr_val = _stable_attr_pair(cur)
+                same_attr_sibs = [
+                    s for s in cur.parent.children
+                    if s.name == cur.name and s.get(attr_name) == attr_val
+                ]
+                skip_position = len(same_attr_sibs) == 1
         elif cur.get('class'):
             sel += "." + ".".join(cur.get('class'))
-        # A stable attribute like data-testid identifies the *kind* of node
-        # (every row in a list shares data-testid="tracklist-row"), not which
-        # one — so it doesn't replace nth-child, it complements it. Add
-        # position whenever there are same-tag siblings, same as the picker's
-        # buildSelector() in server.js, regardless of whether attr_sel is set.
-        if not past_list_item and cur.parent:
+        if not skip_position and not past_list_item and cur.parent:
             sibs = [s for s in cur.parent.children if s.name is not None]
             if len(sibs) > 1:
                 sel += f":nth-child({sibs.index(cur) + 1})"
@@ -295,7 +335,10 @@ def _rank_override_node(candidate_node, target_rank=1):
     for _ in range(15):
         if cur.parent is None:
             break
-        sibs = [s for s in cur.parent.children if s.name == cur.name]
+        sibs = [
+            s for s in cur.parent.children
+            if s.name == cur.name and _same_repeating_item(cur, s)
+        ]
         if len(sibs) >= 3 or cur.name in ['li', 'tr']:
             list_item_node = cur
             list_container = cur.parent
@@ -306,7 +349,10 @@ def _rank_override_node(candidate_node, target_rank=1):
 
     if not list_container:
         return None
-    valid = [s for s in list_container.children if s.name == list_item_node.name]
+    valid = [
+        s for s in list_container.children
+        if s.name == list_item_node.name and _same_repeating_item(list_item_node, s)
+    ]
     if not valid:
         return None
     target_item = valid[target_rank - 1] if len(valid) >= target_rank else valid[0]

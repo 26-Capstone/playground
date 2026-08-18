@@ -197,18 +197,15 @@ const GET_SELECTOR_FN = `
     return vowels / letters.length < 0.25;
   }
 
-  function stableAttr(el) {
+  function stableAttrName(el) {
     // aria-colindex encodes which column of an ARIA grid this cell is —
     // semantic and stable across page loads, unlike CSS-in-JS hash classes
     // (e.g. Spotify's track-row cells) that can regenerate on every render
     // even though the tracklist-row wrapper's data-testid stays constant.
     for (const attr of ['data-testid','data-test','data-id','data-name','aria-colindex','aria-label','name']) {
-      if (el.hasAttribute(attr)) {
-        const v = el.getAttribute(attr);
-        return '[' + attr + '=' + JSON.stringify(v) + ']';
-      }
+      if (el.hasAttribute(attr)) return attr;
     }
-    return '';
+    return null;
   }
 
   function buildSelector(el, debugTrace) {
@@ -218,9 +215,22 @@ const GET_SELECTOR_FN = `
     while (cur && cur.tagName && cur !== document.documentElement) {
       if (cur.id) { parts.unshift('#' + CSS.escape(cur.id)); break; }
       let s = cur.tagName.toLowerCase();
-      const attr = stableAttr(cur);
-      if (attr) {
-        s += attr;
+      const attrName = stableAttrName(cur);
+      let skipPosition = false;
+      if (attrName) {
+        const v = cur.getAttribute(attrName);
+        s += '[' + attrName + '=' + JSON.stringify(v) + ']';
+        // An attribute like data-testid="tracklist-row" repeats across every
+        // row, so position is still needed to say which one. An attribute
+        // like aria-colindex="3" is already unique among this node's
+        // same-tag siblings — appending nth-of-type on top is redundant, and
+        // actively fragile: if sibling structure shifts slightly on a later
+        // page load (e.g. a conditionally-rendered column), the DOM-order
+        // count can stop landing on the element the attribute already
+        // uniquely identifies.
+        const sameAttrSibs = Array.from(cur.parentElement?.children || [])
+          .filter(n => n.tagName === cur.tagName && n.getAttribute(attrName) === v);
+        skipPosition = sameAttrSibs.length === 1;
       } else {
         const cls = Array.from(cur.classList)
           .filter(c => c !== '__doma_hl__' && !isHashClass(c))
@@ -231,7 +241,7 @@ const GET_SELECTOR_FN = `
       }
       const sameTagSibs = Array.from(cur.parentElement?.children || [])
         .filter(n => n.tagName === cur.tagName);
-      if (sameTagSibs.length > 1)
+      if (!skipPosition && sameTagSibs.length > 1)
         s += ':nth-of-type(' + (sameTagSibs.indexOf(cur) + 1) + ')';
       parts.unshift(s);
       let count = -1;

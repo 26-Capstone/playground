@@ -711,7 +711,7 @@ function ApprovalsScreen({ onBack, onAction }) {
             style={{ color: 'var(--text-dim)' }}
           />
           <span>
-            {p.scraper_id} — {p.scraper_name}
+            {p.scraperId} — {p.scraperName}
           </span>
           <span
             className="chip warn"
@@ -753,7 +753,7 @@ function ApprovalsScreen({ onBack, onAction }) {
           }>
           The AI's candidate confidence fell below the threshold.{' '}
           Please review the{' '}
-          <strong style={{ color: 'var(--text)' }}>{p.scraper_name}</strong>{' '}
+          <strong style={{ color: 'var(--text)' }}>{p.scraperName}</strong>{' '}
           scraper.
         </SectionTitle>
 
@@ -784,7 +784,7 @@ function ApprovalsScreen({ onBack, onAction }) {
               <span
                 className="dim mono"
                 style={{ fontSize: 11, marginLeft: 'auto' }}>
-                {p.created_at}
+                {p.createdAt}
               </span>
             </div>
 
@@ -815,7 +815,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                     wordBreak: 'break-all',
                     whiteSpace: 'pre-wrap',
                   }}>
-                  {p.old_selector}
+                  {p.oldSelector}
                 </pre>
               </div>
 
@@ -859,11 +859,11 @@ function ApprovalsScreen({ onBack, onAction }) {
                     wordBreak: 'break-all',
                     whiteSpace: 'pre-wrap',
                   }}>
-                  {p.proposed_selector || '(no suggestion)'}
+                  {p.proposedSelector || '(no suggestion)'}
                 </pre>
               </div>
 
-              {p.extracted_text && (
+              {p.extractedText && (
                 <div
                   style={{
                     padding: '10px 14px',
@@ -876,7 +876,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                     style={{ fontSize: 10.5, marginBottom: 4 }}>
                     Extracted text
                   </div>
-                  <div style={{ fontSize: 13 }}>{p.extracted_text}</div>
+                  <div style={{ fontSize: 13 }}>{p.extractedText}</div>
                 </div>
               )}
 
@@ -1096,7 +1096,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                     gap: 6,
                   }}>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>
-                    {p.scraper_name}
+                    {p.scraperName}
                   </div>
                   <span
                     className="chip"
@@ -1107,7 +1107,7 @@ function ApprovalsScreen({ onBack, onAction }) {
                 <div
                   className="dim mono"
                   style={{ fontSize: 11 }}>
-                  {p.scraper_id}
+                  {p.scraperId}
                 </div>
               </div>
               <div
@@ -1118,8 +1118,8 @@ function ApprovalsScreen({ onBack, onAction }) {
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
                 }}
-                title={p.old_selector}>
-                {p.old_selector}
+                title={p.oldSelector}>
+                {p.oldSelector}
               </div>
               <div
                 className="mono"
@@ -1130,8 +1130,8 @@ function ApprovalsScreen({ onBack, onAction }) {
                   whiteSpace: 'nowrap',
                   color: 'var(--ok)',
                 }}
-                title={p.proposed_selector}>
-                {p.proposed_selector || '—'}
+                title={p.proposedSelector}>
+                {p.proposedSelector || '—'}
               </div>
               <div
                 className="mono"
@@ -1150,7 +1150,7 @@ function ApprovalsScreen({ onBack, onAction }) {
               <div
                 className="dim mono"
                 style={{ fontSize: 11 }}>
-                {p.created_at}
+                {p.createdAt}
               </div>
               <div
                 style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>

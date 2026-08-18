@@ -72,22 +72,28 @@ async function waitForStableContent(page, maxWaitMs) {
 }
 
 async function waitForContent(page, selector, timeoutMs) {
-  // Waiting on the selector alone is a dead wait whenever it no longer
-  // matches anything — exactly the situation self-heal runs in, since it
-  // only fires once the selector is already broken. That dead wait burns
-  // the whole budget while providing zero signal about whether the rest of
-  // the page ever finished rendering, so the V2 snapshot captured right
-  // after can end up being an unrendered skeleton. Racing it against the
-  // selector-agnostic stabilization check means we still notice once the
-  // page itself has settled, even though the target selector never will.
-  await Promise.race([
-    page
-      .waitForFunction(new Function('sel', `return (${WAIT_FOR_CONTENT_FN_SRC})(sel)`), selector, {
-        timeout: timeoutMs,
-      })
-      .catch(() => {}),
-    waitForStableContent(page, timeoutMs),
-  ]);
+  // The selector gets its own full chance first. Racing it against page
+  // stabilization (an earlier attempt to avoid wasting the whole budget on
+  // a selector that's structurally broken and will never match) backfired
+  // for a *working* selector whose own content just arrives a little late —
+  // e.g. a play-count number populated by a slightly-delayed secondary
+  // fetch, which barely moves the page's overall text length. Stabilization
+  // would declare the page "done" before that number ever showed up, so we
+  // gave up and called page.$eval a beat too early — on a selector that was
+  // correct all along. Only fall back to the stabilization signal once the
+  // selector has genuinely had its full timeout and still didn't appear —
+  // at that point extraction is going to fail regardless, so this just gives
+  // self-heal's V2 snapshot a page that's as loaded as it's going to get,
+  // capped well under the remaining budget rather than eating into it.
+  const matched = await page
+    .waitForFunction(new Function('sel', `return (${WAIT_FOR_CONTENT_FN_SRC})(sel)`), selector, {
+      timeout: timeoutMs,
+    })
+    .then(() => true)
+    .catch(() => false);
+  if (matched) return;
+
+  await waitForStableContent(page, Math.min(5000, timeoutMs));
 }
 
 async function runScraper({ id, name, url, css_selector, user_intent, extra_fields }) {

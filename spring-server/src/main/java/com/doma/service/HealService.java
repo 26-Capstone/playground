@@ -129,17 +129,8 @@ public class HealService {
             scraper.setLastRunAt(now);
             scraperRepository.save(scraper);
 
-            HealProposal proposal = new HealProposal();
-            proposal.setScraperId(scraperId);
-            proposal.setScraperName(scraper.getName());
-            proposal.setOldSelector(scraper.getCssSelector());
-            proposal.setProposedSelector((String) result.getOrDefault("robust_selector", ""));
-            proposal.setExtractedText((String) result.getOrDefault("extracted_text", ""));
-            proposal.setConfidence(confidence);
-            proposal.setReasoning((String) result.getOrDefault("reasoning", ""));
-            proposal.setV1Html(v1Html);
-            proposal.setV2Html(v2Html);
-            healProposalRepository.save(proposal);
+            upsertPendingProposal(scraperId, scraper.getName(), null, scraper.getCssSelector(),
+                result, confidence, v1Html, v2Html);
             sendHealSlackAlert(scraper, null, scraper.getCssSelector(), result, confidence, "pending", now);
             log.info("[healer] {} below confidence threshold ({}%) → saved to approval queue", scraper.getName(), Math.round(confidence * 100));
 
@@ -205,24 +196,43 @@ public class HealService {
             log.info("[healer] {} extra field '{}' auto-recovery complete (confidence {}%)", scraper.getName(), label, Math.round(confidence * 100));
 
         } else if ("healed".equals(status)) {
-            HealProposal proposal = new HealProposal();
-            proposal.setScraperId(scraperId);
-            proposal.setScraperName(scraper.getName());
-            proposal.setFieldLabel(label);
-            proposal.setOldSelector(selector);
-            proposal.setProposedSelector((String) result.getOrDefault("robust_selector", ""));
-            proposal.setExtractedText((String) result.getOrDefault("extracted_text", ""));
-            proposal.setConfidence(confidence);
-            proposal.setReasoning((String) result.getOrDefault("reasoning", ""));
-            proposal.setV1Html(v1Html);
-            proposal.setV2Html(v2Html);
-            healProposalRepository.save(proposal);
+            upsertPendingProposal(scraperId, scraper.getName(), label, selector,
+                result, confidence, v1Html, v2Html);
             sendHealSlackAlert(scraper, label, selector, result, confidence, "pending", LocalDateTime.now().format(FMT));
             log.info("[healer] {} extra field '{}' below confidence threshold ({}%) → saved to approval queue", scraper.getName(), label, Math.round(confidence * 100));
 
         } else {
             log.info("[healer] {} extra field '{}' cannot heal — {}", scraper.getName(), label, result.get("reason"));
         }
+    }
+
+    /**
+     * Below-threshold heal results go here instead of straight to save() — on a
+     * short schedule (e.g. every 15m), a selector that stays broken re-triggers
+     * healing on every run, and without this the approval queue filled up with a
+     * fresh duplicate row per run for the same unresolved scraper/field while the
+     * original just sat there awaiting review. Reusing the existing pending
+     * proposal keeps one live row per broken field, refreshed with the latest
+     * attempt's data.
+     */
+    private void upsertPendingProposal(String scraperId, String scraperName, String fieldLabel,
+                                        String oldSelector, Map<String, Object> result, double confidence,
+                                        String v1Html, String v2Html) {
+        HealProposal proposal = healProposalRepository
+            .findFirstByScraperIdAndFieldLabelAndStatusOrderByCreatedAtDesc(scraperId, fieldLabel, "pending")
+            .orElseGet(HealProposal::new);
+        proposal.setScraperId(scraperId);
+        proposal.setScraperName(scraperName);
+        proposal.setFieldLabel(fieldLabel);
+        proposal.setOldSelector(oldSelector);
+        proposal.setProposedSelector((String) result.getOrDefault("robust_selector", ""));
+        proposal.setExtractedText((String) result.getOrDefault("extracted_text", ""));
+        proposal.setConfidence(confidence);
+        proposal.setReasoning((String) result.getOrDefault("reasoning", ""));
+        proposal.setV1Html(v1Html);
+        proposal.setV2Html(v2Html);
+        proposal.setCreatedAt(LocalDateTime.now().format(FMT));
+        healProposalRepository.save(proposal);
     }
 
     /**

@@ -1329,18 +1329,39 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                   }));
                   if (onScraperUpdate) onScraperUpdate(data.scraper);
                   const r = data.result;
-                  setRunMsg(
-                    r.status === 'healthy'
-                      ? `✓ Collection complete — "${r.value}"`
-                      : r.heal?.status === 'healed'
-                        ? `⚡ Self-healing succeeded`
-                        : r.heal?.status === 'pending'
-                          ? `⏳ Confidence below threshold — pending approval`
-                          : r.heal?.status === 'skipped'
-                            ? `✗ Selector mismatch — use 'Reselect selector'`
-                            : `✗ Selector mismatch — ${r.heal?.reason || 'element not found'}`,
-                  );
-                  setRunState('done');
+                  if (r.status === 'healthy') {
+                    setRunMsg(`✓ Collection complete — "${r.value}"`);
+                    setRunState('done');
+                    return;
+                  }
+                  // Self-heal runs on a background thread server-side and was
+                  // never reflected in this response (there's no `r.heal` —
+                  // that field doesn't exist), so data.scraper.status here is
+                  // just the transitional "healing" state, not the outcome.
+                  // Poll once for the real result instead of guessing at one.
+                  setRunMsg('⏳ Collection failed — attempting self-heal…');
+                  setTimeout(async () => {
+                    try {
+                      const s = await fetch(`/api/scrapers/${c.id}`).then((res) =>
+                        res.json(),
+                      );
+                      setC((prev) => ({ ...prev, ...s, spark: prev.spark }));
+                      if (onScraperUpdate) onScraperUpdate(s);
+                      setRunMsg(
+                        s.status === 'healthy'
+                          ? `⚡ Self-healing succeeded — "${s.lastValue}"`
+                          : s.status === 'pending'
+                            ? `⏳ Confidence below threshold — pending approval`
+                            : `✗ Self-healing failed — selector may need manual reselection`,
+                      );
+                    } catch {
+                      setRunMsg(
+                        '✗ Collection failed — check the approval queue for self-heal status',
+                      );
+                    } finally {
+                      setRunState('done');
+                    }
+                  }, 6000);
                 } catch (e) {
                   setRunMsg(`Error: ${e.message}`);
                   setRunState('error');

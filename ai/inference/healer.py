@@ -253,6 +253,35 @@ def _class_selector(node):
     return '.' + '.'.join(_escape_css_ident(c) for c in classes)
 
 
+_NAV_ROLES = {'tab', 'tablist', 'menuitem', 'menu', 'menubar', 'navigation'}
+
+
+def _looks_navigational(node):
+    """Whether this node (or one of its near ancestors) is a UI navigation
+    affordance — a tab, menu item, or link to another page — rather than a
+    value the page is displaying right now. The prompt already tells the LLM
+    not to pick these (a tab that *leads to* the data isn't the data), but it
+    doesn't reliably comply — it has repeatedly picked exactly this kind of
+    element with reasoning like "clicking this tab would show the real
+    value." This is a hard backstop: excluded from the candidate pool
+    entirely, so there's nothing for the LLM to pick even if it wants to."""
+    el = node
+    for _ in range(4):
+        if el is None or el.name is None:
+            break
+        role = (el.get('role') or '').lower()
+        if role in _NAV_ROLES:
+            return True
+        if el.get('data-landing-url') or el.get('aria-selected') is not None:
+            return True
+        if el.name == 'a':
+            href = el.get('href') or ''
+            if href and not href.startswith('#'):
+                return True
+        el = el.parent
+    return False
+
+
 def _same_repeating_item(a, b):
     """Whether a and b look like two instances of the same repeating list
     item, not just incidentally-same-tag siblings that play different roles
@@ -568,9 +597,13 @@ def heal_target(
     v2_nodes   = soup_v2.find_all()
     v2_pos_info = ({id(t): i for i, t in enumerate(v2_nodes)}, len(v2_nodes))
 
-    # 후보 수집 (텍스트 있고 50자 미만인 리프 노드)
+    # 후보 수집 (텍스트 있고 50자 미만인 리프 노드, 네비게이션 요소 제외)
     candidates = soup_v2.find_all(['b', 'td', 'span', 'div', 'a', 'p', 'strong', 'em', 'li'])
-    filtered   = [c for c in candidates if c.get_text(strip=True) and len(c.get_text(strip=True)) < 50]
+    filtered   = [
+        c for c in candidates
+        if c.get_text(strip=True) and len(c.get_text(strip=True)) < 50
+        and not _looks_navigational(c)
+    ]
 
     if not filtered:
         # V2 HTML에 텍스트를 가진 후보가 하나도 없으면(예: CSR 페이지가 아직 데이터를

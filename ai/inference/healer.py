@@ -631,28 +631,37 @@ def heal_target(
                 break
 
     # 셀렉터 검증 + 랭킹 타겟 override
-    robust_selector = llm_result.get("robust_selector") or generate_full_selector(healed_node)
+    #
+    # The LLM is asked to hand-edit a candidate's own selector text (e.g. bump
+    # an nth-child index to point at rank #1), but it doesn't reliably follow
+    # that instruction — sometimes it free-writes a selector from scratch, and
+    # even when it "just changes the number" it doesn't know our own rules for
+    # when position is redundant (see generate_full_selector / _class_selector).
+    # Trusting that string when it happened to validate against V2 at heal
+    # time is exactly how the same "nth-of-type stacked on an already-unique
+    # attribute" selector kept getting re-saved no matter how much
+    # generate_full_selector itself was fixed — it was simply never being
+    # called. The LLM's text is now used only to detect the ranking-override
+    # signal below (is it pointing at a different, better node?); the selector
+    # string that actually gets saved always comes from our own
+    # generate_full_selector(), never from the LLM's own CSS.
+    llm_selector = llm_result.get("robust_selector") or ""
     is_ranking = any(kw in target_name for kw in _RANKING_KEYWORDS)
 
-    try:
-        test_node = soup_v2.select_one(robust_selector)
+    if llm_selector:
+        try:
+            test_node = soup_v2.select_one(llm_selector)
+        except Exception:
+            test_node = None
         if test_node and test_node != healed_node and is_ranking and test_node.get_text(strip=True):
             healed_node = test_node
-        elif not test_node:
-            # LLM이 준 robust_selector가 V2 어디에도 안 걸리는 경우 — 이 문자열을 그대로
-            # 저장하면 나중에 실제 브라우저에서 항상 매칭 실패한다. 검증된 healed_node
-            # 기준으로 다시 만든 셀렉터로 대체한다.
-            robust_selector = generate_full_selector(healed_node)
-    except Exception:
-        robust_selector = generate_full_selector(healed_node)
+
+    robust_selector = generate_full_selector(healed_node)
 
     if is_ranking:
         override = _rank_override_node(filtered[original_idx], target_rank=1)
         if override and override.get_text(strip=True):
             healed_node = override
-            # override로 healed_node가 바뀌었는데 robust_selector를 안 맞춰주면, 미리보기
-            # 텍스트(healed_node 기준)와 실제 저장되는 셀렉터가 서로 다른 노드를 가리키게
-            # 된다 — 승인해도 나중에 재수집 시 못 찾거나 다른 값을 가져오는 원인이었다.
             robust_selector = generate_full_selector(healed_node)
 
     return {

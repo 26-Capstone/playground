@@ -198,7 +198,11 @@ const GET_SELECTOR_FN = `
   }
 
   function stableAttr(el) {
-    for (const attr of ['data-testid','data-test','data-id','data-name','aria-label','name']) {
+    // aria-colindex encodes which column of an ARIA grid this cell is —
+    // semantic and stable across page loads, unlike CSS-in-JS hash classes
+    // (e.g. Spotify's track-row cells) that can regenerate on every render
+    // even though the tracklist-row wrapper's data-testid stays constant.
+    for (const attr of ['data-testid','data-test','data-id','data-name','aria-colindex','aria-label','name']) {
       if (el.hasAttribute(attr)) {
         const v = el.getAttribute(attr);
         return '[' + attr + '=' + JSON.stringify(v) + ']';

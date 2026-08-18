@@ -196,8 +196,10 @@ def _extract_delta_features(v1_node, v2_cand, v1_pos_info, v2_pos_info):
 # one a human would get from the picker. Without this, generate_full_selector
 # ignored attributes like data-testid entirely and fell straight to raw
 # class + nth-child chains, even on sites (e.g. Spotify's web player) that
-# expose stable test IDs on exactly the nodes that matter.
-_STABLE_ATTRS = ['data-testid', 'data-test', 'data-id', 'data-name', 'aria-label', 'name']
+# expose stable test IDs on exactly the nodes that matter. aria-colindex is
+# included because some sites' cell-level classes regenerate on every render
+# even though their ARIA grid semantics (and their row's data-testid) don't.
+_STABLE_ATTRS = ['data-testid', 'data-test', 'data-id', 'data-name', 'aria-colindex', 'aria-label', 'name']
 
 
 def _stable_attr_selector(node):
@@ -364,6 +366,11 @@ def _call_llm(target_name, user_intent, v1_text, v1_css,
 
 3. **튼튼한 CSS 선택자 작성**:
    - 의미 있는 고유 속성(class, id)을 활용하고, 순위 목적이면 :nth-child(X)를 포함해 유일성 보장.
+
+4. **네비게이션 요소는 데이터가 아니다 (반드시 준수)**:
+   - robust_selector가 가리키는 요소는 반드시 [사용자 목적]이 요구하는 실제 데이터 값(예: 브랜드명이면 "블랙야크" 같은 브랜드명, 가격이면 숫자)을 **지금 이 순간 담고 있는** 텍스트 요소여야 해.
+   - "이 탭/링크를 클릭하면 원하는 데이터가 있는 페이지로 이동한다"는 이유로 탭, 메뉴, "더보기"/"랭킹" 같은 네비게이션 링크나 버튼을 고르면 안 돼 — 그건 데이터가 아니라 페이지 이동 수단이야. [과거 텍스트]와 같은 종류의 값이 아니라 메뉴/탭 레이블(예: "랭킹", "Home", "더보기")이라면 그 후보는 제외해.
+   - V2 후보군 전체를 살펴봐도 실제 데이터를 담은 요소가 하나도 없다면(예: 아직 목록 페이지로 진입하기 전 상태), 억지로 그럴듯한 후보를 골라내지 마. 이 경우 "selected_id": null, "confidence": 0.0으로 정직하게 응답하고, reasoning에 "V2에 실제 데이터가 없고 웹사이트 구조가 근본적으로 바뀌었을 가능성"을 명시해 — 틀린 답을 내는 것보다 모른다고 하는 게 낫다.
 
 아래 JSON 포맷으로 출력해.
 {{

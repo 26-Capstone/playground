@@ -4896,8 +4896,9 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
         display: 'grid',
         gridTemplateColumns: '1.1fr 1fr',
         gap: 'var(--s-6)',
+        alignItems: 'start',
       }}>
-      <div>
+      <div style={{ minWidth: 0 }}>
         <FieldLabel>Alternative data templates</FieldLabel>
         <div
           className="muted"
@@ -4947,6 +4948,8 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
                   background: on ? 'var(--accent-soft)' : 'var(--bg-2)',
                   borderRadius: 10,
                   minHeight: 104,
+                  minWidth: 0,
+                  whiteSpace: 'normal',
                 }}>
                 <div
                   style={{
@@ -5019,7 +5022,7 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
         </div>
       </div>
 
-      <div>
+      <div style={{ minWidth: 0 }}>
         <FieldLabel>Or, write it in plain language</FieldLabel>
         <div
           className="muted"
@@ -5098,6 +5101,8 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
                   borderColor: on ? 'var(--accent)' : 'var(--border)',
                   background: on ? 'var(--accent-soft)' : 'var(--bg-2)',
                   color: on ? 'var(--text)' : 'var(--text-mute)',
+                  minWidth: 0,
+                  whiteSpace: 'normal',
                 }}>
                 <div
                   style={{
@@ -5124,7 +5129,7 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
                     />
                   )}
                 </div>
-                <div style={{ textAlign: 'left' }}>
+                <div style={{ textAlign: 'left', minWidth: 0 }}>
                   <div
                     style={{
                       fontSize: 12.5,
@@ -5170,6 +5175,8 @@ function WizardStep2({ intent, setIntent, domain, setDomain }) {
               background: 'transparent',
               border: 0,
               padding: 0,
+              whiteSpace: 'pre-wrap',
+              overflowWrap: 'anywhere',
             }}>{`domain: ${domain}
 user_intent: """${intent || '(the sentence you enter here)'}"""
 

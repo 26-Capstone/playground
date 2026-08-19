@@ -16,6 +16,7 @@ npm-debug.log*
 # build output
 client/dist/
 client/.vite/
+server/client/
 
 # SQLite DB
 server/doma.db

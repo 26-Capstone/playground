@@ -5193,9 +5193,9 @@ function WizardStep3({
   setPickTarget,
 }) {
   const canvasRef = React.useRef(null);
+  const hlRef = React.useRef(null);
   const wsRef = React.useRef(null);
   const stateRef = React.useRef('connecting');
-  const lastMoveAt = React.useRef(0);
   const pickTargetRef = React.useRef(pickTarget);
 
   const [connState, _setConn] = React.useState('connecting');
@@ -5240,6 +5240,24 @@ function WizardStep3({
         img.src = 'data:image/jpeg;base64,' + msg.data;
         return;
       }
+      if (msg.type === 'hittest') {
+        const hl = hlRef.current;
+        const canvas = canvasRef.current;
+        if (!hl || !canvas) return;
+        const r = msg.rect;
+        if (!r) { hl.style.display = 'none'; return; }
+        const sx = canvas.clientWidth / REMOTE_W;
+        const sy = canvas.clientHeight / REMOTE_H;
+        hl.style.left = (r.left * sx) + 'px';
+        hl.style.top = (r.top * sy) + 'px';
+        hl.style.width = (r.width * sx) + 'px';
+        hl.style.height = (r.height * sy) + 'px';
+        hl.style.outline = r.blocked ? '2px solid #E04A4A' : '2px solid #3182F6';
+        hl.style.background = r.blocked ? 'rgba(224,74,74,0.10)' : 'rgba(49,130,246,0.10)';
+        hl.style.boxShadow = r.blocked ? '0 0 0 4px rgba(224,74,74,0.15)' : '0 0 0 4px rgba(49,130,246,0.15)';
+        hl.style.display = 'block';
+        return;
+      }
       if (msg.type === 'status') {
         setConn(msg.status);
         if (msg.nodeCount) setNodeCount(msg.nodeCount);
@@ -5247,6 +5265,7 @@ function WizardStep3({
           const full = /^https?:\/\//i.test(url) ? url : 'https://' + url;
           ws.send(JSON.stringify({ type: 'navigate', url: full }));
         }
+        if (msg.status === 'navigating' && hlRef.current) hlRef.current.style.display = 'none';
         return;
       }
       if (msg.type === 'selector') {
@@ -5298,10 +5317,11 @@ function WizardStep3({
 
   const onMouseMove = (e) => {
     if (stateRef.current !== 'ready') return;
-    const now = Date.now();
-    if (now - lastMoveAt.current < 45) return;
-    lastMoveAt.current = now;
     wsRef.current?.send(JSON.stringify({ type: 'mousemove', ...coords(e) }));
+  };
+
+  const onMouseLeave = () => {
+    if (hlRef.current) hlRef.current.style.display = 'none';
   };
 
   const onClick = (e) => {
@@ -5805,7 +5825,18 @@ function WizardStep3({
                 : 'default',
             }}
             onMouseMove={onMouseMove}
+            onMouseLeave={onMouseLeave}
             onClick={onClick}
+          />
+          <div
+            ref={hlRef}
+            style={{
+              position: 'absolute',
+              pointerEvents: 'none',
+              display: 'none',
+              borderRadius: 3,
+              zIndex: 2,
+            }}
           />
         </div>
       </div>
@@ -6750,9 +6781,9 @@ function ExtraFieldsEditor({ fields, onFieldsChange, pickTarget, onPickTarget, i
 
 function SelectorRepickPanel({ scraper, onClose, onSaved }) {
   const canvasRef = React.useRef(null);
+  const hlRef = React.useRef(null);
   const wsRef = React.useRef(null);
   const stateRef = React.useRef('connecting');
-  const lastMoveAt = React.useRef(0);
   const testResolveRef = React.useRef(null);
 
   const [connState, _setConn] = React.useState('connecting');
@@ -6810,6 +6841,24 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
         img.src = 'data:image/jpeg;base64,' + msg.data;
         return;
       }
+      if (msg.type === 'hittest') {
+        const hl = hlRef.current;
+        const canvas = canvasRef.current;
+        if (!hl || !canvas) return;
+        const r = msg.rect;
+        if (!r) { hl.style.display = 'none'; return; }
+        const sx = canvas.clientWidth / REMOTE_W;
+        const sy = canvas.clientHeight / REMOTE_H;
+        hl.style.left = (r.left * sx) + 'px';
+        hl.style.top = (r.top * sy) + 'px';
+        hl.style.width = (r.width * sx) + 'px';
+        hl.style.height = (r.height * sy) + 'px';
+        hl.style.outline = r.blocked ? '2px solid #E04A4A' : '2px solid #3182F6';
+        hl.style.background = r.blocked ? 'rgba(224,74,74,0.10)' : 'rgba(49,130,246,0.10)';
+        hl.style.boxShadow = r.blocked ? '0 0 0 4px rgba(224,74,74,0.15)' : '0 0 0 4px rgba(49,130,246,0.15)';
+        hl.style.display = 'block';
+        return;
+      }
       if (msg.type === 'status') {
         setConn(msg.status);
         if (msg.nodeCount) setNodeCount(msg.nodeCount);
@@ -6819,6 +6868,7 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
             : 'https://' + scraper.url;
           ws.send(JSON.stringify({ type: 'navigate', url: full }));
         }
+        if (msg.status === 'navigating' && hlRef.current) hlRef.current.style.display = 'none';
         return;
       }
       if (msg.type === 'selector') {
@@ -7414,9 +7464,6 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                 }}
                 onMouseMove={(e) => {
                   if (stateRef.current !== 'ready') return;
-                  const now = Date.now();
-                  if (now - lastMoveAt.current < 45) return;
-                  lastMoveAt.current = now;
                   const r = canvasRef.current.getBoundingClientRect();
                   wsRef.current?.send(
                     JSON.stringify({
@@ -7429,6 +7476,9 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                       ),
                     }),
                   );
+                }}
+                onMouseLeave={() => {
+                  if (hlRef.current) hlRef.current.style.display = 'none';
                 }}
                 onClick={(e) => {
                   if (stateRef.current !== 'ready') return;
@@ -7443,6 +7493,16 @@ function SelectorRepickPanel({ scraper, onClose, onSaved }) {
                       ...c,
                     }),
                   );
+                }}
+              />
+              <div
+                ref={hlRef}
+                style={{
+                  position: 'absolute',
+                  pointerEvents: 'none',
+                  display: 'none',
+                  borderRadius: 3,
+                  zIndex: 2,
                 }}
               />
             </div>

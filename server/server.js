@@ -281,55 +281,21 @@ const GET_SELECTOR_FN = `
 })
 `;
 
-const OVERLAY_SCRIPT = `
-(function() {
-  if (document.getElementById('__doma_hl__')) return;
-  const ov = document.createElement('div');
-  ov.id = '__doma_hl__';
-  ov.style.cssText = [
-    'position:fixed', 'pointer-events:none', 'z-index:2147483647',
-    'outline:2px solid #3182F6', 'background:rgba(49,130,246,0.10)',
-    'box-shadow:0 0 0 4px rgba(49,130,246,0.15)', 'border-radius:3px',
-    'transition:left 60ms,top 60ms,width 60ms,height 60ms', 'display:none'
-  ].join(';');
-  document.body.appendChild(ov);
-
-  const BLOCKED_OV = new Set(['img','picture','video','audio','canvas','svg','iframe','object','embed','script','style','meta','link','noscript','br','hr','source','track']);
-  document.addEventListener('mousemove', function(e) {
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (!el || el.id === '__doma_hl__') { ov.style.display = 'none'; return; }
-    const r = el.getBoundingClientRect();
-    const tag = el.tagName.toLowerCase();
-    const isBlocked = BLOCKED_OV.has(tag) || (tag === 'input' && ['image','file','color','range','submit','button','reset','checkbox','radio'].includes((el.type||'').toLowerCase()));
-    ov.style.display    = 'block';
-    ov.style.left       = r.left   + 'px';
-    ov.style.top        = r.top    + 'px';
-    ov.style.width      = r.width  + 'px';
-    ov.style.height     = r.height + 'px';
-    ov.style.outline    = isBlocked ? '2px solid #E04A4A' : '2px solid #3182F6';
-    ov.style.background = isBlocked ? 'rgba(224,74,74,0.10)' : 'rgba(49,130,246,0.10)';
-    ov.style.boxShadow  = isBlocked ? '0 0 0 4px rgba(224,74,74,0.15)' : '0 0 0 4px rgba(49,130,246,0.15)';
-  });
-})();
-`;
-
 wss.on("connection", (ws) => {
   let browser = null;
   let page = null;
   let cdp = null;
   let ready = false;
-  let lastMoveAt = 0;
   let semaphoreReleased = false;
   let pendingMove = null;
   let moveInFlight = false;
 
-  // On heavy pages that keep re-rendering live, like Toss Securities, a
-  // single page.mouse.move() CDP round trip can take longer than the 45ms
-  // throttle interval — if handled sequentially with await, backlogged
-  // coordinates pile up in the queue, so even after the user stops moving
-  // the cursor, it keeps visibly following the "backlogged path" for a
-  // while. We keep only the latest coordinate and drop the rest
-  // (coalescing) so the cursor always tracks the "current position" only.
+  // On heavy pages, a single mouse.move()+evaluate() CDP round-trip can take
+  // longer than the interval between incoming mousemove messages. If handled
+  // sequentially with await, backlogged coordinates pile up and the cursor
+  // keeps following a stale "backlogged path" after the user stops moving.
+  // We coalesce: keep only the latest coordinate and drop all intermediate
+  // ones, so the overlay always tracks the current cursor position only.
   const flushMove = async () => {
     if (moveInFlight || !pendingMove) return;
     const { x, y } = pendingMove;
@@ -337,6 +303,19 @@ wss.on("connection", (ws) => {
     moveInFlight = true;
     try {
       await page?.mouse.move(x, y);
+      // Get hovered element rect and send immediately — much faster than waiting
+      // for a screencast JPEG frame to carry the overlay back to the client.
+      const rect = await page?.evaluate(({ px, py }) => {
+        const BLOCKED = new Set(['img','picture','video','audio','canvas','svg','iframe','object','embed','script','style','meta','link','noscript','br','hr','source','track']);
+        const el = document.elementFromPoint(px, py);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        if (!r.width && !r.height) return null;
+        const tag = el.tagName.toLowerCase();
+        const blocked = BLOCKED.has(tag) || (tag === 'input' && ['image','file','color','range','submit','button','reset','checkbox','radio'].includes((el.type || '').toLowerCase()));
+        return { left: r.left, top: r.top, width: r.width, height: r.height, blocked };
+      }, { px: x, py: y });
+      send({ type: 'hittest', rect: rect || null });
     } catch (e) {
       // Ignore transient failures, e.g. during page navigation — the next coordinate will arrive shortly
     } finally {
@@ -405,7 +384,6 @@ wss.on("connection", (ws) => {
           waitUntil: "domcontentloaded",
           timeout: 45000,
         });
-        await page.evaluate(OVERLAY_SCRIPT).catch(() => {});
         const nodeCount = await page
           .evaluate(() => document.querySelectorAll("*").length)
           .catch(() => 0);
@@ -414,9 +392,6 @@ wss.on("connection", (ws) => {
       }
 
       if (msg.type === "mousemove" && ready) {
-        const now = Date.now();
-        if (now - lastMoveAt < 45) return;
-        lastMoveAt = now;
         pendingMove = { x: msg.x, y: msg.y };
         flushMove();
       }

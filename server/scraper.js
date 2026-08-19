@@ -151,6 +151,16 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
     // Refresh the V1 snapshot on selector success (Spring uses this as v1_html on heal calls)
     if (value && !extractError) {
       fs.writeFileSync(path.join(SNAPSHOTS_DIR, `${id}_v1.html`), html, 'utf-8');
+    } else if (extractError) {
+      // Debug aid, not used by any other code path: on a primary-field
+      // failure, save exactly what this automated run actually saw. There
+      // was no way to inspect this after the fact — only the live picker
+      // (fetched separately, with real user interaction) could be checked,
+      // which isn't the same session and doesn't answer what an unattended,
+      // no-interaction automated load actually renders.
+      try {
+        fs.writeFileSync(path.join(SNAPSHOTS_DIR, `${id}_debug_failure.html`), html, 'utf-8');
+      } catch {}
     }
 
     for (const field of extra_fields || []) {

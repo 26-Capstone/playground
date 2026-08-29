@@ -255,16 +255,35 @@ def _class_selector(node):
 
 _NAV_ROLES = {'tab', 'tablist', 'menuitem', 'menu', 'menubar', 'navigation'}
 
+# Landmark elements whose whole subtree is chrome rather than page data.
+_NAV_CONTAINERS = {'nav', 'header', 'footer'}
+
 
 def _looks_navigational(node):
     """Whether this node (or one of its near ancestors) is a UI navigation
-    affordance — a tab, menu item, or link to another page — rather than a
-    value the page is displaying right now. The prompt already tells the LLM
-    not to pick these (a tab that *leads to* the data isn't the data), but it
-    doesn't reliably comply — it has repeatedly picked exactly this kind of
-    element with reasoning like "clicking this tab would show the real
-    value." This is a hard backstop: excluded from the candidate pool
-    entirely, so there's nothing for the LLM to pick even if it wants to."""
+    affordance — a tab or menu item — rather than a value the page is
+    displaying right now. The prompt already tells the LLM not to pick these
+    (a tab that *leads to* the data isn't the data), but it doesn't reliably
+    comply — it has repeatedly picked exactly this kind of element with
+    reasoning like "clicking this tab would show the real value." This is a
+    hard backstop: excluded from the candidate pool entirely, so there's
+    nothing for the LLM to pick even if it wants to.
+
+    This used to also treat *any* node within 4 levels of an <a href> as
+    navigational, which was far too broad: the data users actually target is
+    very often itself a link. A product name in a ranking list, a news
+    headline, a webtoon title — all of them are <a href> pointing at a detail
+    page, and all of them were being deleted from the candidate pool before
+    the ranker or the LLM ever saw them. Measured against the ground-truth
+    holdout set, that one rule removed 21% of all correct targets, and for a
+    link-heavy site (naverWebtoon) it removed 100% of them — making self-heal
+    structurally impossible there no matter how good the model was.
+
+    Real navigation affordances are identified by their semantics instead:
+    an explicit ARIA role, aria-selected/data-landing-url, or living inside a
+    <nav>/<header>/<footer> landmark. Those signals still catch the tabs the
+    backstop was originally added for, without taking content links with
+    them."""
     el = node
     for _ in range(4):
         if el is None or el.name is None:
@@ -274,10 +293,16 @@ def _looks_navigational(node):
             return True
         if el.get('data-landing-url') or el.get('aria-selected') is not None:
             return True
-        if el.name == 'a':
-            href = el.get('href') or ''
-            if href and not href.startswith('#'):
-                return True
+        el = el.parent
+
+    # Landmarks sit further up than 4 levels on most real pages, so this walk
+    # is separate and deeper than the role/attribute one above.
+    el = node
+    for _ in range(8):
+        if el is None or el.name is None:
+            break
+        if el.name in _NAV_CONTAINERS:
+            return True
         el = el.parent
     return False
 

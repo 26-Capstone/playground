@@ -8,6 +8,7 @@ import json
 import pathlib
 import difflib
 
+import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup
 import joblib
@@ -124,6 +125,159 @@ def _ancestor_tags(node, levels=5):
             break
     return tags
 
+# ─── 앵커(칼럼 헤더 / 섹션 제목) ────────────────────────────────────────────
+#
+# src/processing/feature_extractor.py와 동일 구현. 값이 학습 때와 달라지면
+# 안 되므로 한쪽만 고치지 말 것.
+#
+# 기존 피처는 전부 "V1 노드와 이 후보가 구조적으로 얼마나 닮았나"였다. 사이트가
+# 개편되면 클래스명도 DOM 경로도 전부 바뀌어, 모든 후보가 똑같이 안 닮은 상태가
+# 되어 판별이 되지 않았다. 반면 '거래대금'(칼럼 헤더)이나 '새로운 베스트도전'
+# (섹션 제목)은 남는다 — 개편 상황에서 유일하게 기댈 수 있는 신호다.
+
+_HEADING_TAGS = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'caption', 'legend'}
+
+
+def _build_heading_map(soup, max_len=40):
+    """각 요소에 '문서 순서상 직전 제목'을 매긴다.
+
+    제목 후보를 class="...title..."까지 넓히면 항목 자신의 제목(웹툰 이름 등)이
+    잡혀 섹션 이름을 덮어쓴다. 반복 항목을 제외해 더 정확히 만들어봤지만 홀드아웃
+    Recall@30이 +8 → +5로 나빠졌다. 시맨틱 제목 태그만 쓰는 쪽이 측정상 낫다.
+    """
+    out, last = {}, ''
+    for el in soup.find_all(True):
+        if el.name in _HEADING_TAGS:
+            t = el.get_text(strip=True)
+            if t:
+                last = t[:max_len]
+        out[id(el)] = last
+    return out
+
+
+def _build_column_header_map(soup, max_len=40):
+    """표의 각 데이터 셀에 같은 칼럼의 헤더 텍스트를 매긴다."""
+    out = {}
+    for table in soup.find_all('table'):
+        header = None
+        for tr in table.find_all('tr'):
+            cells = [c for c in tr.children if getattr(c, 'name', None) in ('td', 'th')]
+            if not cells:
+                continue
+            if header is None and all(c.name == 'th' for c in cells):
+                header = [c.get_text(strip=True)[:max_len] for c in cells]
+                continue
+            if header is None:
+                continue
+            for i, c in enumerate(cells):
+                out[id(c)] = header[i] if i < len(header) else ''
+    return out
+
+
+def _anchor_maps(node):
+    """노드가 속한 문서의 앵커 맵. 문서 객체에 캐싱한다 — 후보 1,500개마다 전체
+    순회를 다시 하면 치유 한 건이 분 단위가 된다."""
+    root = node
+    while root.parent is not None:
+        root = root.parent
+    maps = getattr(root, '_doma_anchor_maps', None)
+    if maps is None:
+        maps = (_build_heading_map(root), _build_column_header_map(root))
+        root._doma_anchor_maps = maps
+    return maps
+
+
+def _column_header(node):
+    _, colmap = _anchor_maps(node)
+    cur = node
+    for _ in range(12):
+        if cur is None or getattr(cur, 'name', None) is None:
+            return ''
+        if id(cur) in colmap:
+            return colmap[id(cur)]
+        cur = cur.parent
+    return ''
+
+
+def _section_heading(node):
+    headmap, _ = _anchor_maps(node)
+    cur = node
+    for _ in range(12):
+        if cur is None or getattr(cur, 'name', None) is None:
+            return ''
+        if id(cur) in headmap:
+            return headmap[id(cur)]
+        cur = cur.parent
+    return ''
+
+
+def _anchor_similarity(a, b):
+    """앵커가 한쪽이라도 없으면 0 — '정보 없음'을 '일치'로 세지 않는다."""
+    if not a or not b:
+        return 0.0
+    return difflib.SequenceMatcher(None, a, b).ratio()
+
+
+# ─── 반복 블록 식별 ──────────────────────────────────────────────────────────
+#
+# 아래 세 함수는 src/processing/feature_extractor.py의 find_repeated_block /
+# get_block_label / get_block_identity_text를 그대로 옮긴 것이다. 학습 파이프라인은
+# 두 피처(block_label_match, block_identity_similarity)를 계산해 왔는데 추론 쪽에는
+# 구현이 없었다. heal_target이 없는 컬럼을 0으로 채우기 때문에 오류 없이 넘어갔고,
+# 모델은 그 피처를 쓰도록 학습된 채로 운영에서는 늘 0을 받고 있었다.
+#
+# 하필 이 둘이 재설계에서 살아남는 신호다 — 클래스명과 DOM 경로가 전부 바뀌어도
+# 반복 블록의 라벨(브랜드명·언론사명 같은 그룹 식별자)과 블록 본문은 남는 편이다.
+# 값이 학습 때와 달라지면 안 되므로 구현을 바꾸지 말고 원본과 동일하게 유지할 것.
+
+
+def _repeated_block(node, min_repeat=3, max_levels=8):
+    """타겟이 속한 '거의 동일한 블록이 반복되는' 조상을 찾는다. class 없는 레벨은
+    그룹 식별자로 부적합하므로 건너뛰고, 같은 class를 가진 형제가 min_repeat개
+    이상인 첫 조상을 반환한다."""
+    cur = node
+    for _ in range(max_levels):
+        if cur is None or cur.parent is None:
+            return None
+        cur = cur.parent
+        if cur.parent is None:
+            return None
+        cur_classes = set(cur.get('class') or [])
+        if not cur_classes:
+            continue
+        sibs = [s for s in cur.parent.children if getattr(s, 'name', None) == cur.name]
+        similar = [s for s in sibs if set(s.get('class') or []) & cur_classes]
+        if len(similar) >= min_repeat:
+            return cur
+    return None
+
+
+def _block_label(node):
+    """반복 블록의 첫 단어 — 보통 그룹을 식별하는 라벨이다."""
+    blk = _repeated_block(node)
+    if blk is None:
+        return ''
+    parts = blk.get_text(strip=True, separator=' ').split()
+    return parts[0] if parts else ''
+
+
+def _block_identity_text(node, max_len=60):
+    blk = _repeated_block(node)
+    if blk is None:
+        return ''
+    return blk.get_text(strip=True, separator=' ')[:max_len]
+
+
+def _text_similarity(text1, text2):
+    """feature_extractor.calc_text_similarity와 동일 규칙. 둘 다 비면 1.0,
+    한쪽만 비면 0.0 — healer의 context_similarity와 결측 처리가 다르므로 공용화하지 않는다."""
+    if not text1 and not text2:
+        return 1.0
+    if not text1 or not text2:
+        return 0.0
+    return difflib.SequenceMatcher(None, text1, text2).ratio()
+
+
 def _extract_float(text):
     clean = re.sub(r'[^\d.]', '', text)
     try:
@@ -188,6 +342,8 @@ def _extract_delta_features(v1_node, v2_cand, v1_pos_info, v2_pos_info):
     la_v2 = _list_ancestor_index(v2_cand)
     la_diff = abs(la_v1 - la_v2) if (la_v1 >= 0 and la_v2 >= 0) else -1
 
+    v1_label = _block_label(v1_node)
+
     d1 = sum(1 for c in v1_text if c.isdigit()) / len(v1_text) if v1_text else 0.0
     d2 = sum(1 for c in v2_text if c.isdigit()) / len(v2_text) if v2_text else 0.0
 
@@ -210,6 +366,9 @@ def _extract_delta_features(v1_node, v2_cand, v1_pos_info, v2_pos_info):
         "child_count_diff":         abs(_direct_child_count(v1_node) - _direct_child_count(v2_cand)),
         "text_digit_ratio_diff":    abs(d1 - d2),
         "list_ancestor_index_diff": la_diff,
+        "block_label_match":        1 if v1_label and v1_label == _block_label(v2_cand) else 0,
+        "block_identity_similarity": _text_similarity(
+            _block_identity_text(v1_node), _block_identity_text(v2_cand)),
     }
 
 
@@ -643,6 +802,37 @@ def _safe_select_one(soup, selector):
 
 # ─── 공개 인터페이스 ──────────────────────────────────────────────────────────
 
+def rank_candidates(target_v1, filtered, probs):
+    """후보를 좋은 순으로 정렬한 인덱스를 돌려준다. 모델 확률에 앵커 정렬을 얹는다.
+
+    평가(src/eval/eval_ranker.py)도 이 함수를 쓴다. 순위 결정을 양쪽에서 따로
+    구현하면 평가가 실재하지 않는 파이프라인을 재게 된다 — nav 필터와 셀렉터
+    생성에서 이미 같은 종류의 어긋남을 겪었다.
+
+    왜 앵커를 학습 피처가 아니라 규칙으로 쓰는가:
+      같은 신호를 피처로 넣어 재학습했더니 모델이 중요도 21위/22위로 사실상
+      무시하면서 트리 분기만 흔들어, 홀드아웃 Recall@30이 69.6% → 65.9%로
+      내려갔다. 학습 사이트 10곳은 기존 구조 피처가 잘 듣는 곳들이라 '개편으로
+      클래스와 DOM 경로가 통째로 무너진' 상황이 학습 분포에 아예 없다. 모델은
+      쓸 일이 없는 피처를 배울 수 없다. 규칙으로 적용하면 같은 신호가 Recall@30을
+      69.6% → 75.4%로 올린다 (naverWebtoon 0% → 50%).
+    """
+    v1_col     = _column_header(target_v1)
+    v1_section = _section_heading(target_v1)
+    if not (v1_col or v1_section):
+        return probs.argsort()[::-1]
+
+    anchor = np.array([
+        max(_anchor_similarity(v1_col, _column_header(c)),
+            _anchor_similarity(v1_section, _section_heading(c)))
+        for c in filtered
+    ])
+    # 굵게 끊어 층을 만든다. 층 안에서는 모델 확률이 순서를 정하므로, 앵커가
+    # 비슷한 후보들 사이에서는 기존 랭커의 판단을 그대로 따른다.
+    tier = np.round(anchor, 1)
+    return np.lexsort((probs, tier))[::-1]
+
+
 def heal_target(
     v1_html: str,
     v2_html: str,
@@ -707,8 +897,8 @@ def heal_target(
             df[col] = 0
     df = df[expected_columns]
 
-    probs          = model.predict_proba(df)[:, 1]
-    top_k_indices  = probs.argsort()[-TOP_K:][::-1]
+    probs         = model.predict_proba(df)[:, 1]
+    top_k_indices = rank_candidates(target_v1, filtered, probs)[:TOP_K]
 
     candidates_for_llm = [
         {

@@ -22,7 +22,31 @@ _features = None
 _llm      = None
 
 TOP_K = 30
-_RANKING_KEYWORDS = ['1위', '베스트', '순위', '랭킹', '첫 번째']
+# A bare ranking word carries no number, so it keeps the original meaning of
+# "the top one". Numbered patterns are tried first — see _requested_rank.
+_RANK_WORDS = ['첫 번째', '베스트', '순위', '랭킹', 'first', 'best']
+_RANK_PATTERNS = [
+    re.compile(r'(?:top|rank|no\.?)\s*(\d+)', re.I),   # "top1 coin name", "rank 2"
+    re.compile(r'#\s*(\d+)'),                          # "currently #1 trending"
+    re.compile(r'(\d+)\s*위'),                          # "1위 종목명"
+]
+
+
+def _requested_rank(target_name):
+    """Which position in a ranked list the user asked for, or None if this
+    target is not rank-oriented.
+
+    Replaces a Korean-only keyword list that fed a hardcoded rank of 1. Every
+    English target name ("top1 coin name") read as non-ranking, so the whole
+    ranking-correction path was dead for them; and had it fired, rank 1 is the
+    wrong answer for every "top2 ..." target.
+    """
+    for pat in _RANK_PATTERNS:
+        m = pat.search(target_name)
+        if m:
+            return int(m.group(1))
+    low = target_name.lower()
+    return 1 if any(w in low for w in _RANK_WORDS) else None
 
 
 def _get_resources():
@@ -324,6 +348,67 @@ def _same_repeating_item(a, b):
     return False
 
 
+_LEADING_NUM_RE = re.compile(r'\d+')
+
+
+def _announced_rank(item):
+    """The rank an item announces, if it opens with an ordinal badge.
+    Ranked lists render the position as the item's very first text
+    ('1SK하이닉스'), so a leading number is that item's rank."""
+    m = _LEADING_NUM_RE.match(item.get_text(strip=True))
+    return int(m.group()) if m else None
+
+
+def _looks_ranked(items):
+    """Whether these siblings are the ranked items themselves.
+
+    This is what separates a list of ranked rows from the cells of one row.
+    Cells share a class, so they satisfy the repeating-sibling test just as
+    rows do — but they read ['1SK하이닉스', '198,900원', '-2.0%'] instead of
+    1, 2, 3. Treating them as the ranked items moves a sibling index across
+    columns rather than up and down the ranking, which silently returns a
+    neighbouring field's value while still looking like a successful heal.
+    """
+    if len(items) < 3:
+        return False
+    return all(_announced_rank(it) == i + 1 for i, it in enumerate(items[:3]))
+
+
+def _repeating_siblings(item, container):
+    return [s for s in container.children
+            if s.name == item.name and _same_repeating_item(item, s)]
+
+
+def _repeating_item_levels(element):
+    """Every ancestor that could be the repeating list item, innermost first.
+
+    Returned as (item, container, path), where path replays the descent from
+    any sibling item back down to `element` as [(tag, index_among_same_tag)].
+    Collecting all levels rather than stopping at the first is what lets the
+    callers below pick the ranked list instead of a row's cells.
+    """
+    cur, path, levels = element, [], []
+    for _ in range(15):
+        if cur is None or cur.name is None or cur.parent is None:
+            break
+        sibs = [s for s in cur.parent.children
+                if s.name == cur.name and _same_repeating_item(cur, s)]
+        if len(sibs) >= 3 or cur.name in ['li', 'tr']:
+            levels.append((cur, cur.parent, list(path)))
+        same_tag = [s for s in cur.parent.children if s.name == cur.name]
+        path.insert(0, (cur.name, same_tag.index(cur) if cur in same_tag else 0))
+        cur = cur.parent
+    return levels
+
+
+def _ranked_level(levels):
+    """The level whose sibling items announce 1, 2, 3 — the real ranked list."""
+    for item, container, path in levels:
+        if _looks_ranked(_repeating_siblings(item, container)):
+            return item, container, path
+    return None
+
+
 def generate_full_selector(element):
     root = element
     while root.parent is not None:
@@ -343,18 +428,15 @@ def generate_full_selector(element):
     # layout shift up there (an ad slot, a conditional banner) changes sibling
     # counts and breaks the entire chain even though the ranked item itself never
     # moved. So ancestors above the list item are matched by tag+class only.
-    list_item = None
-    cur = element
-    while cur is not None and cur.name is not None:
-        if cur.parent:
-            sibs = [
-                s for s in cur.parent.children
-                if s.name == cur.name and _same_repeating_item(cur, s)
-            ]
-            if len(sibs) >= 3 or cur.name in ['li', 'tr']:
-                list_item = cur
-                break
-        cur = cur.parent
+    # The innermost repeating level is often a row's cells rather than the list
+    # of rows. Picking it drops the row's own position from the selector, so a
+    # heal that correctly resolved rank 2 gets saved as a class-only path that
+    # re-resolves to rank 1 on the next scrape — the value silently reverts.
+    # Prefer the level whose items announce 1, 2, 3; fall back to the innermost
+    # one for ordinary (unranked) lists.
+    levels = _repeating_item_levels(element)
+    ranked = _ranked_level(levels)
+    list_item = ranked[0] if ranked else (levels[0][0] if levels else None)
 
     path, cur = [], element
     past_list_item = False
@@ -417,37 +499,19 @@ def _expanded_context_html(node, levels=3, max_length=3000):
 # ─── 랭킹 보정 ───────────────────────────────────────────────────────────────
 
 def _rank_override_node(candidate_node, target_rank=1):
-    cur = candidate_node
-    path_from_list_item = []
-    list_item_node = list_container = None
-
-    for _ in range(15):
-        if cur.parent is None:
-            break
-        sibs = [
-            s for s in cur.parent.children
-            if s.name == cur.name and _same_repeating_item(cur, s)
-        ]
-        if len(sibs) >= 3 or cur.name in ['li', 'tr']:
-            list_item_node = cur
-            list_container = cur.parent
-            break
-        idx = sibs.index(cur)
-        path_from_list_item.insert(0, (cur.name, idx))
-        cur = cur.parent
-
-    if not list_container:
+    ranked = _ranked_level(_repeating_item_levels(candidate_node))
+    if ranked is None:
         return None
-    valid = [
-        s for s in list_container.children
-        if s.name == list_item_node.name and _same_repeating_item(list_item_node, s)
-    ]
-    if not valid:
+    item, container, path = ranked
+    valid = _repeating_siblings(item, container)
+    # Too few items to hold the requested rank: this is not the list the user
+    # meant. Falling back to the first item would quietly answer a different
+    # question than the one asked.
+    if len(valid) < target_rank:
         return None
-    target_item = valid[target_rank - 1] if len(valid) >= target_rank else valid[0]
 
-    result = target_item
-    for tag_name, child_idx in path_from_list_item:
+    result = valid[target_rank - 1]
+    for tag_name, child_idx in path:
         children = [s for s in result.children if s.name == tag_name]
         if len(children) > child_idx:
             result = children[child_idx]
@@ -455,7 +519,6 @@ def _rank_override_node(candidate_node, target_rank=1):
             result = children[0]
         else:
             return None
-
     return result if result.get_text(strip=True) else None
 
 
@@ -704,7 +767,8 @@ def heal_target(
     # string that actually gets saved always comes from our own
     # generate_full_selector(), never from the LLM's own CSS.
     llm_selector = llm_result.get("robust_selector") or ""
-    is_ranking = any(kw in target_name for kw in _RANKING_KEYWORDS)
+    requested_rank = _requested_rank(target_name)
+    is_ranking = requested_rank is not None
 
     if llm_selector:
         try:
@@ -717,7 +781,7 @@ def heal_target(
     robust_selector = generate_full_selector(healed_node)
 
     if is_ranking:
-        override = _rank_override_node(filtered[original_idx], target_rank=1)
+        override = _rank_override_node(filtered[original_idx], target_rank=requested_rank)
         if override and override.get_text(strip=True):
             healed_node = override
             robust_selector = generate_full_selector(healed_node)

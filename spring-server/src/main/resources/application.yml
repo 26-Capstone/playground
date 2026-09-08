@@ -18,4 +18,6 @@ server:
 doma:
   scraper-service-url: ${SCRAPER_SERVICE_URL:http://localhost:3001}
   python-api-url: ${PYTHON_API_URL:http://localhost:8000}
+  # 자가치유 알림에서 대시보드로 돌아가는 링크. 비워두면 링크를 넣지 않는다.
+  app-base-url: ${APP_BASE_URL:}
   api-token: ${DOMA_API_TOKEN:}

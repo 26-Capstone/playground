@@ -37,6 +37,10 @@ public class HealService {
     @Value("${doma.python-api-url}")
     private String pythonApiUrl;
 
+    /** Public address of the dashboard, so an alert can link back to it. Optional. */
+    @Value("${doma.app-base-url:}")
+    private String appBaseUrl;
+
     private static final DateTimeFormatter FMT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -103,14 +107,24 @@ public class HealService {
         double threshold  = scraper.getThreshold() / 100.0;
         String now        = LocalDateTime.now().format(FMT);
 
-        if ("healed".equals(status) && confidence >= threshold) {
+        String extracted   = (String) result.getOrDefault("extracted_text", "—");
+        // A heal can clear the confidence bar and still be wrong. The holdout
+        // evaluation put that at 8.3% of heals, and the failures share a shape:
+        // the value returned is a *different kind* of thing than the field used
+        // to hold ('37억원' becomes the row's rank badge '1'). Auto-approval
+        // overwrites cssSelector and lastValue together, so a wrong one cannot be
+        // undone by rolling back code — the previous value is already gone.
+        // Route those to the approval queue instead of trusting the confidence.
+        boolean kindChanged = valueKindChanged(scraper.getLastValue(), extracted);
+
+        if ("healed".equals(status) && confidence >= threshold && !kindChanged) {
             // Confidence threshold met → auto-recovered
             String oldSelector = scraper.getCssSelector();
             double scoreVal = Math.round(confidence * 1000.0) / 10.0;
             updateLastScore(scraperId, scoreVal);
             scraper.setStatus("healthy");
             scraper.setScore(scoreVal);
-            scraper.setLastValue((String) result.getOrDefault("extracted_text", "—"));
+            scraper.setLastValue(extracted);
             scraper.setLastRunAt(now);
             scraper.setHealedCount(scraper.getHealedCount() + 1);
             scraper.setCssSelector((String) result.getOrDefault("robust_selector", scraper.getCssSelector()));
@@ -131,11 +145,18 @@ public class HealService {
 
             upsertPendingProposal(scraperId, scraper.getName(), null, scraper.getCssSelector(),
                 result, confidence, v1Html, v2Html);
-            sendHealSlackAlert(scraper, null, scraper.getCssSelector(), result, confidence, "pending", now);
-            log.info("[healer] {} below confidence threshold ({}%) → saved to approval queue", scraper.getName(), Math.round(confidence * 100));
+            sendHealSlackAlert(scraper, null, scraper.getCssSelector(), result, confidence,
+                kindChanged ? "value_kind_changed" : "pending", now);
+            log.info("[healer] {} → approval queue ({}, confidence {}%)", scraper.getName(),
+                kindChanged ? "value kind changed" : "below confidence threshold", Math.round(confidence * 100));
 
         } else {
+            // The healer gave up. Until now this was silent — the scraper just sat
+            // at status=failed until somebody opened the dashboard. This is exactly
+            // the case a human has to resolve, so it is the one worth interrupting
+            // them for: nothing will fix itself here.
             updateScraperFailed(scraper);
+            sendHealSlackAlert(scraper, null, scraper.getCssSelector(), result, confidence, "needs_user", now);
             log.info("[healer] {} cannot heal — {}", scraper.getName(), result.get("reason"));
         }
     }
@@ -184,9 +205,12 @@ public class HealService {
         double confidence = ((Number) result.getOrDefault("confidence", 0)).doubleValue();
         double threshold  = scraper.getThreshold() / 100.0;
 
-        if ("healed".equals(status) && confidence >= threshold) {
+        String extracted   = (String) result.getOrDefault("extracted_text", "—");
+        boolean kindChanged = valueKindChanged(String.valueOf(field.get("lastValue")), extracted);
+
+        if ("healed".equals(status) && confidence >= threshold && !kindChanged) {
             field.put("selector", result.getOrDefault("robust_selector", selector));
-            field.put("lastValue", result.getOrDefault("extracted_text", "—"));
+            field.put("lastValue", extracted);
             scraper.setExtraFields(fieldsToJson(fields));
             scraper.setHealedCount(scraper.getHealedCount() + 1);
             scraperRepository.save(scraper);
@@ -198,10 +222,14 @@ public class HealService {
         } else if ("healed".equals(status)) {
             upsertPendingProposal(scraperId, scraper.getName(), label, selector,
                 result, confidence, v1Html, v2Html);
-            sendHealSlackAlert(scraper, label, selector, result, confidence, "pending", LocalDateTime.now().format(FMT));
-            log.info("[healer] {} extra field '{}' below confidence threshold ({}%) → saved to approval queue", scraper.getName(), label, Math.round(confidence * 100));
+            sendHealSlackAlert(scraper, label, selector, result, confidence,
+                kindChanged ? "value_kind_changed" : "pending", LocalDateTime.now().format(FMT));
+            log.info("[healer] {} extra field '{}' → approval queue ({}, confidence {}%)", scraper.getName(), label,
+                kindChanged ? "value kind changed" : "below confidence threshold", Math.round(confidence * 100));
 
         } else {
+            sendHealSlackAlert(scraper, label, selector, result, confidence, "needs_user",
+                LocalDateTime.now().format(FMT));
             log.info("[healer] {} extra field '{}' cannot heal — {}", scraper.getName(), label, result.get("reason"));
         }
     }
@@ -275,17 +303,54 @@ public class HealService {
         String webhookUrl = scraper.getWebhookUrl();
         if (webhookUrl == null || webhookUrl.isBlank()) return;
 
-        String statusLabel = "auto_approved".equals(status) ? "Auto-recovery complete" : "Pending approval";
+        boolean needsUser  = "needs_user".equals(status);
+        boolean kindChanged = "value_kind_changed".equals(status);
         String newSelector = (String) result.getOrDefault("robust_selector", "");
+        String extracted   = (String) result.getOrDefault("extracted_text", "");
+
+        String icon, statusLabel;
+        if (needsUser)         { icon = "🚨"; statusLabel = "Could not heal — pick the element again"; }
+        else if (kindChanged)  { icon = "⚠️"; statusLabel = "Held for review — value looks like a different field"; }
+        else if ("auto_approved".equals(status)) { icon = "🩹"; statusLabel = "Auto-recovery complete"; }
+        else                   { icon = "🩹"; statusLabel = "Pending approval"; }
 
         StringBuilder sb = new StringBuilder();
-        sb.append("🩹 *DOMA self-heal* — *").append(scraper.getName()).append("*\n");
+        sb.append(icon).append(" *DOMA self-heal* — *").append(scraper.getName()).append("*\n");
         sb.append("*Status:* `").append(statusLabel).append("`\n");
         sb.append("*Field:* ").append(fieldLabel != null ? fieldLabel : "Default").append("\n");
-        sb.append("*Selector:* `").append(oldSelector).append("` → `").append(newSelector).append("`\n");
-        sb.append("*Confidence:* ").append(Math.round(confidence * 100)).append("%\n");
+
+        if (needsUser) {
+            // There is no proposed selector to show — that is the whole point.
+            sb.append("*Selector:* `").append(oldSelector).append("` (still broken)\n");
+            Object reason = result.get("reason");
+            if (reason != null) sb.append("*Reason:* ").append(reason).append("\n");
+        } else {
+            sb.append("*Selector:* `").append(oldSelector).append("` → `").append(newSelector).append("`\n");
+            sb.append("*Confidence:* ").append(Math.round(confidence * 100)).append("%\n");
+        }
+
+        if (kindChanged) {
+            // Show both values side by side — the mismatch is the evidence, and it
+            // is far quicker to judge than a selector string.
+            sb.append("*Value:* `").append(scraper.getLastValue()).append("` → `")
+              .append(extracted).append("`\n");
+            sb.append("_Confidence cleared the bar, but the new value is a different kind of ")
+              .append("thing than this field has been returning — approve or fix it by hand._\n");
+        }
+
         sb.append("*Time:* ").append(now).append("\n");
         sb.append("*URL:* ").append(scraper.getUrl());
+        // Link straight to where the person has to act: the scraper itself when the
+        // element must be picked again, the queue when a heal is waiting on review.
+        // The client reads these query params on load (client/src/app.jsx).
+        if ((needsUser || kindChanged) && appBaseUrl != null && !appBaseUrl.isBlank()) {
+            String base = appBaseUrl.endsWith("/")
+                ? appBaseUrl.substring(0, appBaseUrl.length() - 1)
+                : appBaseUrl;
+            sb.append(needsUser
+                ? "\n*Pick the element again:* " + base + "/?scraper=" + scraper.getId()
+                : "\n*Review in the approval queue:* " + base + "/?view=approvals");
+        }
 
         Map<String, Object> textObj = new LinkedHashMap<>();
         textObj.put("type", "mrkdwn");
@@ -296,7 +361,7 @@ public class HealService {
         section.put("text", textObj);
 
         Map<String, Object> slack = new LinkedHashMap<>();
-        slack.put("text", "🩹 DOMA self-heal — " + scraper.getName());
+        slack.put("text", icon + " DOMA self-heal — " + scraper.getName() + " (" + statusLabel + ")");
         slack.put("blocks", List.of(section));
 
         HttpHeaders headers = new HttpHeaders();
@@ -307,6 +372,56 @@ public class HealService {
         } catch (Exception e) {
             log.warn("[healer] Slack alert failed {}: {}", webhookUrl, e.getMessage());
         }
+    }
+
+
+    /**
+     * Whether the healed value looks like a *different kind of thing* than what
+     * this field has been returning — not merely a different value.
+     *
+     * A price that moves from 74,432원 to 75,100원 is the field working. A price
+     * that becomes "1" is the healer having landed on the row's rank badge, and a
+     * name that becomes "8.8억원" is it having landed on the wrong column. The
+     * holdout evaluation put this class of failure at 8.3% of heals even after
+     * the ranking fixes, and confidence does not separate them: they arrive
+     * *above* the threshold, which is what makes them dangerous. Auto-approval
+     * writes cssSelector and lastValue in the same save, so once one lands the
+     * previous value is gone and no code rollback brings it back.
+     *
+     * The checks mirror features the ranker already uses (digit ratio, currency
+     * symbol, numeric format), deliberately kept coarse. A false alarm costs one
+     * approval-queue review; a miss costs silently corrupted data.
+     */
+    static boolean valueKindChanged(String oldValue, String newValue) {
+        if (oldValue == null || newValue == null) return false;
+        String a = oldValue.trim(), b = newValue.trim();
+        // "—" is the placeholder written while a field is pending or has never
+        // run, so there is no established shape to compare against yet.
+        if (a.isEmpty() || b.isEmpty() || "—".equals(a) || "null".equals(a)) return false;
+        if (a.equals(b)) return false;
+
+        if (Math.abs(digitRatio(a) - digitRatio(b)) >= 0.5) return true;
+        if (hasCurrency(a) != hasCurrency(b)) return true;
+        if (isPureNumber(a) != isPureNumber(b)) return true;
+
+        double longer = Math.max(a.length(), b.length());
+        double shorter = Math.min(a.length(), b.length());
+        return shorter > 0 && longer / shorter >= 4.0;
+    }
+
+    private static double digitRatio(String text) {
+        if (text.isEmpty()) return 0;
+        long digits = text.chars().filter(Character::isDigit).count();
+        return digits / (double) text.length();
+    }
+
+    private static boolean hasCurrency(String text) {
+        return text.matches(".*[\\$€£₩¥].*") || text.contains("원") || text.contains("달러");
+    }
+
+    /** No letters at all — a bare number/percentage rather than a label or name. */
+    private static boolean isPureNumber(String text) {
+        return text.matches("[^\\p{L}]*\\d[^\\p{L}]*");
     }
 
     private void updateScraperFailed(Scraper scraper) {

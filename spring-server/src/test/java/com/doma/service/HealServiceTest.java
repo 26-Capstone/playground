@@ -49,6 +49,7 @@ class HealServiceTest {
         healService = new HealService(restTemplate, scraperRepository, scrapeResultRepository, healProposalRepository);
         ReflectionTestUtils.setField(healService, "scraperServiceUrl", "http://node-scraper");
         ReflectionTestUtils.setField(healService, "pythonApiUrl", "http://python-ai");
+        ReflectionTestUtils.setField(healService, "appBaseUrl", "https://doma.example.com");
 
         scraper = new Scraper();
         scraper.setId("s1");
@@ -127,13 +128,47 @@ class HealServiceTest {
     }
 
     @Test
-    void noSlackAlertWhenHealFails() {
+    @SuppressWarnings("unchecked")
+    void alertIsSentWhenHealerGivesUp() {
+        // This used to assert the opposite — a failed heal sent nothing, and the
+        // scraper sat at status=failed until somebody opened the dashboard. That
+        // is the one case where nothing will fix itself, so it is the one worth
+        // interrupting a person for.
         scraper.setWebhookType("slack");
         scraper.setWebhookUrl("https://hooks.slack.com/test");
         stubHealResult("failed", 0.0);
 
         healService.tryHeal("s1", "<html>v2</html>", true, List.of());
 
-        verify(restTemplate, never()).postForEntity(anyString(), any(), eq(String.class));
+        ArgumentCaptor<HttpEntity<?>> captor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("https://hooks.slack.com/test"), captor.capture(), eq(String.class));
+        assertThat(captor.getValue().getBody().toString())
+            .contains("pick the element again")
+            .contains("/?scraper=s1");   // 사용자가 곧장 갈 수 있어야 알림이 쓸모 있다
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void confidentHealIsHeldForReviewWhenTheValueKindChanges() {
+        // Confidence clears the bar, but '37억원' becoming '1' means the healer
+        // landed on the row's rank badge. Auto-approving would overwrite the last
+        // good value along with the selector.
+        scraper.setWebhookType("slack");
+        scraper.setWebhookUrl("https://hooks.slack.com/test");
+        scraper.setLastValue("37억원");
+        when(restTemplate.postForObject(contains("/heal"), any(), eq(Map.class)))
+            .thenReturn(Map.of("status", "healed", "confidence", 0.95,
+                               "robust_selector", ".new-selector", "extracted_text", "1"));
+
+        healService.tryHeal("s1", "<html>v2</html>", true, List.of());
+
+        ArgumentCaptor<HttpEntity<?>> captor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("https://hooks.slack.com/test"), captor.capture(), eq(String.class));
+        assertThat(captor.getValue().getBody().toString())
+            .contains("different field")
+            .contains("/?view=approvals");
+        // The selector must not have been swapped in.
+        assertThat(scraper.getCssSelector()).isEqualTo(".old-selector");
+    }
+
 }

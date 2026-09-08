@@ -54,6 +54,37 @@ function App(){
     return () => clearInterval(timer);
   }, [handleRefresh]);
 
+  // Deep link from a self-heal alert. Two shapes, matching the two alerts that
+  // ask a person to act: ?scraper=<id> opens that scraper so its element can be
+  // picked again, ?view=approvals opens the queue a held-back heal landed in.
+  //
+  // Applied after the list arrives, because DetailScreen takes the whole scraper
+  // object rather than an id. Fires once — the address bar is then cleaned so a
+  // refresh or Back does not bounce the user here again.
+  const deepLinked = React.useRef(false);
+  React.useEffect(() => {
+    if (deepLinked.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const wantId = params.get('scraper');
+    const wantView = params.get('view');
+    if (!wantId && !wantView) { deepLinked.current = true; return; }
+
+    if (wantView === 'approvals') {
+      setRoute({ name: 'approvals' });
+      deepLinked.current = true;
+    } else if (wantId) {
+      if (!scraperList.length) return;          // 목록이 아직 안 왔다
+      const found = scraperList.find(sc => String(sc.id) === wantId);
+      if (found) setRoute({ name: 'detail', payload: found });
+      // 못 찾으면(삭제된 스크래퍼) 그냥 포기한다 — 파라미터를 계속 들고 있지 않는다
+      deepLinked.current = true;
+    }
+
+    if (deepLinked.current) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [scraperList]);
+
   // theme — also persisted in localStorage so refresh keeps state
   React.useEffect(()=>{
     const stored = localStorage.getItem('doma.theme');

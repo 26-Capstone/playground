@@ -150,6 +150,16 @@ public class HealService {
             log.info("[healer] {} → approval queue ({}, confidence {}%)", scraper.getName(),
                 kindChanged ? "value kind changed" : "below confidence threshold", Math.round(confidence * 100));
 
+        } else if ("no_change_needed".equals(status)) {
+            // The selector still resolves in the snapshot, so there is nothing to
+            // heal — the scrape failed for some other reason (a slow render, or the
+            // page changing between the run and the snapshot, which happens
+            // constantly on a ranking page). Neither mark it failed nor call anyone:
+            // the healer only saw a snapshot, and that it matched there is no
+            // evidence the live page is fine. ScraperService has already set the
+            // status to "healing" and the next run settles it.
+            log.info("[healer] {} needs no heal — selector still resolves in the snapshot", scraper.getName());
+
         } else {
             // The healer gave up. Until now this was silent — the scraper just sat
             // at status=failed until somebody opened the dashboard. This is exactly
@@ -226,6 +236,10 @@ public class HealService {
                 kindChanged ? "value_kind_changed" : "pending", LocalDateTime.now().format(FMT));
             log.info("[healer] {} extra field '{}' → approval queue ({}, confidence {}%)", scraper.getName(), label,
                 kindChanged ? "value kind changed" : "below confidence threshold", Math.round(confidence * 100));
+
+        } else if ("no_change_needed".equals(status)) {
+            log.info("[healer] {} extra field '{}' needs no heal — selector still resolves in the snapshot",
+                scraper.getName(), label);
 
         } else {
             sendHealSlackAlert(scraper, label, selector, result, confidence, "needs_user",

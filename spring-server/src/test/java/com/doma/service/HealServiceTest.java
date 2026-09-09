@@ -148,6 +148,23 @@ class HealServiceTest {
     }
 
     @Test
+    void noChangeNeededIsNotAFailureAndCallsNobody() {
+        // The healer returns no_change_needed when the old selector still resolves
+        // in the snapshot — the scrape failed for some other reason, most often a
+        // page that moved between the run and the snapshot. A ranking page does
+        // that on every refresh, so treating it as "could not heal" fired the
+        // pick-the-element-again alert every time the top item changed.
+        scraper.setWebhookType("slack");
+        scraper.setWebhookUrl("https://hooks.slack.com/test");
+        stubHealResult("no_change_needed", 1.0);
+
+        healService.tryHeal("s1", "<html>v2</html>", true, List.of());
+
+        verify(restTemplate, never()).postForEntity(anyString(), any(), eq(String.class));
+        assertThat(scraper.getStatus()).isNotEqualTo("failed");
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     void confidentHealIsHeldForReviewWhenTheValueKindChanges() {
         // Confidence clears the bar, but '37억원' becoming '1' means the healer

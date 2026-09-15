@@ -3,6 +3,7 @@ package com.doma.repository;
 import com.doma.domain.HealProposal;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,12 @@ public interface HealProposalRepository extends JpaRepository<HealProposal, Long
     List<HealProposal> findAllByOrderByCreatedAtDesc();
 
     List<HealProposal> findByReportedTrueOrderByIdAsc();
+
+    // Primary-field records still describing an unfixed break, newest first.
+    List<HealProposal> findByScraperIdAndFieldLabelIsNullAndResolvedSelectorIsNullAndStatusInOrderByCreatedAtDesc(
+        String scraperId, Collection<String> statuses);
+
+    List<HealProposal> findByResolvedSelectorIsNotNullOrderByIdAsc();
 
     void deleteByScraperId(String scraperId);
 }

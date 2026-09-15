@@ -123,6 +123,7 @@ public class ScraperService {
     public Optional<Scraper> updateSelector(String id, String cssSelector, String userIntent,
                                              Object extraFieldsRaw) {
         return scraperRepository.findById(id).map(s -> {
+            closeOpenFailures(s, cssSelector, userIntent);
             s.setCssSelector(cssSelector);
             if (userIntent != null) s.setUserIntent(userIntent);
             if (extraFieldsRaw != null) {
@@ -133,6 +134,58 @@ public class ScraperService {
             s.setLastValue("—");
             return scraperRepository.save(s);
         });
+    }
+
+    // Records describing a primary-field break nobody has fixed yet. "rejected" is
+    // included because rejecting a heal leaves the scraper broken — re-picking the
+    // element is what actually fixes it.
+    private static final List<String> OPEN_FAILURE_STATUSES = List.of("needs_user", "pending", "rejected");
+
+    /**
+     * A re-pick of the primary element is the answer to whatever break is still
+     * open, so record it there — that turns the V1/V2 HTML saved at heal time into
+     * a labelled pair for retraining — and close the records it makes obsolete.
+     *
+     * Only the newest open record gets the answer, and only when the re-pick is
+     * plausibly the same target having moved rather than the user changing what
+     * they track: the intent is unchanged, the scraper isn't currently healthy, and
+     * no run has succeeded since the record was written (if one has, the break it
+     * captured already went away and its HTML is not the page this fixes).
+     *
+     * Pending and needs_user records are closed either way. A pending proposal was
+     * computed against the selector being replaced; left in the queue, approving
+     * it would overwrite the element the user just picked.
+     */
+    private void closeOpenFailures(Scraper s, String newSelector, String newIntent) {
+        if (newSelector == null || newSelector.isBlank() || newSelector.equals(s.getCssSelector())) return;
+
+        List<HealProposal> open = healProposalRepository
+            .findByScraperIdAndFieldLabelIsNullAndResolvedSelectorIsNullAndStatusInOrderByCreatedAtDesc(
+                s.getId(), OPEN_FAILURE_STATUSES);
+        if (open.isEmpty()) return;
+
+        String now = LocalDateTime.now().format(FMT);
+        HealProposal newest = open.get(0);
+        boolean sameTarget = (newIntent == null || newIntent.equals(s.getUserIntent()))
+            && !"healthy".equals(s.getStatus())
+            && !scrapeResultRepository.existsByScraperIdAndStatusAndRunAtGreaterThan(
+                s.getId(), "healthy", newest.getCreatedAt());
+
+        for (HealProposal p : open) {
+            boolean answer = sameTarget && p == newest;
+            boolean stillOpen = !"rejected".equals(p.getStatus());
+            if (!answer && !stillOpen) continue; // already reviewed, nothing to change
+
+            if (answer) {
+                p.setResolvedSelector(newSelector);
+                p.setResolvedAt(now);
+            }
+            if (stillOpen) {
+                p.setStatus(answer && "needs_user".equals(p.getStatus()) ? "user_resolved" : "superseded");
+                p.setReviewedAt(now);
+            }
+            healProposalRepository.save(p);
+        }
     }
 
     // ── Operational settings update (schedule · threshold · channels) ───────────
@@ -535,6 +588,8 @@ public class ScraperService {
             dto.put("reviewedAt",       p.getReviewedAt().isEmpty() ? null : p.getReviewedAt());
             dto.put("reported",         p.isReported());
             dto.put("reportedAt",       p.getReportedAt().isEmpty() ? null : p.getReportedAt());
+            dto.put("resolvedSelector", p.getResolvedSelector());
+            dto.put("resolvedAt",       p.getResolvedAt().isEmpty() ? null : p.getResolvedAt());
             return dto;
         }).collect(Collectors.toList());
     }
@@ -725,6 +780,51 @@ public class ScraperService {
         result.put("count",                items.size());
         result.put("generatedAt",          LocalDateTime.now().format(FMT));
         result.put("items",                items);
+        result.put("skippedMissingHtmlIds", skippedMissingHtmlIds);
+        return result;
+    }
+
+    /**
+     * Exports every primary-field break a person fixed by re-picking the element,
+     * for building positive (label=1) retraining pairs: oldSelector on v1Html is the
+     * target before the drift, resolvedSelector is where the person found it after.
+     * proposedSelector, when not blank, is the heal that was held back or rejected —
+     * a known wrong answer on the same page.
+     *
+     * The re-pick happens on a live page loaded later than v2Html, so the consumer
+     * must check that resolvedSelector still matches v2Html and skip pairs where it
+     * doesn't. Same full-re-export contract as exportReportedHeals.
+     */
+    public Map<String, Object> exportReselections() {
+        List<Map<String, Object>> items = new ArrayList<>();
+        List<Long> skippedMissingHtmlIds = new ArrayList<>();
+
+        for (HealProposal p : healProposalRepository.findByResolvedSelectorIsNotNullOrderByIdAsc()) {
+            if (p.getV1Html() == null || p.getV2Html() == null) {
+                skippedMissingHtmlIds.add(p.getId());
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id",               p.getId());
+            item.put("scraperId",        p.getScraperId());
+            item.put("scraperName",      p.getScraperName());
+            // The training split groups by site, so the consumer needs the domain.
+            item.put("scraperUrl",       scraperRepository.findById(p.getScraperId()).map(Scraper::getUrl).orElse(null));
+            item.put("status",           p.getStatus());
+            item.put("oldSelector",      p.getOldSelector());
+            item.put("proposedSelector", p.getProposedSelector());
+            item.put("resolvedSelector", p.getResolvedSelector());
+            item.put("v1Html",           p.getV1Html());
+            item.put("v2Html",           p.getV2Html());
+            item.put("createdAt",        p.getCreatedAt());
+            item.put("resolvedAt",       p.getResolvedAt());
+            items.add(item);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("count",                 items.size());
+        result.put("generatedAt",           LocalDateTime.now().format(FMT));
+        result.put("items",                 items);
         result.put("skippedMissingHtmlIds", skippedMissingHtmlIds);
         return result;
     }

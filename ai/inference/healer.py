@@ -921,7 +921,11 @@ def heal_target(
     )
 
     final_id = llm_result.get("selected_id")
-    if final_id is None or not (0 <= final_id < TOP_K):
+    # Bound by the list actually sent, not TOP_K: a page with fewer than TOP_K
+    # candidates sends a shorter list, and an id past its end used to raise
+    # IndexError below — a 500 that Spring records as a bare failure with no
+    # alert, so nobody was ever asked to pick the element again.
+    if final_id is None or not (0 <= final_id < len(top_k_indices)):
         # llm_result["reasoning"] holds either the LLM's own explanation for
         # declining every candidate, or (on an API-level failure) the
         # "API 에러: ..." message _call_llm sets in its except clause — surface

@@ -1,5 +1,7 @@
 package com.doma.service;
 
+import com.doma.domain.HealProposal;
+import com.doma.domain.ScrapeResult;
 import com.doma.domain.Scraper;
 import com.doma.repository.HealProposalRepository;
 import com.doma.repository.ScrapeResultRepository;
@@ -172,7 +174,15 @@ class HealServiceTest {
         // good value along with the selector.
         scraper.setWebhookType("slack");
         scraper.setWebhookUrl("https://hooks.slack.com/test");
-        scraper.setLastValue("37억원");
+        // As in production: the failed run that triggered this heal has already
+        // reset lastValue to "—", so the established value only survives in the
+        // run history. Setting lastValue directly here is what let this guard ship
+        // without ever firing.
+        scraper.setLastValue("—");
+        ScrapeResult lastGood = new ScrapeResult();
+        lastGood.setValue("37억원");
+        when(scrapeResultRepository.findFirstByScraperIdAndStatusOrderByRunAtDesc("s1", "healthy"))
+            .thenReturn(Optional.of(lastGood));
         when(restTemplate.postForObject(contains("/heal"), any(), eq(Map.class)))
             .thenReturn(Map.of("status", "healed", "confidence", 0.95,
                                "robust_selector", ".new-selector", "extracted_text", "1"));
@@ -186,6 +196,45 @@ class HealServiceTest {
             .contains("/?view=approvals");
         // The selector must not have been swapped in.
         assertThat(scraper.getCssSelector()).isEqualTo(".old-selector");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void confidentExtraFieldHealIsHeldForReviewWhenTheValueKindChanges() {
+        // The failed run already wrote "—" into the field; the real value is in history.
+        scraper.setExtraFields("[{\"label\":\"Price\",\"selector\":\".price\",\"lastValue\":\"—\"}]");
+        ScrapeResult lastGood = new ScrapeResult();
+        lastGood.setExtraValues("[{\"label\":\"Price\",\"value\":\"74,432원\"}]");
+        when(scrapeResultRepository.findTop50ByScraperIdOrderByRunAtDesc("s1")).thenReturn(List.of(lastGood));
+        when(restTemplate.postForObject(contains("/heal"), any(), eq(Map.class)))
+            .thenReturn(Map.of("status", "healed", "confidence", 0.95,
+                               "robust_selector", ".rank-badge", "extracted_text", "1"));
+
+        healService.tryHeal("s1", "<html>v2</html>", false, List.of("Price"));
+
+        ArgumentCaptor<HealProposal> saved = ArgumentCaptor.forClass(HealProposal.class);
+        verify(healProposalRepository).save(saved.capture());
+        assertThat(saved.getValue().getStatus()).isEqualTo("pending");
+        assertThat(scraper.getExtraFields()).contains("\".price\"");
+    }
+
+    @Test
+    void givingUpKeepsTheHtmlSoAReselectCanBecomeATrainingPair() {
+        when(restTemplate.postForObject(contains("/heal"), any(), eq(Map.class)))
+            .thenReturn(Map.of("status", "failed", "confidence", 0,
+                               "reason", "LLM found no suitable node"));
+
+        healService.tryHeal("s1", "<html>v2</html>", true, List.of());
+
+        ArgumentCaptor<HealProposal> saved = ArgumentCaptor.forClass(HealProposal.class);
+        verify(healProposalRepository).save(saved.capture());
+        HealProposal record = saved.getValue();
+        assertThat(record.getStatus()).isEqualTo("needs_user");
+        assertThat(record.getFieldLabel()).isNull();
+        assertThat(record.getOldSelector()).isEqualTo(".old-selector");
+        assertThat(record.getV1Html()).isEqualTo("<html>v1</html>");
+        assertThat(record.getV2Html()).isEqualTo("<html>v2</html>");
+        assertThat(record.getReasoning()).isEqualTo("LLM found no suitable node");
     }
 
 }

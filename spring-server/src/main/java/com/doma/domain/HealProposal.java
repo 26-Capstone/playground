@@ -74,6 +74,17 @@ public class HealProposal {
     @Column(name = "v2_html", columnDefinition = "TEXT")
     private String v2Html;
 
+    // The selector a person picked by hand to fix the break this record describes
+    // (a heal that gave up, was held for review, or was rejected). Together with
+    // oldSelector and the V1/V2 HTML above it forms a labelled drift pair — the
+    // only source of *correct* answers from production, since a report only says
+    // a heal was wrong. Null until someone re-picks the element.
+    @Column(name = "resolved_selector", columnDefinition = "TEXT")
+    private String resolvedSelector;
+
+    @Column(name = "resolved_at", nullable = false, columnDefinition = "text not null default ''")
+    private String resolvedAt = "";
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {

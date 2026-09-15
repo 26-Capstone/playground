@@ -269,6 +269,11 @@ public class ScraperController {
         return ResponseEntity.ok(scraperService.exportReportedHeals());
     }
 
+    @GetMapping("/v1/heal-history/reselections/export")
+    public ResponseEntity<?> exportReselections() {
+        return ResponseEntity.ok(scraperService.exportReselections());
+    }
+
     // ── Python AI proxy ────────────────────────────────────────────────────────
 
     @Value("${doma.python-api-url}")

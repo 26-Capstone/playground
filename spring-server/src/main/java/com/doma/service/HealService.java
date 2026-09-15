@@ -1,6 +1,7 @@
 package com.doma.service;
 
 import com.doma.domain.HealProposal;
+import com.doma.domain.ScrapeResult;
 import com.doma.domain.Scraper;
 import com.doma.repository.HealProposalRepository;
 import com.doma.repository.ScrapeResultRepository;
@@ -115,7 +116,10 @@ public class HealService {
         // overwrites cssSelector and lastValue together, so a wrong one cannot be
         // undone by rolling back code — the previous value is already gone.
         // Route those to the approval queue instead of trusting the confidence.
-        boolean kindChanged = valueKindChanged(scraper.getLastValue(), extracted);
+        // Compare against run history, not scraper.getLastValue(): the failed run
+        // that triggered this heal has already overwritten lastValue with "—", so
+        // that comparison never had a shape to check and the guard never fired.
+        boolean kindChanged = valueKindChanged(lastGoodValue(scraperId), extracted);
 
         if ("healed".equals(status) && confidence >= threshold && !kindChanged) {
             // Confidence threshold met → auto-recovered
@@ -143,7 +147,7 @@ public class HealService {
             scraper.setLastRunAt(now);
             scraperRepository.save(scraper);
 
-            upsertPendingProposal(scraperId, scraper.getName(), null, scraper.getCssSelector(),
+            upsertOpenProposal("pending", scraperId, scraper.getName(), null, scraper.getCssSelector(),
                 result, confidence, v1Html, v2Html);
             sendHealSlackAlert(scraper, null, scraper.getCssSelector(), result, confidence,
                 kindChanged ? "value_kind_changed" : "pending", now);
@@ -166,6 +170,11 @@ public class HealService {
             // the case a human has to resolve, so it is the one worth interrupting
             // them for: nothing will fix itself here.
             updateScraperFailed(scraper);
+            // Keep the HTML this break was seen on. When someone re-picks the element,
+            // ScraperService attaches their selector to this record, making it a
+            // labelled drift pair — exactly the case the model failed on.
+            upsertOpenProposal("needs_user", scraperId, scraper.getName(), null, scraper.getCssSelector(),
+                result, confidence, v1Html, v2Html);
             sendHealSlackAlert(scraper, null, scraper.getCssSelector(), result, confidence, "needs_user", now);
             log.info("[healer] {} cannot heal — {}", scraper.getName(), result.get("reason"));
         }
@@ -216,7 +225,8 @@ public class HealService {
         double threshold  = scraper.getThreshold() / 100.0;
 
         String extracted   = (String) result.getOrDefault("extracted_text", "—");
-        boolean kindChanged = valueKindChanged(String.valueOf(field.get("lastValue")), extracted);
+        // Same reason as healPrimary: the failed run already reset this field's lastValue to "—".
+        boolean kindChanged = valueKindChanged(lastGoodExtraValue(scraperId, label), extracted);
 
         if ("healed".equals(status) && confidence >= threshold && !kindChanged) {
             field.put("selector", result.getOrDefault("robust_selector", selector));
@@ -230,7 +240,7 @@ public class HealService {
             log.info("[healer] {} extra field '{}' auto-recovery complete (confidence {}%)", scraper.getName(), label, Math.round(confidence * 100));
 
         } else if ("healed".equals(status)) {
-            upsertPendingProposal(scraperId, scraper.getName(), label, selector,
+            upsertOpenProposal("pending", scraperId, scraper.getName(), label, selector,
                 result, confidence, v1Html, v2Html);
             sendHealSlackAlert(scraper, label, selector, result, confidence,
                 kindChanged ? "value_kind_changed" : "pending", LocalDateTime.now().format(FMT));
@@ -256,13 +266,21 @@ public class HealService {
      * original just sat there awaiting review. Reusing the existing pending
      * proposal keeps one live row per broken field, refreshed with the latest
      * attempt's data.
+     *
+     * The same holds for a heal that gave up ("needs_user"): one row per broken
+     * field, carrying the latest HTML, waiting for someone to re-pick the element.
      */
-    private void upsertPendingProposal(String scraperId, String scraperName, String fieldLabel,
-                                        String oldSelector, Map<String, Object> result, double confidence,
-                                        String v1Html, String v2Html) {
+    private void upsertOpenProposal(String status, String scraperId, String scraperName, String fieldLabel,
+                                     String oldSelector, Map<String, Object> result, double confidence,
+                                     String v1Html, String v2Html) {
         HealProposal proposal = healProposalRepository
-            .findFirstByScraperIdAndFieldLabelAndStatusOrderByCreatedAtDesc(scraperId, fieldLabel, "pending")
+            .findFirstByScraperIdAndFieldLabelAndStatusOrderByCreatedAtDesc(scraperId, fieldLabel, status)
             .orElseGet(HealProposal::new);
+        // A heal that gave up carries its explanation in "reason", not "reasoning".
+        String reasoning = (String) result.getOrDefault("reasoning", "");
+        if ((reasoning == null || reasoning.isBlank()) && result.get("reason") != null) {
+            reasoning = String.valueOf(result.get("reason"));
+        }
         proposal.setScraperId(scraperId);
         proposal.setScraperName(scraperName);
         proposal.setFieldLabel(fieldLabel);
@@ -270,11 +288,37 @@ public class HealService {
         proposal.setProposedSelector((String) result.getOrDefault("robust_selector", ""));
         proposal.setExtractedText((String) result.getOrDefault("extracted_text", ""));
         proposal.setConfidence(confidence);
-        proposal.setReasoning((String) result.getOrDefault("reasoning", ""));
+        proposal.setReasoning(reasoning == null ? "" : reasoning);
+        proposal.setStatus(status);
         proposal.setV1Html(v1Html);
         proposal.setV2Html(v2Html);
         proposal.setCreatedAt(LocalDateTime.now().format(FMT));
         healProposalRepository.save(proposal);
+    }
+
+    /** The primary field's value from its most recent successful run, or null if it has none. */
+    private String lastGoodValue(String scraperId) {
+        return scrapeResultRepository.findFirstByScraperIdAndStatusOrderByRunAtDesc(scraperId, "healthy")
+            .map(ScrapeResult::getValue)
+            .orElse(null);
+    }
+
+    /**
+     * The same for an extra field. Its values only live inside each run's
+     * extraValues JSON, so this scans recent runs instead of querying. A field
+     * broken for longer than that window has no shape to compare against, which
+     * only leaves the guard quiet — the same as for a field that has never run.
+     */
+    private String lastGoodExtraValue(String scraperId, String label) {
+        for (ScrapeResult r : scrapeResultRepository.findTop50ByScraperIdOrderByRunAtDesc(scraperId)) {
+            for (Map<String, Object> v : parseFields(r.getExtraValues())) {
+                Object val = v.get("value");
+                if (label.equals(v.get("label")) && val != null && !String.valueOf(val).isBlank()) {
+                    return String.valueOf(val);
+                }
+            }
+        }
+        return null;
     }
 
     /**

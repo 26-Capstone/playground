@@ -3114,6 +3114,9 @@ const HEAL_STATUS_LABEL = {
   approved:      { label: 'Manually approved', cls: 'ok' },
   rejected:      { label: 'Rejected', cls: 'danger' },
   pending:       { label: 'Pending approval', cls: 'warn' },
+  needs_user:    { label: 'Could not heal', cls: 'danger' },
+  user_resolved: { label: 'Reselected by user', cls: 'ok' },
+  superseded:    { label: 'Superseded', cls: '' },
 };
 
 // ─── Activity (org-wide self-healing events) ───────────────────────────────

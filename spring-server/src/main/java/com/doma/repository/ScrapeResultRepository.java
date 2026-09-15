@@ -6,10 +6,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ScrapeResultRepository extends JpaRepository<ScrapeResult, Long> {
 
     List<ScrapeResult> findTop50ByScraperIdOrderByRunAtDesc(String scraperId);
+
+    Optional<ScrapeResult> findFirstByScraperIdAndStatusOrderByRunAtDesc(String scraperId, String status);
+
+    // run_at is stored as "yyyy-MM-dd HH:mm:ss", so string order is time order.
+    boolean existsByScraperIdAndStatusAndRunAtGreaterThan(String scraperId, String status, String runAt);
 
     List<ScrapeResult> findByScraperIdOrderByRunAtAsc(String scraperId);
 

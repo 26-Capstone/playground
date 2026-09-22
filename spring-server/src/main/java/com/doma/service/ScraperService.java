@@ -139,18 +139,31 @@ public class ScraperService {
     // Records describing a primary-field break nobody has fixed yet. "rejected" is
     // included because rejecting a heal leaves the scraper broken — re-picking the
     // element is what actually fixes it.
-    private static final List<String> OPEN_FAILURE_STATUSES = List.of("needs_user", "pending", "rejected");
+    // "superseded" is included so a record closed by an earlier re-pick that did not
+    // answer it can still be answered later; the oldSelector check below is what
+    // keeps a closed record from collecting an answer that isn't its own.
+    private static final List<String> OPEN_FAILURE_STATUSES =
+        List.of("needs_user", "pending", "rejected", "superseded");
 
     /**
      * A re-pick of the primary element is the answer to whatever break is still
      * open, so record it there — that turns the V1/V2 HTML saved at heal time into
      * a labelled pair for retraining — and close the records it makes obsolete.
      *
-     * Only the newest open record gets the answer, and only when the re-pick is
-     * plausibly the same target having moved rather than the user changing what
-     * they track: the intent is unchanged, the scraper isn't currently healthy, and
-     * no run has succeeded since the record was written (if one has, the break it
-     * captured already went away and its HTML is not the page this fixes).
+     * Only the newest open record gets the answer, and only when this re-pick
+     * replaces the very selector that record describes and the user is still after
+     * the same thing (unchanged intent). Checking the selector rather than the
+     * scraper's health is what makes this hold in practice: a selector can keep
+     * returning a value and still point at the wrong element, which is one of the
+     * cases people re-pick for — the first real re-pick came after 44 consecutive
+     * successful runs, and conditions based on "has a run succeeded since" threw
+     * that pair away. It also keeps a heal's work from being credited to a person:
+     * an intervening auto-heal changes the live selector, so it no longer matches
+     * the record's oldSelector.
+     *
+     * A pair whose V2 HTML has since drifted is not filtered here — the consumer
+     * checks that the re-picked selector still resolves in that HTML and skips the
+     * pair when it doesn't.
      *
      * Pending and needs_user records are closed either way. A pending proposal was
      * computed against the selector being replaced; left in the queue, approving
@@ -167,20 +180,21 @@ public class ScraperService {
         String now = LocalDateTime.now().format(FMT);
         HealProposal newest = open.get(0);
         boolean sameTarget = (newIntent == null || newIntent.equals(s.getUserIntent()))
-            && !"healthy".equals(s.getStatus())
-            && !scrapeResultRepository.existsByScraperIdAndStatusAndRunAtGreaterThan(
-                s.getId(), "healthy", newest.getCreatedAt());
+            && newest.getOldSelector() != null
+            && newest.getOldSelector().equals(s.getCssSelector());
 
         for (HealProposal p : open) {
             boolean answer = sameTarget && p == newest;
-            boolean stillOpen = !"rejected".equals(p.getStatus());
-            if (!answer && !stillOpen) continue; // already reviewed, nothing to change
+            // Only these two are still waiting on someone; rejected and superseded
+            // records have already been closed and keep the status they carry.
+            boolean closable = "pending".equals(p.getStatus()) || "needs_user".equals(p.getStatus());
+            if (!answer && !closable) continue;
 
             if (answer) {
                 p.setResolvedSelector(newSelector);
                 p.setResolvedAt(now);
             }
-            if (stillOpen) {
+            if (closable) {
                 p.setStatus(answer && "needs_user".equals(p.getStatus()) ? "user_resolved" : "superseded");
                 p.setReviewedAt(now);
             }

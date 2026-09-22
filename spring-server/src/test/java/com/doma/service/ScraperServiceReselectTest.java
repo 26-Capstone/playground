@@ -88,18 +88,19 @@ class ScraperServiceReselectTest {
     }
 
     @Test
-    void reselectIsNotAnAnswerOnceARunSucceededSinceTheBreak() {
-        // The break this record captured went away on its own; its V2 HTML is not
-        // the page the new selector was picked for.
+    void successfulRunsSinceTheBreakDoNotBlockTheAnswer() {
+        // The first real re-pick in production came after 44 consecutive successful
+        // runs: the old selector kept returning a value while pointing at the wrong
+        // element. Treating "a run has succeeded since" as proof the break went away
+        // threw that pair away.
+        scraper.setStatus("healthy");
         HealProposal gaveUp = record("needs_user", "2026-09-15 10:00:00");
         openRecords(gaveUp);
-        when(scrapeResultRepository.existsByScraperIdAndStatusAndRunAtGreaterThan(
-            "s1", "healthy", "2026-09-15 10:00:00")).thenReturn(true);
 
         service.updateSelector("s1", ".new", "top1 product name", null);
 
-        assertThat(gaveUp.getResolvedSelector()).isNull();
-        assertThat(gaveUp.getStatus()).isEqualTo("superseded");
+        assertThat(gaveUp.getResolvedSelector()).isEqualTo(".new");
+        assertThat(gaveUp.getStatus()).isEqualTo("user_resolved");
     }
 
     @Test
@@ -116,16 +117,33 @@ class ScraperServiceReselectTest {
     }
 
     @Test
-    void reselectOnAHealthyScraperIsNotAnAnswer() {
-        // e.g. a later heal was auto-approved — that doesn't write a healthy run,
-        // but the break is no longer open.
-        scraper.setStatus("healthy");
+    void anInterveningHealsWorkIsNotCreditedToThePerson() {
+        // A heal landed after this record was written, so the live selector is no
+        // longer the one the record describes. Whatever the person replaces now is
+        // the answer to that heal's selector, not to this record's.
+        scraper.setCssSelector(".healed");
         HealProposal gaveUp = record("needs_user", "2026-09-15 10:00:00");
         openRecords(gaveUp);
 
         service.updateSelector("s1", ".new", "top1 product name", null);
 
         assertThat(gaveUp.getResolvedSelector()).isNull();
+        assertThat(gaveUp.getStatus()).isEqualTo("superseded");
+    }
+
+    @Test
+    void aClosedRecordCanStillBeAnsweredByALaterReselect() {
+        // Closed by an earlier re-pick that wasn't its answer. It still describes
+        // the selector in use, so the next re-pick of that selector answers it.
+        HealProposal closed = record("superseded", "2026-09-15 10:00:00");
+        closed.setReviewedAt("2026-09-16 09:00:00");
+        openRecords(closed);
+
+        service.updateSelector("s1", ".new", "top1 product name", null);
+
+        assertThat(closed.getResolvedSelector()).isEqualTo(".new");
+        assertThat(closed.getStatus()).isEqualTo("superseded");
+        assertThat(closed.getReviewedAt()).isEqualTo("2026-09-16 09:00:00");
     }
 
     @Test

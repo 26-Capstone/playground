@@ -237,4 +237,32 @@ class HealServiceTest {
         assertThat(record.getReasoning()).isEqualTo("LLM found no suitable node");
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    void anUnrenderedPageSkipsHealingEntirely() {
+        // The page came back as its own chrome with the list missing. Healing here
+        // spends an LLM call on nav text and ends by asking someone to re-pick an
+        // element the page does not contain.
+        // The V1 snapshot stubbed in setUp never carried this notice; V2 is nothing
+        // but chrome and a maintenance line. Sizes are covered in
+        // HealServicePageCheckTest — here the point is that healing is skipped.
+        scraper.setWebhookType("slack");
+        scraper.setWebhookUrl("https://hooks.slack.com/test");
+
+        healService.tryHeal("s1",
+            "<html><body><nav>MUSINSA 검색 장바구니</nav><div>지금은 점검중이에요</div></body></html>",
+            true, List.of("Price"));
+
+        verify(restTemplate, never()).postForObject(contains("/heal"), any(), eq(Map.class));
+        verify(healProposalRepository, never()).save(any());
+        assertThat(scraper.getStatus()).isEqualTo("failed");
+
+        ArgumentCaptor<HttpEntity<?>> captor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("https://hooks.slack.com/test"), captor.capture(), eq(String.class));
+        assertThat(captor.getValue().getBody().toString())
+            .contains("Could not load the page")
+            .contains("점검중")
+            .doesNotContain("pick the element again");
+    }
+
 }

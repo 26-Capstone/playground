@@ -73,6 +73,22 @@ public class HealService {
             return;
         }
 
+        // A selector can only be healed against a page that actually rendered. Every
+        // give-up in production so far came from a page that didn't: an error page
+        // (CGV), a maintenance notice (Toss), an unsupported-browser gate, or a
+        // ranking page that never filled its list (Musinsa). Healing those wastes an
+        // LLM call on nav and footer scraps, and then asks a person to re-pick an
+        // element that is not on the page — the one Musinsa re-pick we collected
+        // could never become a training pair for exactly this reason.
+        String unavailable = unavailableReason(v1Html, v2Html);
+        if (unavailable != null) {
+            log.info("[healer] {} — page did not load ({}), skipping self-heal", scraper.getName(), unavailable);
+            if (primaryBroken) updateScraperFailed(scraper);
+            sendHealSlackAlert(scraper, null, scraper.getCssSelector(), Map.of("reason", unavailable),
+                0, "page_unavailable", LocalDateTime.now().format(FMT));
+            return;
+        }
+
         if (primaryBroken) {
             healPrimary(scraper, scraperId, v1Html, v2Html);
         }
@@ -363,11 +379,13 @@ public class HealService {
 
         boolean needsUser  = "needs_user".equals(status);
         boolean kindChanged = "value_kind_changed".equals(status);
+        boolean unavailable = "page_unavailable".equals(status);
         String newSelector = (String) result.getOrDefault("robust_selector", "");
         String extracted   = (String) result.getOrDefault("extracted_text", "");
 
         String icon, statusLabel;
-        if (needsUser)         { icon = "🚨"; statusLabel = "Could not heal — pick the element again"; }
+        if (unavailable)       { icon = "🚫"; statusLabel = "Could not load the page — no heal attempted"; }
+        else if (needsUser)    { icon = "🚨"; statusLabel = "Could not heal — pick the element again"; }
         else if (kindChanged)  { icon = "⚠️"; statusLabel = "Held for review — value looks like a different field"; }
         else if ("auto_approved".equals(status)) { icon = "🩹"; statusLabel = "Auto-recovery complete"; }
         else                   { icon = "🩹"; statusLabel = "Pending approval"; }
@@ -377,7 +395,14 @@ public class HealService {
         sb.append("*Status:* `").append(statusLabel).append("`\n");
         sb.append("*Field:* ").append(fieldLabel != null ? fieldLabel : "Default").append("\n");
 
-        if (needsUser) {
+        if (unavailable) {
+            // Nothing is known to be wrong with the selector — the page never arrived,
+            // so pointing at it would send someone after the wrong problem.
+            Object reason = result.get("reason");
+            if (reason != null) sb.append("*Reason:* ").append(reason).append("\n");
+            sb.append("_The selector was left alone and no heal was attempted. ")
+              .append("Check whether the site is blocking us or under maintenance._\n");
+        } else if (needsUser) {
             // There is no proposed selector to show — that is the whole point.
             sb.append("*Selector:* `").append(oldSelector).append("` (still broken)\n");
             Object reason = result.get("reason");
@@ -432,6 +457,72 @@ public class HealService {
         }
     }
 
+
+    // Phrases that only show up when a site is refusing or isn't ready: a block
+    // page, a maintenance notice, a browser gate, a rate limit. Counted only when
+    // the last good capture didn't already contain them — plenty of sites carry
+    // "점검 안내" in their own footer year-round.
+    private static final List<String> UNAVAILABLE_MARKERS = List.of(
+        "점검중", "점검 중", "지원하지 않는 브라우저", "일시적인 오류", "잠시 후 다시",
+        "access denied", "ray id", "too many requests", "service unavailable",
+        "temporarily unavailable", "are you a robot", "verify you are human");
+
+    /** Below this much text in the last good capture there is no established bulk to
+     *  lose, so the shrink check stays out of it — an index or an exchange-rate page
+     *  is legitimately a few dozen characters. */
+    private static final int MIN_TEXT_FOR_SHRINK_CHECK = 300;
+
+    /** Musinsa's list page came back at 46% of its last good capture. */
+    private static final double SHRINK_RATIO = 0.55;
+
+    /**
+     * Why the V2 page is not worth healing against, or null when it is.
+     *
+     * Self-heal assumes the page rendered and the selector no longer fits it. When
+     * the page itself didn't arrive — blocked, under maintenance, or a client-side
+     * list that never filled — every candidate is nav and footer text, so the healer
+     * either lands on a menu label or gives up and asks a person to re-pick an
+     * element that isn't there. Both outcomes cost more than they are worth, and the
+     * re-pick can never become a training pair because the answer doesn't exist in
+     * that HTML.
+     *
+     * Deliberately coarse, like valueKindChanged: two signals that were true of
+     * every give-up seen in production, each cheap to explain in an alert. A false
+     * alarm skips one heal attempt and reports a load failure; a miss is the waste
+     * this check exists to stop.
+     */
+    static String unavailableReason(String v1Html, String v2Html) {
+        if (v1Html == null || v2Html == null) return null;
+
+        String v1Text = visibleText(v1Html);
+        String v2Text = visibleText(v2Html);
+        String v1Low = v1Text.toLowerCase();
+        String v2Low = v2Text.toLowerCase();
+
+        for (String marker : UNAVAILABLE_MARKERS) {
+            if (v2Low.contains(marker) && !v1Low.contains(marker)) {
+                return "the page reads \"" + marker + "\"";
+            }
+        }
+
+        if (v1Text.length() >= MIN_TEXT_FOR_SHRINK_CHECK) {
+            double ratio = v2Text.length() / (double) v1Text.length();
+            if (ratio < SHRINK_RATIO) {
+                return String.format("page text is %d%% of the last good capture (%d → %d chars)",
+                    Math.round(ratio * 100), v1Text.length(), v2Text.length());
+            }
+        }
+        return null;
+    }
+
+    /** What a reader would see: scripts and styles dropped, tags stripped, whitespace collapsed. */
+    private static String visibleText(String html) {
+        return html.replaceAll("(?is)<script.*?</script>", " ")
+                   .replaceAll("(?is)<style.*?</style>", " ")
+                   .replaceAll("(?s)<[^>]+>", " ")
+                   .replaceAll("\\s+", " ")
+                   .trim();
+    }
 
     /**
      * Whether the healed value looks like a *different kind of thing* than what

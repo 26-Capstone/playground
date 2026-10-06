@@ -15,7 +15,9 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 
@@ -61,7 +63,43 @@ public class SchedulerService {
     // grows until it spills into timeouts. We apply deterministic jitter based on
     // the scraper ID to spread out the pile-up (the same scraper always gets the
     // same offset even after a restart, so the schedule doesn't become erratic).
-    private static final long JITTER_MAX_MS = 3 * 60 * 1000; // Max 3 minutes
+    // Widened from 3 minutes after node-scraper went down to one browser at a time
+    // (2GB box, see docker-compose.yml): 16 scrapers share the default daily-9 tick,
+    // and a scrape's 75s budget starts counting when the request arrives, not when a
+    // browser frees up. With a 3-minute spread the tail of that queue spent its whole
+    // budget waiting — today's catch-up burst ran a median of 36s against 5-17s a
+    // week earlier, with three runs at the 76s ceiling — and a run that times out in
+    // the queue is recorded as a selector failure even though the selector is fine.
+    private static final long SPREAD_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+    /**
+     * Where this scraper starts inside the spread window: its place in the sorted
+     * list of the scrapers sharing its schedule, as an even slice of the window.
+     *
+     * Hashing the id was the first attempt and isn't enough. For n offsets scattered
+     * across a window the closest pair sits around window/n² apart — measured at
+     * 3.5s for 16 scrapers — and two scrapes that close still queue behind the one
+     * browser. A queued run spends its 75s budget waiting rather than loading the
+     * page, and then gets recorded as a selector failure. Even slices put the same
+     * 16 scrapers 56s apart, comfortably wider than the 5-17s a scrape takes.
+     *
+     * Adding or removing a scraper shifts its neighbours by a few seconds. That is
+     * fine — these are offsets inside a tick, not times anything depends on.
+     */
+    static long slotOffset(List<String> peerIds, String scraperId) {
+        List<String> sorted = peerIds.stream().sorted().collect(Collectors.toList());
+        int count = Math.max(1, sorted.size());
+        int index = Math.max(0, sorted.indexOf(scraperId));
+        return (long) index * (SPREAD_WINDOW_MS / count);
+    }
+
+    /** Ids of every scraper on the same schedule, including this one. */
+    private List<String> peersOn(String schedule) {
+        return scraperRepository.findAllByOrderByCreatedAtDesc().stream()
+            .filter(s -> schedule == null ? s.getSchedule() == null : schedule.equals(s.getSchedule()))
+            .map(Scraper::getId)
+            .collect(Collectors.toList());
+    }
 
     public void addJob(Scraper scraper) {
         if (scraper.getCssSelector() == null || scraper.getCssSelector().isBlank()) return;
@@ -71,7 +109,7 @@ public class SchedulerService {
 
         removeJob(scraper.getId());
 
-        long jitterMs = Math.floorMod(scraper.getId().hashCode(), JITTER_MAX_MS);
+        long jitterMs = slotOffset(peersOn(scraper.getSchedule()), scraper.getId());
 
         // Instead of holding a thread and sleeping when the trigger fires, we just
         // schedule the actual run jitterMs later and return immediately — the pool

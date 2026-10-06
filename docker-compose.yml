@@ -30,11 +30,34 @@ services:
       context: .
       dockerfile: server/Dockerfile
     restart: unless-stopped
+    # Chromium spawns a tree of child processes. Without an init as PID 1, node
+    # never reaps the ones a crashed browser leaves behind, and they pile up
+    # against the memory limit below on a box that has only 2GB to begin with.
+    init: true
+    # One browser at a time. Two concurrent Chromium instances plus postgres,
+    # the JVM and the Python service do not fit in 2GB — that is what left the
+    # launcher unable to start a browser at all on 2026-09-29.
+    mem_limit: 900m
     ports:
       - '3001:3001'
     environment:
       SPRING_SERVICE_URL: http://spring-server:8080
+      MAX_CONCURRENT_BROWSERS: '1'
       TZ: Asia/Seoul
+    # Liveness only: whether the HTTP server answers and whether a browser has
+    # failed to launch since the last success. Recovery itself comes from the
+    # process exiting (server/browser.js) — a compose healthcheck reports, it
+    # does not restart anything.
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "fetch(''http://localhost:3001/internal/health'').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     volumes:
       - snapshots:/app/snapshots
     depends_on:

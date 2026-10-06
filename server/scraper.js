@@ -1,4 +1,4 @@
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./browser');
 const path = require('path');
 const fs = require('fs');
 const { browserSemaphore } = require('./browserLimiter');
@@ -115,7 +115,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
     // If launch were outside the try block, a failure would skip finally and
     // leak the semaphore permit permanently (with MAX_CONCURRENT_BROWSERS=2,
     // just 2 failures would make every subsequent run wait forever).
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     const ctx = await browser.newContext({
       viewport: VIEWPORT, // Same viewport as the selector picker — a mismatch yields a different DOM on responsive pages
       userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',

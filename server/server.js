@@ -1,7 +1,7 @@
 const express = require("express");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 const { WebSocketServer } = require("ws");
-const { chromium } = require("playwright");
+const { launchBrowser, browserHealth } = require("./browser");
 const http = require("http");
 const path = require("path");
 const fs = require("fs");
@@ -74,6 +74,17 @@ app.delete("/internal/snapshot/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+// Liveness for the compose healthcheck: does this process still answer, and has
+// a browser failed to launch since the last success. Recovery is browser.js
+// exiting on a repeated failure — an unhealthy answer here is the short window
+// before that exit. Deliberately does not launch a browser of its own: doing
+// that every 30s on a 2GB box is pressure this service does not need.
+app.get("/internal/health", (req, res) => {
+  const browser = browserHealth();
+  const degraded = browser.lastError !== null;
+  res.status(degraded ? 503 : 200).json({ ok: !degraded, browser });
+});
+
 // Collects the current page HTML for the selector-picking UI
 app.post("/internal/fetch-html", async (req, res) => {
   const { url } = req.body || {};
@@ -84,7 +95,7 @@ app.post("/internal/fetch-html", async (req, res) => {
     // If launch were outside the try block, a failure would skip finally and
     // leak the semaphore permit permanently (with MAX_CONCURRENT_BROWSERS=2,
     // just 2 failures would make every subsequent run wait forever).
-    browser = await chromium.launch({ headless: true });
+    browser = await launchBrowser();
     const ctx = await browser.newContext({ viewport: VIEWPORT }); // Same viewport as the picker/scraper
     const page = await ctx.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
@@ -339,7 +350,7 @@ wss.on("connection", (ws) => {
   (async () => {
     try {
       await browserSemaphore.acquire(); // Limit concurrent Chromium instances (avoid OOM)
-      browser = await chromium.launch({ headless: true });
+      browser = await launchBrowser();
       const ctx = await browser.newContext({
         viewport: VIEWPORT,
         userAgent:

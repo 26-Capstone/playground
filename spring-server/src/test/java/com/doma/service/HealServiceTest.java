@@ -63,7 +63,8 @@ class HealServiceTest {
 
         when(scraperRepository.findById("s1")).thenReturn(Optional.of(scraper));
         lenient().when(scrapeResultRepository.findTop50ByScraperIdOrderByRunAtDesc("s1")).thenReturn(List.of());
-        when(restTemplate.getForObject(contains("/internal/snapshot/"), eq(Map.class)))
+        // lenient: the missing-snapshot tests replace this stub with their own.
+        lenient().when(restTemplate.getForObject(contains("/internal/snapshot/"), eq(Map.class)))
             .thenReturn(Map.of("html", "<html>v1</html>"));
     }
 
@@ -235,6 +236,54 @@ class HealServiceTest {
         assertThat(record.getV1Html()).isEqualTo("<html>v1</html>");
         assertThat(record.getV2Html()).isEqualTo("<html>v2</html>");
         assertThat(record.getReasoning()).isEqualTo("LLM found no suitable node");
+    }
+
+    private void stubRecentRuns(String... statusesNewestFirst) {
+        List<ScrapeResult> rows = new java.util.ArrayList<>();
+        for (String s : statusesNewestFirst) {
+            ScrapeResult r = new ScrapeResult();
+            r.setStatus(s);
+            rows.add(r);
+        }
+        when(scrapeResultRepository.findTop50ByScraperIdOrderByRunAtDesc("s1")).thenReturn(rows);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void missingSnapshotAlertsInsteadOfFailingQuietly() {
+        // Nothing to heal against, and the person is the only one who can fix it.
+        when(restTemplate.getForObject(contains("/internal/snapshot/"), eq(Map.class)))
+            .thenReturn(Map.of());
+        scraper.setWebhookType("slack");
+        scraper.setWebhookUrl("https://hooks.slack.com/test");
+        stubRecentRuns("failed", "healthy");
+
+        healService.tryHeal("s1", "<html>v2</html>", true, List.of());
+
+        verify(restTemplate, never()).postForObject(contains("/heal"), any(), eq(Map.class));
+        assertThat(scraper.getStatus()).isEqualTo("failed");
+
+        ArgumentCaptor<HttpEntity<?>> captor = ArgumentCaptor.forClass(HttpEntity.class);
+        verify(restTemplate).postForEntity(eq("https://hooks.slack.com/test"), captor.capture(), eq(String.class));
+        assertThat(captor.getValue().getBody().toString())
+            .contains("No baseline snapshot")
+            .contains("/?scraper=s1");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void missingSnapshotDoesNotRepeatTheAlertEveryRun() {
+        // Already failing before this run, so the alert for this episode has gone out.
+        when(restTemplate.getForObject(contains("/internal/snapshot/"), eq(Map.class)))
+            .thenReturn(Map.of());
+        scraper.setWebhookType("slack");
+        scraper.setWebhookUrl("https://hooks.slack.com/test");
+        stubRecentRuns("failed", "failed");
+
+        healService.tryHeal("s1", "<html>v2</html>", true, List.of());
+
+        verify(restTemplate, never()).postForEntity(anyString(), any(), eq(String.class));
+        assertThat(scraper.getStatus()).isEqualTo("failed");
     }
 
     @Test

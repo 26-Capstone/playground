@@ -62,14 +62,12 @@ public class HealService {
             Map<String, String> snap = restTemplate.getForObject(
                 scraperServiceUrl + "/internal/snapshot/" + scraperId, Map.class);
             if (snap == null || snap.get("html") == null) {
-                log.info("[healer] {} — no V1 snapshot, skipping self-heal", scraper.getName());
-                if (primaryBroken) updateScraperFailed(scraper);
+                reportMissingSnapshot(scraper, scraperId, primaryBroken);
                 return;
             }
             v1Html = snap.get("html");
         } catch (Exception e) {
-            log.info("[healer] {} — no V1 snapshot, skipping self-heal", scraper.getName());
-            if (primaryBroken) updateScraperFailed(scraper);
+            reportMissingSnapshot(scraper, scraperId, primaryBroken);
             return;
         }
 
@@ -380,11 +378,13 @@ public class HealService {
         boolean needsUser  = "needs_user".equals(status);
         boolean kindChanged = "value_kind_changed".equals(status);
         boolean unavailable = "page_unavailable".equals(status);
+        boolean noSnapshot  = "no_snapshot".equals(status);
         String newSelector = (String) result.getOrDefault("robust_selector", "");
         String extracted   = (String) result.getOrDefault("extracted_text", "");
 
         String icon, statusLabel;
         if (unavailable)       { icon = "🚫"; statusLabel = "Could not load the page — no heal attempted"; }
+        else if (noSnapshot)   { icon = "⚠️"; statusLabel = "No baseline snapshot — nothing to heal against"; }
         else if (needsUser)    { icon = "🚨"; statusLabel = "Could not heal — pick the element again"; }
         else if (kindChanged)  { icon = "⚠️"; statusLabel = "Held for review — value looks like a different field"; }
         else if ("auto_approved".equals(status)) { icon = "🩹"; statusLabel = "Auto-recovery complete"; }
@@ -402,6 +402,12 @@ public class HealService {
             if (reason != null) sb.append("*Reason:* ").append(reason).append("\n");
             sb.append("_The selector was left alone and no heal was attempted. ")
               .append("Check whether the site is blocking us or under maintenance._\n");
+        } else if (noSnapshot) {
+            sb.append("*Selector:* `").append(oldSelector).append("` (still broken)\n");
+            Object reason = result.get("reason");
+            if (reason != null) sb.append("*Reason:* ").append(reason).append("\n");
+            sb.append("_Self-heal compares the page against a snapshot from when this selector ")
+              .append("worked. Pick the element again so one run can succeed and create it._\n");
         } else if (needsUser) {
             // There is no proposed selector to show — that is the whole point.
             sb.append("*Selector:* `").append(oldSelector).append("` (still broken)\n");
@@ -426,11 +432,11 @@ public class HealService {
         // Link straight to where the person has to act: the scraper itself when the
         // element must be picked again, the queue when a heal is waiting on review.
         // The client reads these query params on load (client/src/app.jsx).
-        if ((needsUser || kindChanged) && appBaseUrl != null && !appBaseUrl.isBlank()) {
+        if ((needsUser || kindChanged || noSnapshot) && appBaseUrl != null && !appBaseUrl.isBlank()) {
             String base = appBaseUrl.endsWith("/")
                 ? appBaseUrl.substring(0, appBaseUrl.length() - 1)
                 : appBaseUrl;
-            sb.append(needsUser
+            sb.append(needsUser || noSnapshot
                 ? "\n*Pick the element again:* " + base + "/?scraper=" + scraper.getId()
                 : "\n*Review in the approval queue:* " + base + "/?view=approvals");
         }
@@ -571,6 +577,41 @@ public class HealService {
     /** No letters at all — a bare number/percentage rather than a label or name. */
     private static boolean isPureNumber(String text) {
         return text.matches("[^\\p{L}]*\\d[^\\p{L}]*");
+    }
+
+    /**
+     * There is no V1 snapshot, so there is nothing to heal against. The snapshot is
+     * written only by a successful run and deleted when the selector changes, which
+     * means a scraper that has not succeeded since its last re-pick stays stuck here.
+     *
+     * This path used to return in silence. One scraper sat failed that way while its
+     * page rendered perfectly well and only the selector no longer matched — a heal
+     * would have had a real chance at it, and nobody was told it never ran.
+     *
+     * Alerted once per failure episode rather than once per run: with no snapshot
+     * every later run lands here too, and an hourly scraper would otherwise send the
+     * same message 24 times a day.
+     */
+    private void reportMissingSnapshot(Scraper scraper, String scraperId, boolean primaryBroken) {
+        log.info("[healer] {} — no V1 snapshot, skipping self-heal", scraper.getName());
+        boolean repeat = failureAlreadyReported(scraperId);
+        if (primaryBroken) updateScraperFailed(scraper);
+        if (!repeat) {
+            sendHealSlackAlert(scraper, null, scraper.getCssSelector(),
+                Map.of("reason", "no baseline snapshot to compare against — this scraper has not "
+                    + "completed a successful run since its selector last changed"),
+                0, "no_snapshot", LocalDateTime.now().format(FMT));
+        }
+    }
+
+    /**
+     * Whether this scraper was already failing before the run that just finished, so
+     * an alert for this episode has gone out already. The newest result is that run;
+     * the one before it is the state we were in.
+     */
+    private boolean failureAlreadyReported(String scraperId) {
+        List<ScrapeResult> recent = scrapeResultRepository.findTop50ByScraperIdOrderByRunAtDesc(scraperId);
+        return recent.size() >= 2 && !"healthy".equals(recent.get(1).getStatus());
     }
 
     private void updateScraperFailed(Scraper scraper) {

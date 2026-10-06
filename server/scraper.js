@@ -24,6 +24,15 @@ const SNAPSHOTS_DIR = path.join(__dirname, 'snapshots');
 // window.
 const SCRAPE_BUDGET_MS = 75000;
 
+// How long a selector gets to appear before we give up on it. The default suits
+// heavy real pages (Toss Securities needed more than 15s). It is an env var for
+// demos: against /demo/board, which renders in about a second, waiting 40s for a
+// selector that a layout switch has just broken stalls the whole demonstration —
+// SELECTOR_WAIT_MS=8000 makes the failure, and the heal that follows it, land in
+// seconds. Extra fields keep their own shorter wait since they are supplementary.
+const PRIMARY_WAIT_MS = parseInt(process.env.SELECTOR_WAIT_MS || '40000', 10);
+const EXTRA_FIELD_WAIT_MS = parseInt(process.env.EXTRA_FIELD_WAIT_MS || '15000', 10);
+
 // waitForSelector only checks "does this tag exist in the DOM" — for pages
 // like Toss Securities that render an empty skeleton first and only fill in
 // text/attributes after live data arrives, the wait would pass the instant
@@ -131,7 +140,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
       // giving up with 52 of the 75s budget still unused). extra_fields are
       // supplementary, so they keep the original short 15s wait.
       if (deadline - Date.now() > 1000) {
-        await waitForContent(page, css_selector, boundedTimeout(40000));
+        await waitForContent(page, css_selector, boundedTimeout(PRIMARY_WAIT_MS));
       }
       value = (await page.$eval(css_selector, extractDisplayText)).slice(0, 200);
     } catch (e) {
@@ -168,7 +177,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
       let fieldError = null;
       try {
         if (deadline - Date.now() > 1000) {
-          await waitForContent(page, field.selector, boundedTimeout(15000));
+          await waitForContent(page, field.selector, boundedTimeout(EXTRA_FIELD_WAIT_MS));
         }
         fieldValue = (await page.$eval(field.selector, extractDisplayText)).slice(0, 200);
       } catch (e) {

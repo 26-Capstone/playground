@@ -43,6 +43,9 @@ services:
     environment:
       SPRING_SERVICE_URL: http://spring-server:8080
       MAX_CONCURRENT_BROWSERS: '1'
+      # Lower this for a demo (e.g. 8000) so a broken selector fails in seconds
+      # instead of spending 40s waiting for an element that isn't coming.
+      SELECTOR_WAIT_MS: ${SELECTOR_WAIT_MS:-40000}
       TZ: Asia/Seoul
     # Liveness only: whether the HTTP server answers and whether a browser has
     # failed to launch since the last success. Recovery itself comes from the

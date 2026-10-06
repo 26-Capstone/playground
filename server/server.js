@@ -9,6 +9,7 @@ const { runScraper } = require("./scraper");
 const { browserSemaphore } = require("./browserLimiter");
 const { extractDisplayText } = require("./extractText");
 const { VIEWPORT } = require("./viewport");
+const { registerDemoRoutes } = require("./demo");
 
 const PORT = process.env.PORT || 3001;
 const SPRING_URL =
@@ -32,6 +33,9 @@ app.use(express.json({ limit: "10mb" }));
 const clientDir = path.join(__dirname, "client");
 app.use(express.static(clientDir));
 app.get("/", (req, res) => res.sendFile(path.join(clientDir, "index.html")));
+
+// Demo target page (/demo/board) plus its layout switch — see server/demo.js.
+registerDemoRoutes(app);
 
 // ─── Internal API (Spring Boot only) ─────────────────────────────────────────
 

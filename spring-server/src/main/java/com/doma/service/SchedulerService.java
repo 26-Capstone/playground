@@ -38,6 +38,65 @@ public class SchedulerService {
         "15m",     "0 */15 * * * *"
     );
 
+    /** How often the watchdog sweeps for runs that never arrived. */
+    private static final Duration WATCHDOG_PERIOD = Duration.ofMinutes(10);
+
+    /**
+     * Grace after the expected time before a run counts as missing. It has to clear
+     * the spread window above (15 minutes), or every scraper holding a late slot
+     * would look overdue the moment its tick passed.
+     */
+    static final long GRACE_MINUTES = 20;
+
+    /**
+     * How many minutes past due this scraper is, or 0 when it is on time.
+     *
+     * This is the only check that catches a run which never happened at all. Every
+     * other signal needs a run to produce something: in September the scheduler kept
+     * firing into a broken browser for seven days and the dashboard stayed green,
+     * and on 10/07 one scraper sat on a page that had stopped loading while showing
+     * the previous day's value.
+     *
+     * Returns 0 for anything without a baseline — a scraper that has never run, or a
+     * schedule string the trigger itself could not parse (that job was never
+     * registered, so it is not late).
+     */
+    static long overdueMinutes(String schedule, String lastRunAt, LocalDateTime now) {
+        if (schedule == null || lastRunAt == null || lastRunAt.isBlank()) return 0;
+        LocalDateTime last;
+        try {
+            last = LocalDateTime.parse(lastRunAt,
+                java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        } catch (Exception e) {
+            return 0;
+        }
+
+        LocalDateTime expected;
+        switch (schedule) {
+            case "15m":    expected = last.plusMinutes(15); break;
+            case "hourly": expected = last.plusHours(1);    break;
+            default: {
+                try {
+                    expected = CronExpression.parse(CRON_MAP.getOrDefault(schedule, schedule)).next(last);
+                } catch (Exception e) {
+                    return 0;
+                }
+            }
+        }
+        if (expected == null) return 0;
+        return now.isAfter(expected.plusMinutes(GRACE_MINUTES))
+            ? Duration.between(expected, now).toMinutes()
+            : 0;
+    }
+
+    private void sweepForMissedRuns() {
+        try {
+            scraperService.checkMissedRuns();
+        } catch (Exception e) {
+            log.error("[watchdog] sweep failed: {}", e.getMessage());
+        }
+    }
+
     private Duration smartInitialDelay(String lastRunAt, Duration period) {
         if (lastRunAt == null || lastRunAt.isBlank()) return Duration.ZERO;
         try {
@@ -55,6 +114,10 @@ public class SchedulerService {
     public void init() {
         scraperRepository.findAllByOrderByCreatedAtDesc().forEach(this::addJob);
         log.info("[scheduler] {} job(s) registered", jobs.size());
+
+        taskScheduler.scheduleAtFixedRate(this::sweepForMissedRuns, WATCHDOG_PERIOD);
+        log.info("[watchdog] sweeping for missed runs every {} min (grace {} min)",
+            WATCHDOG_PERIOD.toMinutes(), GRACE_MINUTES);
     }
 
     // If multiple scrapers use the default schedule (e.g. daily-9), they all pile

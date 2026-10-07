@@ -21,3 +21,5 @@ doma:
   # 자가치유 알림에서 대시보드로 돌아가는 링크. 비워두면 링크를 넣지 않는다.
   app-base-url: ${APP_BASE_URL:}
   api-token: ${DOMA_API_TOKEN:}
+  # 운영 알림(수집 누락 감지)을 받을 웹훅. 비워두면 스크래퍼별 웹훅과 로그로만 남는다.
+  alert-webhook-url: ${DOMA_ALERT_WEBHOOK_URL:}

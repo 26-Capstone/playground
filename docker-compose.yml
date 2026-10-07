@@ -82,6 +82,8 @@ services:
       SCRAPER_SERVICE_URL: http://node-scraper:3001
       PYTHON_API_URL: http://python-ai:8000
       DOMA_API_TOKEN: ${DOMA_API_TOKEN:-}
+      # 수집 누락 감지 알림을 받을 웹훅. 스크래퍼별 웹훅이 없는 스크래퍼까지 덮는다.
+      DOMA_ALERT_WEBHOOK_URL: ${DOMA_ALERT_WEBHOOK_URL:-}
       # 자가치유 알림이 대시보드로 돌아가는 링크를 붙일 주소. 비워두면 링크가 빠진다.
       APP_BASE_URL: ${APP_BASE_URL:-}
       TZ: Asia/Seoul

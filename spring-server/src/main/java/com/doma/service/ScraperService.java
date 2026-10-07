@@ -36,6 +36,15 @@ public class ScraperService {
     @Value("${doma.scraper-service-url}")
     private String scraperServiceUrl;
 
+    /**
+     * Where watchdog alerts go. Only 4 of 22 scrapers have a webhook of their own, so
+     * without this an outage like September's — where everything stopped at once —
+     * would have nowhere to report itself. Optional: left blank, the watchdog falls
+     * back to each scraper's own webhook and the log.
+     */
+    @Value("${doma.alert-webhook-url:}")
+    private String alertWebhookUrl;
+
     // Guard against run() firing twice concurrently — this blocks both cases: the "Run now"
     // button overlapping with a scheduled run, and a job re-registered right after
     // updateSettings() firing immediately via smartInitialDelay=0 while a previous run is
@@ -393,6 +402,100 @@ public class ScraperService {
             new Thread(() -> fireFailureAlert(scraper, previousValue, now)).start();
         }
         return Map.of("status", "failed", "error", reason);
+    }
+
+    // Scrapers already reported as overdue, so one outage doesn't alert on every
+    // sweep. An id is dropped as soon as that scraper is no longer overdue, which
+    // lets the next episode alert again. In memory only: a restart can repeat one
+    // alert, which is the safe direction to fail.
+    private final Set<String> missedRunAlerted = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Alerts on runs that never arrived — the one failure the rest of the system
+     * cannot see, because every other signal needs a run to produce something.
+     *
+     * An outage usually hits everything at once (in September, all 20 scrapers), so
+     * once half of the scheduled scrapers are overdue this sends a single grouped
+     * alert instead of twenty separate ones.
+     */
+    public void checkMissedRuns() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Scraper> scheduled = scraperRepository.findAllByOrderByCreatedAtDesc().stream()
+            .filter(s -> s.getCssSelector() != null && !s.getCssSelector().isBlank())
+            .collect(Collectors.toList());
+
+        Map<Scraper, Long> overdue = new LinkedHashMap<>();
+        for (Scraper s : scheduled) {
+            long late = SchedulerService.overdueMinutes(s.getSchedule(), s.getLastRunAt(), now);
+            if (late > 0) overdue.put(s, late);
+        }
+
+        Set<String> overdueIds = overdue.keySet().stream().map(Scraper::getId).collect(Collectors.toSet());
+        missedRunAlerted.retainAll(overdueIds);
+
+        List<Scraper> fresh = overdue.keySet().stream()
+            .filter(s -> !missedRunAlerted.contains(s.getId()))
+            .collect(Collectors.toList());
+        if (fresh.isEmpty()) return;
+
+        boolean widespread = scheduled.size() >= 4 && overdue.size() * 2 >= scheduled.size();
+        if (widespread) {
+            log.error("[watchdog] {} of {} scrapers missed their scheduled run",
+                overdue.size(), scheduled.size());
+            sendWatchdogAlert(groupedAlertText(overdue, scheduled.size(), now), null);
+        } else {
+            for (Scraper s : fresh) {
+                long late = overdue.get(s);
+                log.error("[watchdog] {} — {} minutes past its scheduled run", s.getName(), late);
+                sendWatchdogAlert(singleAlertText(s, late), s);
+            }
+        }
+        missedRunAlerted.addAll(overdueIds);
+    }
+
+    private String singleAlertText(Scraper s, long lateMinutes) {
+        return "⏰ *DOMA missed run* — *" + s.getName() + "*\n"
+            + "*Schedule:* " + SCHEDULE_LABELS.getOrDefault(s.getSchedule(), s.getSchedule()) + "\n"
+            + "*Last run:* " + (s.getLastRunAt().isEmpty() ? "never" : s.getLastRunAt())
+            + "  (" + lateMinutes + " min late)\n"
+            + "*URL:* " + s.getUrl();
+    }
+
+    private String groupedAlertText(Map<Scraper, Long> overdue, int scheduledCount, LocalDateTime now) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("🚨 *DOMA collection stalled* — ").append(overdue.size()).append(" of ")
+          .append(scheduledCount).append(" scrapers missed their scheduled run\n");
+        sb.append("*Checked:* ").append(now.format(FMT)).append("\n");
+        overdue.entrySet().stream().limit(8).forEach(e ->
+            sb.append("• ").append(e.getKey().getName()).append(" — ")
+              .append(e.getValue()).append(" min late\n"));
+        if (overdue.size() > 8) sb.append("… and ").append(overdue.size() - 8).append(" more\n");
+        sb.append("_Check whether the scraper service can still launch a browser._");
+        return sb.toString();
+    }
+
+    /**
+     * Sends to the operations webhook when one is configured, otherwise to the
+     * scraper's own. With neither, the log line written by the caller is the record.
+     */
+    private void sendWatchdogAlert(String text, Scraper fallbackTarget) {
+        String url = (alertWebhookUrl != null && !alertWebhookUrl.isBlank()) ? alertWebhookUrl
+            : (fallbackTarget != null ? fallbackTarget.getWebhookUrl() : null);
+        if (url == null || url.isBlank()) return;
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("text", text);              // Slack renders this
+        payload.put("trigger", "missed_run");   // generic receivers key off this
+        try {
+            // Void: this is fire-and-forget, and a receiver that answers with an
+            // unusual content type (anything but Slack's text/plain "ok") would
+            // otherwise fail response conversion and be logged as a delivery
+            // failure even though the alert arrived.
+            restTemplate.postForEntity(url, jsonEntity(payload), Void.class);
+            log.info("[watchdog] alert sent to {}", url);
+        } catch (Exception e) {
+            log.warn("[watchdog] alert failed {}: {}", url, e.getMessage());
+        }
     }
 
     public Map<String, Object> testWebhook(String scraperId) {

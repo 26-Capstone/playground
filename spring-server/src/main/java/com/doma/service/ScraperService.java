@@ -264,10 +264,20 @@ public class ScraperService {
                 .map(f -> (Map<String, Object>) Map.of("label", f.get("label"), "selector", f.get("selector")))
                 .collect(Collectors.toList()));
         }
-        Map<String, Object> result = restTemplate.postForObject(
-            scraperServiceUrl + "/internal/run", req, Map.class);
-
-        if (result == null) throw new RuntimeException("No response from the Node.js scraper service");
+        // A throw here used to end the run with nothing written: no result row, no
+        // status change, no alert, and the dashboard kept showing the last good
+        // value. That is how one scraper sat "healthy" for a day on a page that had
+        // stopped loading, and how a week of collection went missing in September.
+        Map<String, Object> result;
+        try {
+            result = restTemplate.postForObject(
+                scraperServiceUrl + "/internal/run", req, Map.class);
+        } catch (Exception e) {
+            return recordRunFailure(scraper, scraperId, "scraper service error: " + e.getMessage());
+        }
+        if (result == null) {
+            return recordRunFailure(scraper, scraperId, "no response from the scraper service");
+        }
 
         String status     = (String) result.getOrDefault("status", "failed");
         String value      = (String) result.getOrDefault("value", "");
@@ -275,6 +285,10 @@ public class ScraperService {
         int    durationMs = ((Number) result.getOrDefault("durationMs", 0)).intValue();
         String now        = LocalDateTime.now().format(FMT);
         boolean succeeded = "healthy".equals(status);
+        // The page never arrived, so the selector was never tested. Recorded as its
+        // own cause: there is nothing to heal, and calling it a selector failure
+        // sends whoever reads it after the wrong problem.
+        boolean loadFailed = Boolean.TRUE.equals(result.get("loadFailed"));
 
         // Merge extra-field responses — Node preserves input order, so we match by index
         // (this avoids relying on label uniqueness; label-based matching is only used in approve())
@@ -310,7 +324,9 @@ public class ScraperService {
         sr.setExtraValues(snapshotExtraValues.isEmpty() ? null : listToJson(snapshotExtraValues));
         sr.setScore(succeeded ? 99.0 : 0.0);
         sr.setDurationMs(durationMs);
-        sr.setNote(succeeded ? "Collected successfully — " + value : "Selector match failed");
+        sr.setNote(succeeded ? "Collected successfully — " + value
+            : loadFailed ? "Could not load the page — " + result.getOrDefault("error", "")
+            : "Selector match failed");
         scrapeResultRepository.save(sr);
 
         // Update scraper status (only the primary result is reflected — extra fields don't affect status/score)
@@ -320,7 +336,9 @@ public class ScraperService {
 
         String previousValue = scraper.getLastValue(); // captured before setLastValue
 
-        scraper.setStatus(succeeded ? "healthy" : "healing");
+        // "healing" says a heal is under way. With no V2 HTML there is none, so a
+        // load failure settles at "failed" instead of sitting in healing forever.
+        scraper.setStatus(succeeded ? "healthy" : loadFailed ? "failed" : "healing");
         scraper.setScore(recentScore);
         scraper.setLastValue(succeeded ? value : "—");
         scraper.setLastRunAt(now);
@@ -342,6 +360,39 @@ public class ScraperService {
         }
 
         return result;
+    }
+
+    /**
+     * Records a run that never produced a result at all — the scraper service was
+     * unreachable, errored, or answered with nothing. Until now this path wrote
+     * nothing: no result row, no status change, no alert, and the dashboard went on
+     * showing the last good value as if collection were fine. No heal is attempted,
+     * because there is no V2 HTML to heal against.
+     */
+    private Map<String, Object> recordRunFailure(Scraper scraper, String scraperId, String reason) {
+        String now = LocalDateTime.now().format(FMT);
+        log.error("[run] {} — {}", scraper.getName(), reason);
+
+        ScrapeResult sr = new ScrapeResult();
+        sr.setScraperId(scraperId);
+        sr.setStatus("failed");
+        sr.setValue("");
+        sr.setScore(0.0);
+        sr.setDurationMs(0);
+        sr.setNote("Could not run — " + reason);
+        scrapeResultRepository.save(sr);
+
+        String previousValue = scraper.getLastValue();
+        scraper.setStatus("failed");
+        scraper.setScore(0.0);
+        scraper.setLastValue("—");
+        scraper.setLastRunAt(now);
+        scraperRepository.save(scraper);
+
+        if (scraper.getWebhookUrl() != null && !scraper.getWebhookUrl().isBlank()) {
+            new Thread(() -> fireFailureAlert(scraper, previousValue, now)).start();
+        }
+        return Map.of("status", "failed", "error", reason);
     }
 
     public Map<String, Object> testWebhook(String scraperId) {

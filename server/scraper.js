@@ -118,6 +118,7 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
   let html = '';
   let value = '';
   let extractError = null;
+  let loadError = null;
   const extraValues = [];
 
   try {
@@ -185,12 +186,36 @@ async function runScraper({ id, name, url, css_selector, user_intent, extra_fiel
       }
       extraValues.push({ label: field.label, value: fieldValue || '', error: fieldError });
     }
+  } catch (e) {
+    // The page never loaded: a DNS failure, a goto timeout, a context that died.
+    // This used to escape runScraper — /internal/run answered 500, Spring's call
+    // threw, and nothing was recorded: no result row, no status change, no alert,
+    // while the dashboard kept showing the last good value. It is now reported
+    // like any other failed run, with loadFailed set so Spring can tell "the page
+    // never arrived" from "the selector missed" and skip a heal that has no V2
+    // HTML to work from.
+    loadError = e.message;
   } finally {
     await browser?.close().catch(() => {});
     browserSemaphore.release();
   }
 
   const durationMs = Date.now() - start;
+
+  if (loadError) {
+    console.log(`[scraper] ${name} → load failed: ${loadError} (${durationMs}ms)`);
+    return {
+      status: 'failed',
+      value: '',
+      html: '', // nothing to heal against
+      durationMs,
+      error: loadError,
+      loadFailed: true,
+      // Same order and shape as a normal run — Spring merges these by index.
+      extraValues: (extra_fields || []).map((f) => ({ label: f.label, value: '', error: loadError })),
+    };
+  }
+
   const succeeded = !!value && !extractError;
 
   console.log(`[scraper] ${name} → ${succeeded ? `success: "${value}"` : `failed: ${extractError}`} (${durationMs}ms)`);

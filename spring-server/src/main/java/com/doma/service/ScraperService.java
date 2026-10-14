@@ -235,6 +235,9 @@ public class ScraperService {
                 s.setAlertRangeMin(body.get("alertRangeMin") == null ? null : ((Number) body.get("alertRangeMin")).doubleValue());
             if (body.containsKey("alertRangeMax"))
                 s.setAlertRangeMax(body.get("alertRangeMax") == null ? null : ((Number) body.get("alertRangeMax")).doubleValue());
+            // Marks a scraper as demo/rehearsal, which keeps it out of the metrics.
+            if (body.containsKey("demo"))
+                s.setDemo(Boolean.TRUE.equals(body.get("demo")));
             return scraperRepository.save(s);
         });
     }
@@ -336,6 +339,7 @@ public class ScraperService {
         sr.setNote(succeeded ? "Collected successfully — " + value
             : loadFailed ? "Could not load the page — " + result.getOrDefault("error", "")
             : "Selector match failed");
+        sr.setFailureKind(succeeded ? null : loadFailed ? "page_load" : "selector");
         scrapeResultRepository.save(sr);
 
         // Update scraper status (only the primary result is reflected — extra fields don't affect status/score)
@@ -389,6 +393,7 @@ public class ScraperService {
         sr.setScore(0.0);
         sr.setDurationMs(0);
         sr.setNote("Could not run — " + reason);
+        sr.setFailureKind("run_error");
         scrapeResultRepository.save(sr);
 
         String previousValue = scraper.getLastValue();
@@ -1019,6 +1024,7 @@ public class ScraperService {
         dto.put("lastValue",    s.getLastValue());
         dto.put("lastRun",      s.getLastRunAt().isEmpty() ? "—" : s.getLastRunAt());
         dto.put("healed",       s.getHealedCount());
+        dto.put("demo",         s.isDemo());
         dto.put("runs7d",       0);
         dto.put("spark",        List.of());
         dto.put("type",         s.getDomain());

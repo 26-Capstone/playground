@@ -43,6 +43,19 @@ public class ScrapeResult {
     @Column(name = "run_at", nullable = false)
     private String runAt;
 
+    /**
+     * Why a failed run failed: "selector" (the page rendered, the selector missed),
+     * "page_load" (the page never arrived), or "run_error" (the scraper service
+     * itself failed). Null on success.
+     *
+     * Kept as its own column rather than parsed out of {@link #note} at query time —
+     * the note is a human-facing sentence, and metrics that depend on its wording
+     * break silently the first time someone rewords it. Rows from before this column
+     * are filled in once by FailureKindBackfill.
+     */
+    @Column(name = "failure_kind")
+    private String failureKind;
+
     @PrePersist
     void prePersist() {
         if (runAt == null) {

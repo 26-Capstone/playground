@@ -82,6 +82,17 @@ public class Scraper {
     @Column(name = "healed_count", nullable = false)
     private Integer healedCount = 0;
 
+    /**
+     * Demo and rehearsal scrapers are left out of the performance metrics. One 30s
+     * demo produced about 20,000 of the 22,940 runs in a week, which turned the
+     * 7-day success rate into a measure of that one scraper rather than the feeds
+     * the project is judged on.
+     *
+     * Added via ddl-auto to a table that already has rows, so DEFAULT is required.
+     */
+    @Column(nullable = false, columnDefinition = "boolean not null default false")
+    private boolean demo = false;
+
     @Column(name = "created_at", nullable = false)
     private String createdAt;
 

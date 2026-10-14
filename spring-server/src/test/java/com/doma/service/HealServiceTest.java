@@ -286,6 +286,62 @@ class HealServiceTest {
         assertThat(scraper.getStatus()).isEqualTo("failed");
     }
 
+    /** An open record for the primary field, as the backoff reads it. */
+    private void stubOpenRecord(int attempts, long minutesAgo) {
+        HealProposal open = new HealProposal();
+        open.setScraperId("s1");
+        open.setStatus("pending");
+        open.setOldSelector(".old-selector");
+        open.setProposedSelector(".proposed");
+        open.setAttempts(attempts);
+        open.setCreatedAt(java.time.LocalDateTime.now().minusMinutes(minutesAgo)
+            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+        when(healProposalRepository.findFirstByScraperIdAndFieldLabelAndStatusOrderByCreatedAtDesc(
+            "s1", null, "pending")).thenReturn(Optional.of(open));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aRepeatedBreakIsBackedOffInsteadOfCallingTheLlmAgain() {
+        // Third attempt waits two hours; only ten minutes have passed.
+        scraper.setWebhookType("slack");
+        scraper.setWebhookUrl("https://hooks.slack.com/test");
+        stubOpenRecord(3, 10);
+
+        healService.tryHeal("s1", "<html>v2</html>", true, List.of());
+
+        verify(restTemplate, never()).postForObject(contains("/heal"), any(), eq(Map.class));
+        verify(restTemplate, never()).postForEntity(anyString(), any(), eq(String.class));
+        // "healing" would claim an attempt is in flight.
+        assertThat(scraper.getStatus()).isEqualTo("failed");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theHealRunsAgainOnceTheBackoffWindowHasPassed() {
+        stubOpenRecord(3, 200);   // two-hour wait, three hours ago
+        stubHealResult("healed", 0.95);
+
+        healService.tryHeal("s1", "<html>v2</html>", true, List.of());
+
+        verify(restTemplate).postForObject(contains("/heal"), any(), eq(Map.class));
+        assertThat(scraper.getCssSelector()).isEqualTo(".new-selector");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void eachAttemptOnTheSameBreakIsCounted() {
+        // Below the confidence bar, so this lands in the approval queue and the
+        // record it upserts carries the attempt count the backoff reads next time.
+        stubHealResult("healed", 0.10);
+
+        healService.tryHeal("s1", "<html>v2</html>", true, List.of());
+
+        ArgumentCaptor<HealProposal> saved = ArgumentCaptor.forClass(HealProposal.class);
+        verify(healProposalRepository).save(saved.capture());
+        assertThat(saved.getValue().getAttempts()).isEqualTo(1);
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     void anUnrenderedPageSkipsHealingEntirely() {

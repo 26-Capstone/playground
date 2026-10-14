@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -44,6 +45,29 @@ public class HealService {
 
     private static final DateTimeFormatter FMT =
         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    /** First retry waits this long; the wait doubles with each further attempt. */
+    static final long BACKOFF_BASE_MINUTES = 30;
+
+    /** Ceiling on the wait — a persistently broken selector is retried once a day. */
+    static final long BACKOFF_MAX_MINUTES = 24 * 60;
+
+    /**
+     * How long to wait before attempting this field again, given how many attempts
+     * have already been made.
+     *
+     * A broken selector re-triggers healing on every run, and every attempt is an
+     * LLM call: measured at 27,943 input tokens, about $0.030 each. On the 30-second
+     * schedule the demo scrapers use, one unfixed selector would be 2,880 calls and
+     * roughly $86 a day — and each attempt also re-alerts and rewrites ~1MB of HTML.
+     * Backing off turns that into about six attempts on the first day and one a day
+     * after, without delaying the first attempt at all.
+     */
+    static long backoffMinutes(int attempts) {
+        if (attempts <= 0) return 0;
+        long doublings = Math.min(attempts - 1, 10);
+        return Math.min(BACKOFF_BASE_MINUTES << doublings, BACKOFF_MAX_MINUTES);
+    }
 
     /**
      * Attempts to heal only whichever of primaryBroken/brokenExtraFieldLabels is
@@ -97,6 +121,16 @@ public class HealService {
 
     @SuppressWarnings("unchecked")
     private void healPrimary(Scraper scraper, String scraperId, String v1Html, String v2Html) {
+        long wait = backoffRemaining(scraperId, null);
+        if (wait > 0) {
+            // Same break, already attempted: skip the LLM call, the alert, and the
+            // ~1MB HTML rewrite. ScraperService left the status at "healing", which
+            // would claim a heal is in flight — settle it at failed instead.
+            log.info("[healer] {} — heal backed off, next attempt in {} min", scraper.getName(), wait);
+            updateScraperFailed(scraper);
+            return;
+        }
+
         Map<String, Object> healReq = Map.of(
             "v1_html",      v1Html,
             "v2_html",      v2Html,
@@ -217,6 +251,13 @@ public class HealService {
         }
         String selector = String.valueOf(field.get("selector"));
 
+        long wait = backoffRemaining(scraperId, label);
+        if (wait > 0) {
+            log.info("[healer] {} extra field '{}' — heal backed off, next attempt in {} min",
+                scraper.getName(), label, wait);
+            return;
+        }
+
         Map<String, Object> healReq = Map.of(
             "v1_html",      v1Html,
             "v2_html",      v2Html,
@@ -304,10 +345,45 @@ public class HealService {
         proposal.setConfidence(confidence);
         proposal.setReasoning(reasoning == null ? "" : reasoning);
         proposal.setStatus(status);
+        proposal.setAttempts(proposal.getAttempts() + 1);   // drives the retry backoff
         proposal.setV1Html(v1Html);
         proposal.setV2Html(v2Html);
         proposal.setCreatedAt(LocalDateTime.now().format(FMT));
         healProposalRepository.save(proposal);
+    }
+
+    /**
+     * Minutes left before this field may be healed again, or 0 when it may run now.
+     *
+     * The schedule is read off the open record for this break — its createdAt is the
+     * last attempt and its attempts count is how many there have been — so the
+     * backoff survives a restart without any state of its own. A break with no open
+     * record (a selector that just stopped working) is never delayed.
+     */
+    private long backoffRemaining(String scraperId, String fieldLabel) {
+        HealProposal open = latestOpenRecord(scraperId, fieldLabel);
+        if (open == null) return 0;
+        long wait = backoffMinutes(open.getAttempts());
+        if (wait == 0) return 0;
+        try {
+            LocalDateTime nextAllowed = LocalDateTime.parse(open.getCreatedAt(), FMT).plusMinutes(wait);
+            return Math.max(0, Duration.between(LocalDateTime.now(), nextAllowed).toMinutes());
+        } catch (Exception e) {
+            return 0;   // unparseable timestamp: don't let it block healing
+        }
+    }
+
+    /** The most recent record still describing an unfixed break for this field. */
+    private HealProposal latestOpenRecord(String scraperId, String fieldLabel) {
+        HealProposal latest = null;
+        for (String status : List.of("pending", "needs_user")) {
+            HealProposal found = healProposalRepository
+                .findFirstByScraperIdAndFieldLabelAndStatusOrderByCreatedAtDesc(scraperId, fieldLabel, status)
+                .orElse(null);
+            if (found == null || found.getCreatedAt() == null) continue;
+            if (latest == null || found.getCreatedAt().compareTo(latest.getCreatedAt()) > 0) latest = found;
+        }
+        return latest;
     }
 
     /** The primary field's value from its most recent successful run, or null if it has none. */

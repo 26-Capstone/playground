@@ -79,6 +79,17 @@ public class HealProposal {
     // oldSelector and the V1/V2 HTML above it forms a labelled drift pair — the
     // only source of *correct* answers from production, since a report only says
     // a heal was wrong. Null until someone re-picks the element.
+    /**
+     * How many times healing has been attempted for this break. Incremented on each
+     * upsert of the open record, and what the retry backoff is computed from: a
+     * selector that stays broken on a 30-second schedule would otherwise call the
+     * LLM 2,880 times a day (about $86 at measured prompt size).
+     *
+     * Added via ddl-auto to a table that already has rows, so DEFAULT is required.
+     */
+    @Column(nullable = false, columnDefinition = "integer not null default 0")
+    private int attempts = 0;
+
     @Column(name = "resolved_selector", columnDefinition = "TEXT")
     private String resolvedSelector;
 

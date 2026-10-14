@@ -4020,7 +4020,7 @@ function NewScraperScreen({ scrapers = [], onClose, onRegister }) {
   ];
 
   const isValidCron = (expr) =>
-    /^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/.test(expr.trim());
+    /^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/.test(expr.trim());
 
   const canNext = () => {
     if (step === 0) return url.trim().length > 3;
@@ -6024,7 +6024,7 @@ function WizardStep4({
   setChannels,
 }) {
   const isValidCron = (expr) =>
-    /^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/.test(expr.trim());
+    /^(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)$/.test(expr.trim());
   const toggleCh = (c) =>
     setChannels(
       channels.includes(c) ? channels.filter((x) => x !== c) : [...channels, c],
@@ -6195,7 +6195,7 @@ function WizardStep4({
             <input
               type="text"
               className="input mono"
-              placeholder="0 9 * * 1-5  (min hour day month weekday)"
+              placeholder="0 0 9 * * 1-5  (sec min hour day month weekday)"
               value={customCron}
               onChange={(e) => setCustomCron(e.target.value)}
               style={{
@@ -6216,7 +6216,7 @@ function WizardStep4({
               }}>
               {customCron && !isValidCron(customCron) && (
                 <div style={{ fontSize: 11, color: 'var(--danger)' }}>
-                  Please enter a valid cron expression (5 fields: min hour day month weekday)
+                  Please enter a valid cron expression (6 fields: sec min hour day month weekday)
                 </div>
               )}
               <div
@@ -6227,9 +6227,9 @@ function WizardStep4({
                 }}>
                 Examples&nbsp;&nbsp;
                 {[
-                  ['0 9 * * 1-5', 'Weekdays at 09:00'],
-                  ['0 */6 * * *', 'Every 6 hours'],
-                  ['30 8 * * 1', 'Every Monday at 08:30'],
+                  ['0 0 9 * * 1-5', 'Weekdays at 09:00'],
+                  ['0 0 */6 * * *', 'Every 6 hours'],
+                  ['0 30 8 * * 1', 'Every Monday at 08:30'],
                 ].map(([expr, label]) => (
                   <span
                     key={expr}

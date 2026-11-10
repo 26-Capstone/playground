@@ -211,10 +211,13 @@ public class ScraperService {
         }
     }
 
-    // ── Operational settings update (schedule · threshold · channels) ───────────
+    // ── Operational settings update (name · schedule · threshold · channels) ────
 
     public Optional<Scraper> updateSettings(String id, Map<String, Object> body) {
         return scraperRepository.findById(id).map(s -> {
+            // Validated non-blank by the controller.
+            if (body.containsKey("name"))
+                s.setName(((String) body.get("name")).trim());
             if (body.containsKey("schedule"))
                 s.setSchedule((String) body.get("schedule"));
             if (body.containsKey("threshold"))

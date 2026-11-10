@@ -2144,6 +2144,7 @@ function DetailSettings({ scraper, onScraperUpdate }) {
   const [customCron, setCustomCron] = React.useState(
     isCustom ? currentScheduleKey : '',
   );
+  const [name, setName] = React.useState(scraper.name || '');
   const [threshold, setThreshold] = React.useState(scraper.threshold ?? 85);
   const [channels, setChannels] = React.useState(
     (scraper.channels || []).map(
@@ -2170,6 +2171,10 @@ function DetailSettings({ scraper, onScraperUpdate }) {
   const handleSave = async () => {
     const scheduleVal =
       scheduleKey === 'custom' ? customCron.trim() : scheduleKey;
+    if (!name.trim()) {
+      setMsg({ ok: false, text: 'Scraper name must not be empty.' });
+      return;
+    }
     if (scheduleKey === 'custom' && !isValidCron(customCron)) {
       setMsg({
         ok: false,
@@ -2184,6 +2189,7 @@ function DetailSettings({ scraper, onScraperUpdate }) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          name: name.trim(),
           schedule: scheduleVal,
           threshold,
           channels: channels.map((k) => CHANNEL_LABEL[k] || k),
@@ -2258,6 +2264,34 @@ function DetailSettings({ scraper, onScraperUpdate }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Name */}
+      <div
+        className="card"
+        style={{ padding: 20 }}>
+        <div style={{ fontWeight: 600, marginBottom: 12 }}>Scraper name</div>
+        <input
+          value={name}
+          maxLength={255}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Kyobo daily bestseller #1"
+          style={{
+            padding: '8px 12px',
+            borderRadius: 8,
+            fontSize: 13,
+            border: '1px solid var(--border)',
+            background: 'var(--bg-2)',
+            color: 'var(--text)',
+            width: '100%',
+          }}
+        />
+        <div
+          className="dim"
+          style={{ fontSize: 11.5, marginTop: 8 }}>
+          Shown on the dashboard and in Slack / webhook alerts. Collected data
+          and history are kept.
+        </div>
+      </div>
+
       {/* Schedule */}
       <div
         className="card"

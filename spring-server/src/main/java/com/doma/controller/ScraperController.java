@@ -86,6 +86,15 @@ public class ScraperController {
 
     @PatchMapping("/scrapers/{id}/settings")
     public ResponseEntity<?> updateSettings(@PathVariable String id, @RequestBody Map<String, Object> body) {
+        if (body.containsKey("name")) {
+            Object name = body.get("name");
+            if (!(name instanceof String) || ((String) name).isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "name must not be empty."));
+            }
+            if (((String) name).trim().length() > 255) {
+                return ResponseEntity.badRequest().body(Map.of("error", "name must be 255 characters or fewer."));
+            }
+        }
         return scraperService.updateSettings(id, body)
             .map(updated -> {
                 schedulerService.removeJob(id);

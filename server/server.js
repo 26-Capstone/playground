@@ -404,6 +404,15 @@ wss.on("connection", (ws) => {
           .catch(() => 0);
         ready = true;
         send({ type: "status", status: "ready", nodeCount });
+        // The screencast only emits when the page repaints, and only every Nth of
+        // those frames is forwarded. A static page (no scripts, ads or animation —
+        // the /demo/board page, for one) paints once or twice after load, so no
+        // frame ever reached the client and the picker stayed blank. Send one
+        // still of the loaded page so there is always a first frame.
+        const still = await page
+          .screenshot({ type: "jpeg", quality: SCREENCAST_QUALITY })
+          .catch(() => null);
+        if (still) send({ type: "frame", data: still.toString("base64") });
       }
 
       if (msg.type === "mousemove" && ready) {

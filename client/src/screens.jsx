@@ -1338,30 +1338,47 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
                   // never reflected in this response (there's no `r.heal` —
                   // that field doesn't exist), so data.scraper.status here is
                   // just the transitional "healing" state, not the outcome.
-                  // Poll once for the real result instead of guessing at one.
+                  // Poll for the real result instead of guessing at one. A heal
+                  // (fetch V2 + ranker + LLM) takes 15–30s, so a single check
+                  // a few seconds in still sees "healing" and used to report
+                  // that as a failure. Keep polling while it is in flight.
                   setRunMsg('⏳ Collection failed — attempting self-heal…');
-                  setTimeout(async () => {
+                  const POLL_MS = 3000;
+                  const POLL_LIMIT_MS = 120000;
+                  const startedAt = Date.now();
+                  const poll = async () => {
                     try {
                       const s = await fetch(`/api/scrapers/${c.id}`).then((res) =>
                         res.json(),
                       );
+                      if (
+                        s.status === 'healing' &&
+                        Date.now() - startedAt < POLL_LIMIT_MS
+                      ) {
+                        setTimeout(poll, POLL_MS);
+                        return;
+                      }
                       setC((prev) => ({ ...prev, ...s, spark: prev.spark }));
                       if (onScraperUpdate) onScraperUpdate(s);
                       setRunMsg(
-                        s.status === 'healthy'
-                          ? `⚡ Self-healing succeeded — "${s.lastValue}"`
-                          : s.status === 'pending'
-                            ? `⏳ Confidence below threshold — pending approval`
-                            : `✗ Self-healing failed — selector may need manual reselection`,
+                        s.status === 'healing'
+                          ? '⏳ Self-heal is still running — check the Healing log shortly'
+                          : s.status === 'healthy'
+                            ? `⚡ Self-healing succeeded — "${s.lastValue}"`
+                            : s.status === 'pending'
+                              ? `⏳ Confidence below threshold — pending approval`
+                              : `✗ Self-healing failed — selector may need manual reselection`,
                       );
                     } catch {
                       setRunMsg(
                         '✗ Collection failed — check the approval queue for self-heal status',
                       );
-                    } finally {
-                      setRunState('done');
                     }
-                  }, 6000);
+                    // Only reached once polling stops (the early return above
+                    // skips this while the heal is still in flight).
+                    setRunState('done');
+                  };
+                  setTimeout(poll, POLL_MS);
                 } catch (e) {
                   setRunMsg(`Error: ${e.message}`);
                   setRunState('error');

@@ -51,8 +51,11 @@ function App(){
   React.useEffect(() => {
     handleRefresh();
     const timer = setInterval(handleRefresh, 30000);
-    return () => clearInterval(timer);
-  }, [handleRefresh]);
+    // The list itself refreshes faster, so a collected value or a finished heal
+    // shows on the dashboard within seconds rather than up to 30s later.
+    const listTimer = setInterval(refreshScrapers, 5000);
+    return () => { clearInterval(timer); clearInterval(listTimer); };
+  }, [handleRefresh, refreshScrapers]);
 
   // Deep link from a self-heal alert. Two shapes, matching the two alerts that
   // ask a person to act: ?scraper=<id> opens that scraper so its element can be

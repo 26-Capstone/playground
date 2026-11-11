@@ -687,7 +687,12 @@ def _call_llm(target_name, user_intent, v1_text, v1_css,
               v1_html_snippet, v1_context_html, candidates_list, client):
     system_prompt = (
         "너는 지능형 웹 크롤러의 'DOM 구조 분석 및 자가 복구(Self-Healing) 에이전트'야.\n"
-        "응답은 반드시 JSON 형식으로만 반환해. 다른 설명은 절대 덧붙이지 마."
+        "응답은 반드시 JSON 형식으로만 반환해. 다른 설명은 절대 덧붙이지 마.\n"
+        # The reasoning is shown as-is in the Healing log and in alerts, which are
+        # read in English. Only the output language changes; the instructions stay
+        # as they were, so the selection behaviour is not retuned by a rewrite.
+        "Write the \"reasoning\" field in English. Quote page text exactly as it "
+        "appears on the page, without translating it."
     )
     user_prompt = f"""
 웹사이트가 개편되어 기존 타겟을 찾을 수 없어.
@@ -729,7 +734,7 @@ def _call_llm(target_name, user_intent, v1_text, v1_css,
    - "이 탭/링크를 클릭하면 원하는 데이터가 있는 페이지로 이동한다"는 이유로 탭, 메뉴, "더보기"/"랭킹" 같은 네비게이션 링크나 버튼을 고르면 안 돼 — 그건 데이터가 아니라 페이지 이동 수단이야. [과거 텍스트]와 같은 종류의 값이 아니라 메뉴/탭 레이블(예: "랭킹", "Home", "더보기")이라면 그 후보는 제외해.
    - V2 후보군 전체를 살펴봐도 실제 데이터를 담은 요소가 하나도 없다면(예: 아직 목록 페이지로 진입하기 전 상태), 억지로 그럴듯한 후보를 골라내지 마. 이 경우 "selected_id": null, "confidence": 0.0으로 정직하게 응답하고, reasoning에 "V2에 실제 데이터가 없고 웹사이트 구조가 근본적으로 바뀌었을 가능성"을 명시해 — 틀린 답을 내는 것보다 모른다고 하는 게 낫다.
 
-아래 JSON 포맷으로 출력해.
+아래 JSON 포맷으로 출력해. reasoning은 반드시 영어로 작성해.
 {{
   "selected_id": int,
   "robust_selector": "string",
@@ -761,7 +766,7 @@ def _call_llm(target_name, user_intent, v1_text, v1_css,
         )
         return json.loads(resp.content[0].text)
     except Exception as e:
-        return {"selected_id": None, "confidence": 0, "reasoning": f"API 에러: {e}"}
+        return {"selected_id": None, "confidence": 0, "reasoning": f"API error: {e}"}
 
 
 # ─── Tailwind 셀렉터 파싱 헬퍼 ───────────────────────────────────────────────
@@ -854,7 +859,7 @@ def heal_target(
 
     target_v1 = _safe_select_one(soup_v1, css_selector)
     if not target_v1:
-        return {"status": "failed", "reason": f"V1에서 셀렉터를 찾지 못했습니다. (selector: {css_selector[:80]}...)"}
+        return {"status": "failed", "reason": f"The old selector matched nothing in V1. (selector: {css_selector[:80]}...)"}
 
     # 기존 셀렉터가 V2에서도 동작하면 치유 불필요
     existing = _safe_select_one(soup_v2, css_selector)
@@ -864,7 +869,7 @@ def heal_target(
             "robust_selector":  css_selector,
             "extracted_text":   existing.get_text(strip=True),
             "confidence":       1.0,
-            "reasoning":        "기존 셀렉터가 V2에서도 유효합니다.",
+            "reasoning":        "The existing selector still matches in V2.",
         }
 
     v1_text = target_v1.get_text(strip=True)
@@ -887,7 +892,7 @@ def heal_target(
         # V2 HTML에 텍스트를 가진 후보가 하나도 없으면(예: CSR 페이지가 아직 데이터를
         # 렌더링하기 전에 캡처됨) 0개 샘플로 StandardScaler에 넘어가 알아보기 힘든 sklearn
         # 에러가 난다 — 여기서 먼저 걸러서 명확한 실패 사유를 반환한다.
-        return {"status": "failed", "reason": "V2 HTML에서 후보 요소를 찾지 못했습니다 (페이지가 비어있거나 아직 로드되지 않았을 수 있습니다)."}
+        return {"status": "failed", "reason": "No candidate elements found in the V2 HTML (the page may be empty or not fully loaded)."}
 
     # ML 필터링
     features_list = [_extract_delta_features(target_v1, c, v1_pos_info, v2_pos_info) for c in filtered]
@@ -928,11 +933,11 @@ def heal_target(
     if final_id is None or not (0 <= final_id < len(top_k_indices)):
         # llm_result["reasoning"] holds either the LLM's own explanation for
         # declining every candidate, or (on an API-level failure) the
-        # "API 에러: ..." message _call_llm sets in its except clause — surface
+        # "API error: ..." message _call_llm sets in its except clause — surface
         # whichever we have instead of this generic fallback, since collapsing
         # both cases into one message makes them impossible to tell apart later.
-        detail = llm_result.get("reasoning") or "선택된 노드 없음"
-        return {"status": "failed", "reason": f"LLM이 적합한 노드를 찾지 못했습니다: {detail}"}
+        detail = llm_result.get("reasoning") or "no node selected"
+        return {"status": "failed", "reason": f"The LLM found no suitable node: {detail}"}
 
     original_idx = top_k_indices[final_id]
     healed_node  = filtered[original_idx]

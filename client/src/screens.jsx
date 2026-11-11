@@ -1185,6 +1185,48 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
   const [runMsg, setRunMsg] = React.useState('');
   const [deleteConfirm, setDeleteConfirm] = React.useState(false);
 
+  // Live refresh. The tabs below loaded their data once, on mount, so a run or
+  // a heal that finished while this page was open (scheduled, Run now, or the
+  // background heal thread) only showed up after leaving and coming back.
+  // Poll the scraper while the page is open; when its status, last run, value
+  // or selector changes, update the header and the list and bump liveKey so
+  // each tab refetches its own data.
+  const [liveKey, setLiveKey] = React.useState(0);
+  const onScraperUpdateRef = React.useRef(onScraperUpdate);
+  onScraperUpdateRef.current = onScraperUpdate;
+  React.useEffect(() => {
+    const LIVE_POLL_MS = 3000;
+    const sig = (s) =>
+      [s.status, s.lastRun, s.lastValue, s.css_selector, s.healed].join('|');
+    let last = sig(scraper);
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/scrapers/${scraper.id}`);
+        if (!res.ok) return;
+        const s = await res.json();
+        if (stopped || !s || !s.id) return;
+        const next = sig(s);
+        if (next === last) return;
+        last = next;
+        setC((prev) => ({
+          ...prev,
+          ...s,
+          spark: Array.isArray(s.spark) ? s.spark : prev.spark,
+        }));
+        if (onScraperUpdateRef.current) onScraperUpdateRef.current(s);
+        setLiveKey((k) => k + 1);
+      } catch {
+        /* transient — the next tick retries */
+      }
+    };
+    const timer = setInterval(tick, LIVE_POLL_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [scraper.id]);
+
   const scores = c.spark || [];
 
   return (
@@ -1529,17 +1571,20 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
         <DetailOverview
           scraper={c}
           scores={scores}
+          refreshKey={liveKey}
         />
       )}
       {tab === 'Runs' && (
         <DetailRuns
           scraperId={c.id}
+          refreshKey={liveKey}
           extraLabels={(c.extra_fields || []).map((f) => f.label)}
         />
       )}
       {tab === 'Healing log' && (
         <DetailHealHistory
           scraperId={c.id}
+          refreshKey={liveKey}
           onScraperReverted={(updated) => {
             setC(updated);
             if (onScraperUpdate) onScraperUpdate(updated);
@@ -1589,7 +1634,7 @@ function DetailScreen({ scraper, onBack, onScraperUpdate, onDelete }) {
   );
 }
 
-function DetailOverview({ scraper, scores }) {
+function DetailOverview({ scraper, scores, refreshKey = 0 }) {
   const [results, setResults] = React.useState(null); // null = loading
 
   React.useEffect(() => {
@@ -1597,7 +1642,7 @@ function DetailOverview({ scraper, scores }) {
       .then((r) => r.json())
       .then((data) => setResults(Array.isArray(data) ? data : []))
       .catch(() => setResults([]));
-  }, [scraper.id]);
+  }, [scraper.id, refreshKey]);
 
   // ── Stats computed from run history ────────────────────────────────────────
   const hasResults = results && results.length > 0;
@@ -2953,7 +2998,7 @@ function DetailApi({ scraper }) {
   );
 }
 
-function DetailRuns({ scraperId, extraLabels = [] }) {
+function DetailRuns({ scraperId, extraLabels = [], refreshKey = 0 }) {
   const hasExtra = extraLabels.length > 0;
   const [runs, setRuns] = React.useState(null);
 
@@ -2966,7 +3011,7 @@ function DetailRuns({ scraperId, extraLabels = [] }) {
       .then((r) => r.json())
       .then((data) => setRuns(Array.isArray(data) ? data : []))
       .catch(() => setRuns(null));
-  }, [scraperId]);
+  }, [scraperId, refreshKey]);
 
   if (runs === null) {
     return (
@@ -3390,7 +3435,7 @@ function ActivityScreen() {
   );
 }
 
-function DetailHealHistory({ scraperId, onScraperReverted }) {
+function DetailHealHistory({ scraperId, onScraperReverted, refreshKey = 0 }) {
   const [history, setHistory] = React.useState(null);
   const [reportingId, setReportingId] = React.useState(null);
 
@@ -3408,7 +3453,7 @@ function DetailHealHistory({ scraperId, onScraperReverted }) {
   React.useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scraperId]);
+  }, [scraperId, refreshKey]);
 
   const handleReport = async (h) => {
     if (

@@ -14,11 +14,11 @@
 // The layout is in-memory, so a container restart puts it back to A.
 
 const ITEMS = [
-  { name: '아크니트 오버사이즈 니트', base: 59000 },
-  { name: '코튼 와이드 데님 팬츠', base: 42000 },
-  { name: '울 블렌드 발마칸 코트', base: 189000 },
-  { name: '램스울 라운드넥 가디건', base: 78000 },
-  { name: '워싱 코듀로이 셔츠', base: 36000 },
+  { name: 'Oversized Cable-Knit Sweater', base: 59 },
+  { name: 'Wide-Leg Cotton Denim Pants', base: 42 },
+  { name: 'Wool-Blend Balmacaan Coat', base: 189 },
+  { name: 'Lambswool Crewneck Cardigan', base: 78 },
+  { name: 'Washed Corduroy Shirt', base: 36 },
 ];
 
 // How often the ranking reorders, so a text target (the #1 product name) visibly
@@ -32,19 +32,21 @@ function board(now = Date.now()) {
   const rows = ITEMS.map((item, i) => ({
     name: item.name,
     // A small wave per item, so every second's reading differs.
-    price: Math.round(item.base * (1 + Math.sin((tick + i * 7) / 5) * 0.02)),
+    // In cents, so the wave moves the price on every reading.
+    price: Math.round(item.base * 100 * (1 + Math.sin((tick + i * 7) / 5) * 0.02)),
   }));
   const shift = Math.floor(now / ROTATE_MS) % rows.length;
   return rows.slice(shift).concat(rows.slice(0, shift));
 }
 
-const won = (n) => n.toLocaleString('ko-KR') + '원';
+const usd = (cents) =>
+  '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const CSS = `
   :root { color-scheme: light }
   * { box-sizing: border-box }
   body { margin:0; padding:40px 24px; background:#F7F8FA; color:#191F28;
-         font:16px/1.6 -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif }
+         font:16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif }
   .wrap { max-width:760px; margin:0 auto; display:flex; flex-direction:column; gap:20px }
   nav { display:flex; gap:8px; align-items:center; font-size:13px; color:#4E5968 }
   nav a { padding:6px 12px; border-radius:999px; background:#E5E8EB; color:#191F28; text-decoration:none }
@@ -66,19 +68,19 @@ const CSS = `
   .sc-head { display:flex; gap:16px; padding:0 18px; font-size:12px; letter-spacing:.04em; color:#8B95A1 }
 `;
 
-// Layout A — a table. Columns: 순위 · 상품명 · 가격.
+// Layout A — a table. Columns: Rank · Product · Price.
 function renderA(rows) {
   const body = rows
     .map(
       (r, i) => `      <tr class="row">
         <td class="rank">${i + 1}</td>
         <td class="name">${r.name}</td>
-        <td class="price">${won(r.price)}</td>
+        <td class="price">${usd(r.price)}</td>
       </tr>`,
     )
     .join('\n');
   return `    <table class="rank-table">
-      <thead><tr><th>순위</th><th>상품명</th><th>가격</th></tr></thead>
+      <thead><tr><th>Rank</th><th>Product</th><th>Price</th></tr></thead>
       <tbody>
 ${body}
       </tbody>
@@ -86,7 +88,7 @@ ${body}
 }
 
 // Layout B — the same content after a "redesign": flex rows instead of a table,
-// generated-looking class names, and 가격 moved ahead of 상품명 so position-based
+// generated-looking class names, and Price moved ahead of Product so position-based
 // selectors miss. The visible text and the column labels are unchanged, which is
 // what the healer's anchors rely on.
 function renderB(rows) {
@@ -94,13 +96,13 @@ function renderB(rows) {
     .map(
       (r, i) => `        <div class="sc-item">
           <em class="sc-badge">${i + 1}</em>
-          <span class="sc-amt">${won(r.price)}</span>
+          <span class="sc-amt">${usd(r.price)}</span>
           <p class="sc-ttl">${r.name}</p>
         </div>`,
     )
     .join('\n');
   return `    <div class="sc-7f3a1b">
-      <div class="sc-head"><span>순위</span><span>가격</span><span>상품명</span></div>
+      <div class="sc-head"><span>Rank</span><span>Price</span><span>Product</span></div>
       <div class="sc-list">
 ${body}
       </div>
@@ -109,13 +111,13 @@ ${body}
 
 function renderPage(which) {
   const rows = board();
-  const stamp = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+  const stamp = new Date().toLocaleTimeString('en-US', { hour12: false });
   return `<!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DOMA 데모 — 실시간 인기 상품</title>
+  <title>DOMA Demo — Trending Now</title>
   <style>${CSS}</style>
 </head>
 <body>
@@ -123,12 +125,12 @@ function renderPage(which) {
     <!-- Controls live in <nav> on purpose: the healer excludes nav landmarks from
          its candidates, so these links never get mistaken for the data. -->
     <nav>
-      <span>레이아웃</span>
-      <a class="${which === 'a' ? 'on' : ''}" href="/demo/layout?set=a">A (원래 구조)</a>
-      <a class="${which === 'b' ? 'on' : ''}" href="/demo/layout?set=b">B (개편 후)</a>
+      <span>Layout</span>
+      <a class="${which === 'a' ? 'on' : ''}" href="/demo/layout?set=a">A (original)</a>
+      <a class="${which === 'b' ? 'on' : ''}" href="/demo/layout?set=b">B (redesigned)</a>
     </nav>
-    <h2>실시간 인기 상품</h2>
-    <p class="meta">갱신 ${stamp} · 매초 가격이 바뀌고 ${ROTATE_MS / 1000}초마다 순위가 교체됩니다</p>
+    <h2>Trending Now</h2>
+    <p class="meta">Updated ${stamp} · Prices change every second; the ranking reorders every ${ROTATE_MS / 1000}s</p>
 ${which === 'b' ? renderB(rows) : renderA(rows)}
   </div>
 </body>

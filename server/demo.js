@@ -21,9 +21,12 @@ const ITEMS = [
   { name: 'Washed Corduroy Shirt', base: 36 },
 ];
 
-// How often the ranking reorders, so a text target (the #1 product name) visibly
-// changes too and not only the numbers.
-const ROTATE_MS = 20000;
+// The ranking order is fixed; only prices move. It used to reorder every 20s so
+// the #1 name changed too, but then a redesign could land between two readings
+// with the previous #1 sitting at #2. The healer then has to choose between the
+// old text (now #2) and the #1 position, and it chose differently on two takes
+// of the same demo (cr_o2hi picked #1, cr_q3jv picked #2) — a real limitation
+// on ranked lists, but not one a stage demo should depend on.
 
 let layout = 'a';
 
@@ -31,12 +34,10 @@ function board(now = Date.now()) {
   const tick = Math.floor(now / 1000);
   const rows = ITEMS.map((item, i) => ({
     name: item.name,
-    // A small wave per item, so every second's reading differs.
-    // In cents, so the wave moves the price on every reading.
+    // A small wave per item, in cents, so every second's reading differs.
     price: Math.round(item.base * 100 * (1 + Math.sin((tick + i * 7) / 5) * 0.02)),
   }));
-  const shift = Math.floor(now / ROTATE_MS) % rows.length;
-  return rows.slice(shift).concat(rows.slice(0, shift));
+  return rows;
 }
 
 const usd = (cents) =>
@@ -130,7 +131,7 @@ function renderPage(which) {
       <a class="${which === 'b' ? 'on' : ''}" href="/demo/layout?set=b">B (redesigned)</a>
     </nav>
     <h2>Trending Now</h2>
-    <p class="meta">Updated ${stamp} · Prices change every second; the ranking reorders every ${ROTATE_MS / 1000}s</p>
+    <p class="meta">Updated ${stamp} · Prices change every second</p>
 ${which === 'b' ? renderB(rows) : renderA(rows)}
   </div>
 </body>
